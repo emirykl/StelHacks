@@ -1,0 +1,295 @@
+import { createServer } from "node:http";
+
+import { Keypair } from "@stellar/stellar-sdk";
+import { basicNodeSigner } from "@stellar/stellar-sdk/contract";
+import {
+  HackathonCore,
+  ballotLeaf,
+  scorecardLeaf,
+  toHex,
+  verifyBallot,
+  verifyScorecard,
+} from "@stelhacks/sdk";
+
+import { settings } from "./config.js";
+import { issue } from "./receipt.js";
+import { proofFor, seal } from "./seal.js";
+import { contractOf, isRecord, isScorecard } from "./validate.js";
+import { keepBallot, keepScorecard, leaves, phaseOf } from "./store.js";
+
+/**
+ * The sealed collection service.
+ *
+ * It takes scorecards and ballots during the judging window, holds them where
+ * nobody can read them, and publishes one digest committing to all of them when
+ * the window closes. Four routes, and each one exists to bound what this
+ * service can do rather than to enable something:
+ *
+ *   POST /scorecard   take one, hand back a receipt
+ *   POST /ballot      the same, for the crowd
+ *   POST /seal        build the tree and publish the root on chain
+ *   GET  /proof       the inclusion proof for one leaf, from the moment the
+ *                     root exists
+ *
+ * The proof route is open the instant the root is published rather than at some
+ * later point, because a judge who has to wait to check their own inclusion is
+ * a judge being asked to trust in the meantime.
+ */
+
+const sealer = Keypair.fromSecret(settings.sealerSecret);
+
+/** The phase a hackathon has to be in for its sealed input to be collected. */
+const JUDGING = 4;
+
+interface Failure {
+  status: number;
+  says: string;
+}
+
+function refuse(status: number, says: string): Failure {
+  return { status, says };
+}
+
+async function takeScorecard(raw: unknown): Promise<unknown | Failure> {
+  if (!isRecord(raw)) {
+    return refuse(400, "that is not a scorecard submission");
+  }
+
+  const contract = contractOf(raw);
+  const signature = raw["signature"];
+  const feedback = raw["feedback"];
+
+  if (contract === null || !isScorecard(raw["scorecard"]) || typeof signature !== "string") {
+    return refuse(400, "a submission needs a contract, a scorecard and a signature");
+  }
+  if (feedback !== undefined && typeof feedback !== "string") {
+    return refuse(400, "feedback has to be text");
+  }
+
+  const body = { contract, scorecard: raw["scorecard"], signature, feedback };
+  const phase = await phaseOf(body.contract);
+
+  if (phase === null) {
+    return refuse(404, "no such hackathon");
+  }
+  if (phase !== JUDGING) {
+    return refuse(409, "this hackathon is not collecting scorecards");
+  }
+
+  const leaf = scorecardLeaf(body.scorecard);
+  const signed = {
+    signer: body.scorecard.judge,
+    leaf,
+    signature: Buffer.from(body.signature, "hex"),
+  };
+
+  // The signature is what makes the entry the judge's rather than the service's.
+  // Without this check the service could write whatever it liked into the table
+  // and the tree would faithfully commit to it.
+  if (!verifyScorecard(body.scorecard, signed)) {
+    return refuse(400, "that signature does not cover that scorecard");
+  }
+
+  await keepScorecard({
+    contract: body.contract,
+    team: body.scorecard.team,
+    judge: body.scorecard.judge,
+    scores: body.scorecard.scores,
+    feedback: body.feedback ?? null,
+    leaf: toHex(leaf),
+    signature: body.signature,
+  });
+
+  return issue(leaf, sealer, Math.floor(Date.now() / 1000));
+}
+
+async function takeBallot(raw: unknown): Promise<unknown | Failure> {
+  if (!isRecord(raw)) {
+    return refuse(400, "that is not a ballot");
+  }
+
+  const contract = contractOf(raw);
+  const voter = raw["voter"];
+  const team = raw["team"];
+  const signature = raw["signature"];
+
+  if (
+    contract === null ||
+    typeof voter !== "string" ||
+    typeof team !== "number" ||
+    typeof signature !== "string"
+  ) {
+    return refuse(400, "a ballot needs a contract, a voter, a team and a signature");
+  }
+
+  const body = { contract, voter, team, signature };
+  const phase = await phaseOf(body.contract);
+
+  if (phase === null) {
+    return refuse(404, "no such hackathon");
+  }
+  if (phase !== JUDGING) {
+    return refuse(409, "this hackathon is not collecting ballots");
+  }
+
+  const leaf = ballotLeaf(body.voter, body.team);
+  const signed = {
+    signer: body.voter,
+    leaf,
+    signature: Buffer.from(body.signature, "hex"),
+  };
+
+  if (!verifyBallot(body.voter, body.team, signed)) {
+    return refuse(400, "that signature does not cover that ballot");
+  }
+
+  await keepBallot({
+    contract: body.contract,
+    voter: body.voter,
+    team: body.team,
+    leaf: toHex(leaf),
+    signature: body.signature,
+  });
+
+  return issue(leaf, sealer, Math.floor(Date.now() / 1000));
+}
+
+/**
+ * Closes the window by putting one digest on chain.
+ *
+ * After this the service can no longer change any of the entries, because the
+ * root commits to all of them at once. The contract refuses a second root for
+ * the same reason: one more would let the sealer replace the whole set after
+ * seeing what the first produced.
+ */
+async function publish(raw: unknown) {
+  if (!isRecord(raw)) {
+    return refuse(400, "that is not a sealing request");
+  }
+
+  const contract = contractOf(raw);
+
+  if (contract === null) {
+    return refuse(400, "sealing needs a contract");
+  }
+
+  const body = {
+    contract,
+    kind: raw["kind"] === "ballots" ? ("ballots" as const) : ("scorecards" as const),
+  };
+  const held = await leaves(body.contract, body.kind);
+
+  if (held.length === 0) {
+    return refuse(409, "there is nothing to seal");
+  }
+
+  const sealed = seal(held);
+
+  const core = new HackathonCore({
+    contractId: body.contract,
+    networkPassphrase: settings.networkPassphrase,
+    rpcUrl: settings.rpcUrl,
+    publicKey: sealer.publicKey(),
+    ...basicNodeSigner(sealer, settings.networkPassphrase),
+  });
+
+  const root = Buffer.from(sealed.root);
+  const call =
+    body.kind === "scorecards"
+      ? await core.publish_score_root({ root })
+      : await core.publish_ballot_root({ root });
+
+  await call.signAndSend();
+
+  return { root: toHex(sealed.root), sealed: held.length };
+}
+
+/** The inclusion proof for one leaf, rebuilt from what the service holds. */
+async function proof(contract: string, kind: "scorecards" | "ballots", leaf: string) {
+  const held = await leaves(contract, kind);
+
+  if (held.length === 0) {
+    return refuse(404, "nothing is held for that hackathon");
+  }
+
+  const sealed = seal(held);
+  const found = proofFor(sealed, Buffer.from(leaf, "hex"));
+
+  if (found === null) {
+    // Said plainly rather than as a generic not found. A judge asking this
+    // question is asking whether they were left out, and the answer is yes.
+    return refuse(404, "that leaf is not in the tree");
+  }
+
+  return { root: toHex(sealed.root), proof: found.map(toHex) };
+}
+
+const routes = createServer((request, response) => {
+  const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+
+  const answer = (status: number, body: unknown): void => {
+    response.writeHead(status, { "content-type": "application/json" });
+    response.end(JSON.stringify(body));
+  };
+
+  const settle = (result: unknown): void => {
+    const failure = result as Failure;
+
+    if (typeof failure?.status === "number" && typeof failure.says === "string") {
+      answer(failure.status, { error: failure.says });
+    } else {
+      answer(200, result);
+    }
+  };
+
+  if (request.method === "GET" && url.pathname === "/proof") {
+    const contract = url.searchParams.get("contract") ?? "";
+    const kind = url.searchParams.get("kind") === "ballots" ? "ballots" : "scorecards";
+    const leaf = url.searchParams.get("leaf") ?? "";
+
+    proof(contract, kind, leaf).then(settle, (reason) => answer(500, { error: String(reason) }));
+
+    return;
+  }
+
+  if (request.method !== "POST") {
+    answer(405, { error: "not a route" });
+
+    return;
+  }
+
+  let body = "";
+  request.on("data", (chunk) => (body += chunk));
+  request.on("end", () => {
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      answer(400, { error: "that is not JSON" });
+
+      return;
+    }
+
+    const handler =
+      url.pathname === "/scorecard"
+        ? takeScorecard(parsed)
+        : url.pathname === "/ballot"
+          ? takeBallot(parsed)
+          : url.pathname === "/seal"
+            ? publish(parsed)
+            : null;
+
+    if (handler === null) {
+      answer(404, { error: "not a route" });
+
+      return;
+    }
+
+    handler.then(settle, (reason) => answer(500, { error: String(reason) }));
+  });
+});
+
+routes.listen(settings.port, () => {
+  console.log(`sealing for ${sealer.publicKey()} on :${settings.port}`);
+});
