@@ -75,7 +75,7 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
               {/* A place is not a subject, so it is not dressed as one. The pin
                   says which kind of fact it is without a word being spent. */}
               {hackathon.location !== null && (
-                <span className="label flex items-center gap-1.5 text-ink-soft">
+                <span className="label flex items-center gap-1.5 font-bold text-ink-soft">
                   <Pin />
                   {hackathon.location}
                 </span>
@@ -108,7 +108,7 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
               ) : (
                 <>
                   {prize.figure}{" "}
-                  <span className="label font-normal text-ink-faint">{prize.code}</span>
+                  <span className="label font-bold text-ink-soft">{prize.code}</span>
                 </>
               )}
             </p>
