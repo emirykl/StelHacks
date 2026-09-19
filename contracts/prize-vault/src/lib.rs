@@ -3,10 +3,18 @@
 //! Custody of the prize pool for a single hackathon.
 //!
 //! The vault accepts deposits from anyone at any phase, but only ever pays out
-//! against a result that the paired [`hackathon-core`] instance has finalised.
-//! No platform key can move the funds.
+//! against a result that the paired hackathon has finalized. No platform key
+//! can move the funds, because there is no function that would let one.
 
-use soroban_sdk::contract;
+mod contract;
+mod errors;
+mod events;
+mod storage;
 
-#[contract]
-pub struct PrizeVault;
+#[cfg(test)]
+mod test;
+
+pub use contract::{PrizeVault, PrizeVaultClient};
+pub use errors::Error;
+pub use events::{Created, Deposited, Paid};
+pub use storage::DataKey;
