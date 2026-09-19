@@ -30,7 +30,21 @@ import type { ReactNode } from "react";
    is worth more than the indirection. */
 const INK = "#171310";
 const SIGNAL = "#f0c630";
-const EDGE = "#5c5753";
+
+/*
+  The permanent edge, and the reason it is light.
+
+  `baseColor` is not part of the moving highlight: the shader draws it around
+  the whole rim at a fixed strength, and it is what gives the button an edge
+  when nobody is pointing at it. The component ships with a dark grey, which is
+  right on the dark page it was designed against and invisible here, where a
+  dark stroke sits on a dark fill on light paper. Set light, it reads as a bevel
+  catching the room, which is the effect the shine then travels along.
+
+  Without this the button was flat until the cursor was almost on it, and a
+  reader who never brought the cursor near never saw anything at all.
+*/
+const BEVEL = "#b6ada2";
 
 export function CommitButton({
   children,
@@ -59,20 +73,25 @@ export function CommitButton({
       tintOpacity={1}
       textColor={SIGNAL}
       lineColor="#ffffff"
-      baseColor={EDGE}
-      intensity={1}
-      shineSize={10}
-      shineFade={40}
-      thickness={1}
+      baseColor={BEVEL}
+      /* All three pushed well past the defaults, which are tuned for a white
+         line on a dark page. Against paper the same line has almost nothing to
+         be brighter than, so it has to be wider, stronger and drawn over more
+         of the rim before it reads as light rather than as an artefact. */
+      intensity={2.2}
+      thickness={2.4}
+      shineSize={26}
+      shineFade={34}
       blur={0}
       followMouse
-      /* Nearer than the default two hundred and fifty. On a page with two of
-         these the light should answer the cursor that is coming for it, not
-         every cursor that passes the middle of the screen. */
-      proximity={180}
+      /* Further than the default. On paper the shine is the only thing that
+         says this button is different from a black rectangle, so it should be
+         lit by the time somebody is deciding whether to press it rather than
+         once they have already arrived. */
+      proximity={340}
       /* Never on its own. A button that glows while nobody is pointing at it is
          motion the reader did not ask for, and this product turns that off
-         everywhere else. */
+         everywhere else. The bevel is what carries it at rest. */
       autoAnimate={false}
       disabled={disabled}
       {...(href === undefined ? { type } : { href })}
