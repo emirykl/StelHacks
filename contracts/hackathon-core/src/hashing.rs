@@ -1,7 +1,9 @@
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{Bytes, BytesN, Env};
+use soroban_sdk::{Address, Bytes, BytesN, Env};
 
 use crate::constitution::Constitution;
+use crate::merkle;
+use crate::scorecard::Scorecard;
 use crate::submission::SubmissionMetadata;
 
 /// Domain separators.
@@ -13,6 +15,8 @@ use crate::submission::SubmissionMetadata;
 /// would have no way to tell which one it was looking at.
 const CONSTITUTION_DOMAIN: &[u8] = b"stelhacks.v1.constitution";
 const SUBMISSION_DOMAIN: &[u8] = b"stelhacks.v1.submission";
+const SCORECARD_DOMAIN: &[u8] = b"stelhacks.v1.scorecard";
+const BALLOT_DOMAIN: &[u8] = b"stelhacks.v1.ballot";
 
 /// The digest that locks the rules of a hackathon.
 ///
@@ -36,6 +40,39 @@ pub fn hash_constitution(env: &Env, constitution: &Constitution) -> BytesN<32> {
 /// that the project a judge scored is the project that was submitted.
 pub fn hash_submission_metadata(env: &Env, metadata: &SubmissionMetadata) -> BytesN<32> {
     digest(env, SUBMISSION_DOMAIN, metadata.clone().to_xdr(env))
+}
+
+/// The leaf a scorecard occupies in the sealed tree.
+///
+/// The judge's address is part of the payload, so one judge cannot have their
+/// scorecard counted as another's, and the team is part of it so a scorecard
+/// cannot be moved between projects after the fact.
+pub fn scorecard_leaf(env: &Env, scorecard: &Scorecard) -> BytesN<32> {
+    merkle::leaf(
+        env,
+        &tagged(env, SCORECARD_DOMAIN, scorecard.clone().to_xdr(env)),
+    )
+}
+
+/// The leaf a community ballot occupies.
+///
+/// A ballot is only ever a voter and the project they chose, so the payload is
+/// exactly that pair. Nothing about the voter's identity is hidden here: the
+/// tally is sealed until the reveal, and after it every ballot is open for
+/// anyone to recount.
+pub fn ballot_leaf(env: &Env, voter: &Address, team: u32) -> BytesN<32> {
+    let mut payload = Bytes::from_slice(env, BALLOT_DOMAIN);
+    payload.append(&voter.clone().to_xdr(env));
+    payload.extend_from_array(&team.to_be_bytes());
+
+    merkle::leaf(env, &payload)
+}
+
+fn tagged(env: &Env, domain: &[u8], body: Bytes) -> Bytes {
+    let mut payload = Bytes::from_slice(env, domain);
+    payload.append(&body);
+
+    payload
 }
 
 fn digest(env: &Env, domain: &[u8], body: Bytes) -> BytesN<32> {

@@ -12,6 +12,34 @@ use crate::errors::Error;
 /// contract carries the full precision and only the interface rounds.
 pub const MAX_WEIGHTED_SCORE: u32 = MAX_CRITERION_SCORE * WEIGHT_TOTAL_BPS;
 
+/// A project's revealed scorecards, kept as a running count and sum.
+///
+/// The average is the arithmetic mean of the valid scorecards, and holding the
+/// pair means computing it never requires loading every scorecard a project
+/// received. The sum is widened to sixty four bits so a project with hundreds
+/// of judges cannot overflow it.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct ScoreTally {
+    pub count: u32,
+    pub total: u64,
+}
+
+impl ScoreTally {
+    /// The mean weighted score, at [`MAX_WEIGHTED_SCORE`] scale.
+    ///
+    /// A project nobody scored has no average rather than an average of zero.
+    /// Treating it as zero would quietly rank an unjudged project below a badly
+    /// judged one, which is a different claim from the one the data supports.
+    pub fn average(&self) -> Option<u32> {
+        if self.count == 0 {
+            return None;
+        }
+
+        Some((self.total / self.count as u64) as u32)
+    }
+}
+
 /// What one judge gave one criterion.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

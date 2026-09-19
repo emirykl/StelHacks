@@ -190,6 +190,37 @@ pub struct JudgeRecused {
     pub team: u32,
 }
 
+/// Every scorecard is now sealed behind one digest.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScoreRootPublished {
+    pub root: BytesN<32>,
+}
+
+/// One scorecard was opened.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScoreRevealed {
+    #[topic]
+    pub judge: Address,
+    pub team: u32,
+    /// The weighted total, at full precision.
+    pub weighted: u32,
+}
+
+pub fn score_root_published(env: &Env, root: &BytesN<32>) {
+    ScoreRootPublished { root: root.clone() }.publish(env);
+}
+
+pub fn score_revealed(env: &Env, judge: &Address, team: u32, weighted: u32) {
+    ScoreRevealed {
+        judge: judge.clone(),
+        team,
+        weighted,
+    }
+    .publish(env);
+}
+
 pub fn judge_recused(env: &Env, judge: &Address, team: u32) {
     JudgeRecused {
         judge: judge.clone(),

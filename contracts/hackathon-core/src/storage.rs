@@ -4,6 +4,7 @@ use crate::constitution::Constitution;
 use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
 use crate::roster::{Registration, Team};
+use crate::scorecard::ScoreTally;
 use crate::state::HackathonState;
 use crate::submission::Submission;
 
@@ -63,6 +64,13 @@ pub enum DataKey {
     /// How many judges stepped away from one project, so the quorum can be
     /// checked without walking the whole bench.
     RecusalCount(u32),
+    /// The digest sealing every scorecard until the reveal.
+    ScoreRoot,
+    /// One judge's weighted total for one project, once revealed.
+    Score(u32, Address),
+    /// How many scorecards a project has had revealed, and their sum, so the
+    /// average never needs the whole list loaded.
+    ScoreTally(u32),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -284,6 +292,58 @@ pub fn recusal_count(env: &Env, team: u32) -> u32 {
         .persistent()
         .get(&DataKey::RecusalCount(team))
         .unwrap_or(0u32)
+}
+
+pub fn save_score_root(env: &Env, root: &BytesN<32>) {
+    env.storage().instance().set(&DataKey::ScoreRoot, root);
+    touch(env);
+}
+
+pub fn load_score_root(env: &Env) -> Result<BytesN<32>, Error> {
+    env.storage()
+        .instance()
+        .get(&DataKey::ScoreRoot)
+        .ok_or(Error::ScoreRootMissing)
+}
+
+pub fn has_score_root(env: &Env) -> bool {
+    env.storage().instance().has(&DataKey::ScoreRoot)
+}
+
+pub fn has_score(env: &Env, team: u32, judge: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Score(team, judge.clone()))
+}
+
+pub fn save_score(env: &Env, team: u32, judge: &Address, weighted: u32) {
+    let key = DataKey::Score(team, judge.clone());
+    env.storage().persistent().set(&key, &weighted);
+    touch_entry(env, &key);
+
+    let tally = load_score_tally(env, team);
+    let updated = ScoreTally {
+        count: tally.count + 1,
+        total: tally.total + weighted as u64,
+    };
+
+    let counter = DataKey::ScoreTally(team);
+    env.storage().persistent().set(&counter, &updated);
+    touch_entry(env, &counter);
+}
+
+pub fn load_score(env: &Env, team: u32, judge: &Address) -> Result<u32, Error> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Score(team, judge.clone()))
+        .ok_or(Error::ScorecardNotFound)
+}
+
+pub fn load_score_tally(env: &Env, team: u32) -> ScoreTally {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ScoreTally(team))
+        .unwrap_or(ScoreTally { count: 0, total: 0 })
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

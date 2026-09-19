@@ -86,7 +86,7 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
         ],
         judges,
         judge_quorum: 3,
-        judging_mode: JudgingMode::Easy,
+        judging_mode: JudgingMode::Easy(Address::generate(env)),
         vote: VotePolicy {
             judge_bps: 8_000,
             community_bps: 2_000,

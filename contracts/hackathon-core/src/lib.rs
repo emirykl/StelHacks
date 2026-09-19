@@ -13,6 +13,7 @@ mod events;
 #[cfg(test)]
 mod fixtures;
 mod hashing;
+mod merkle;
 mod organizers;
 mod phase;
 mod roster;
@@ -33,11 +34,11 @@ pub use constitution::{
 };
 pub use contract::{HackathonCore, HackathonCoreClient};
 pub use errors::Error;
-pub use hashing::{hash_constitution, hash_submission_metadata};
+pub use hashing::{ballot_leaf, hash_constitution, hash_submission_metadata, scorecard_leaf};
 pub use organizers::OrganizingTeam;
 pub use phase::Phase;
 pub use roster::{ApplicationStatus, Registration, Team};
-pub use scorecard::{CriterionScore, Scorecard, MAX_WEIGHTED_SCORE};
+pub use scorecard::{CriterionScore, ScoreTally, Scorecard, MAX_WEIGHTED_SCORE};
 pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
 pub use submission::{Submission, SubmissionMetadata, SubmissionRequirements, SubmissionStatus};

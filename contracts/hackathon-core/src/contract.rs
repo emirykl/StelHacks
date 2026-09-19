@@ -3,10 +3,12 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, 
 use crate::constitution::{Constitution, TeamPolicy};
 use crate::errors::Error;
 use crate::events;
-use crate::hashing::hash_constitution;
+use crate::hashing::{self, hash_constitution};
+use crate::merkle;
 use crate::organizers::OrganizingTeam;
 use crate::phase::Phase;
 use crate::roster::{Registration, Team};
+use crate::scorecard::{ScoreTally, Scorecard};
 use crate::state::HackathonState;
 use crate::storage;
 use crate::submission::Submission;
@@ -476,6 +478,108 @@ impl HackathonCore {
         events::judge_recused(&env, &judge, team_id);
 
         Ok(())
+    }
+
+    /// Seals every scorecard behind one digest.
+    ///
+    /// This is the moment the judging window closes in the easy mode. Until it
+    /// happens the scorecards live off chain with the collection service; after
+    /// it, that service can no longer change any of them, because the root it
+    /// published commits to all of them at once.
+    ///
+    /// Only the address the constitution named may call this, and only once.
+    /// A second root would let the sealer replace the whole set after seeing
+    /// what the first one produced.
+    pub fn publish_score_root(env: Env, root: BytesN<32>) -> Result<(), Error> {
+        let constitution = storage::load_constitution(&env)?;
+        let sealer = constitution
+            .judging_mode
+            .sealer()
+            .ok_or(Error::WrongJudgingMode)?;
+
+        sealer.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Judging {
+            return Err(Error::WrongPhase);
+        }
+        if env.ledger().timestamp() < state.schedule.judging_closes_at {
+            return Err(Error::DeadlineNotReached);
+        }
+        if storage::has_score_root(&env) {
+            return Err(Error::ScoreRootAlreadyPublished);
+        }
+
+        storage::save_score_root(&env, &root);
+        events::score_root_published(&env, &root);
+
+        Ok(())
+    }
+
+    /// Opens one sealed scorecard.
+    ///
+    /// Anyone may call this and it needs no signature, because the proof is the
+    /// authorization: a scorecard that does not sit under the published root is
+    /// refused, and one that does was written by the judge it names before the
+    /// window closed. That is what lets a participant open every scorecard
+    /// themselves rather than waiting for somebody to publish them.
+    pub fn reveal_score(
+        env: Env,
+        scorecard: Scorecard,
+        proof: Vec<BytesN<32>>,
+    ) -> Result<u32, Error> {
+        if storage::load_state(&env)?.phase != Phase::Reveal {
+            return Err(Error::WrongPhase);
+        }
+
+        let root = storage::load_score_root(&env)?;
+        let leaf = hashing::scorecard_leaf(&env, &scorecard);
+
+        if !merkle::verify(&env, &root, &leaf, &proof) {
+            return Err(Error::ProofDoesNotMatchRoot);
+        }
+
+        if storage::has_score(&env, scorecard.team, &scorecard.judge) {
+            return Err(Error::ScorecardAlreadyRecorded);
+        }
+
+        let submission = storage::load_submission(&env, scorecard.team)?;
+        let constitution = storage::load_constitution(&env)?;
+
+        if !constitution.judges_track(&scorecard.judge, &submission.track) {
+            return Err(Error::NotJudge);
+        }
+
+        // A judge who stepped away is not counted, even if the sealer included
+        // their card. Otherwise the recusal would be cosmetic.
+        if storage::has_recused(&env, &scorecard.judge, scorecard.team) {
+            return Err(Error::JudgeRecused);
+        }
+
+        let track = constitution
+            .track(&submission.track)
+            .ok_or(Error::TrackNotFound)?;
+        let weighted = scorecard.weighted_total(&track)?;
+
+        storage::save_score(&env, scorecard.team, &scorecard.judge, weighted);
+        events::score_revealed(&env, &scorecard.judge, scorecard.team, weighted);
+
+        Ok(weighted)
+    }
+
+    /// The digest sealing the scorecards.
+    pub fn score_root(env: Env) -> Result<BytesN<32>, Error> {
+        storage::load_score_root(&env)
+    }
+
+    /// One judge's weighted total for one project, once revealed.
+    pub fn score(env: Env, team_id: u32, judge: Address) -> Result<u32, Error> {
+        storage::load_score(&env, team_id, &judge)
+    }
+
+    /// A project's revealed scorecards, as a count and a sum.
+    pub fn score_tally(env: Env, team_id: u32) -> ScoreTally {
+        storage::load_score_tally(&env, team_id)
     }
 
     /// Whether this judge stepped away from this project.
