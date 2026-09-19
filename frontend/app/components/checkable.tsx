@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 import { ProofStrip, type Proof } from "./proof-strip";
 import { canCheck, check } from "../../lib/verify";
@@ -58,26 +59,101 @@ export function CheckableProofStrip({
     }
   }
 
+  const settled = stage.at === "answered" ? settle(proofs, stage.findings) : proofs;
+  const held = stage.at === "answered" && settled.every((p) => p.standing === "verified");
+
   return (
     <ProofStrip
-      proofs={stage.at === "answered" ? settle(proofs, stage.findings) : proofs}
+      proofs={settled}
       action={
         canCheck() ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <p className="text-[0.8125rem] text-night-ink-soft">{said(stage)}</p>
+            {/*
+              A check that finds everything in order used to leave the bar
+              looking exactly as it did before: four dots changed colour, a
+              sentence changed wording, and the button still read "Check these".
+              People pressed it, waited, and concluded it was broken.
 
-            <button
-              type="button"
-              onClick={run}
-              disabled={stage.at === "asking"}
-              className="h-8 shrink-0 rounded-full bg-night-ink px-4 text-[0.8125rem] font-semibold text-night transition-colors duration-150 ease-settle hover:bg-night-ink/85 active:translate-y-px disabled:opacity-50"
-            >
-              {stage.at === "asking" ? "Asking" : "Check these"}
-            </button>
+              So the answer replaces the control rather than sitting beside it.
+              A green badge where a white button was is a change nobody can miss,
+              and pressing again is still there for anybody who wants it.
+            */}
+            {held ? (
+              <Settled onAgain={() => void run()} />
+            ) : (
+              <>
+                <p className="text-[0.8125rem] text-night-ink-soft">{said(stage)}</p>
+
+                <button
+                  type="button"
+                  onClick={() => void run()}
+                  disabled={stage.at === "asking"}
+                  className="h-8 shrink-0 rounded-full bg-night-ink px-4 text-[0.8125rem] font-semibold text-night transition-colors duration-150 ease-settle hover:bg-night-ink/85 active:translate-y-px disabled:opacity-50"
+                >
+                  {stage.at === "asking"
+                    ? "Reading the contract"
+                    : stage.at === "unreachable"
+                      ? "Try again"
+                      : "Check these"}
+                </button>
+              </>
+            )}
           </div>
         ) : undefined
       }
     />
+  );
+}
+
+/**
+ * The answer, arriving where the button was.
+ *
+ * It fades and scales in rather than appearing, because the whole point is that
+ * a reader who pressed something sees something happen. The movement is short
+ * enough to read as a settle rather than an entrance, and it is skipped for
+ * anybody who has asked their system to stop animating things.
+ */
+function Settled({ onAgain }: { onAgain: () => void }) {
+  const still = useReducedMotion();
+
+  return (
+    <div className="flex items-center gap-3">
+      <motion.span
+        initial={still ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 460, damping: 30 }}
+        className="flex h-8 shrink-0 items-center gap-2 rounded-full bg-verified px-3.5 text-[0.8125rem] font-semibold text-paper"
+      >
+        <Tick />
+        All four match the contract
+      </motion.span>
+
+      <button
+        type="button"
+        onClick={onAgain}
+        className="text-[0.8125rem] text-night-ink-soft underline decoration-night-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-night-ink"
+      >
+        Check again
+      </button>
+    </div>
+  );
+}
+
+/** Drawn rather than a character, so it keeps its weight beside the label. */
+function Tick() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-3 shrink-0"
+    >
+      <path d="M2 6.4 4.7 9 10 3.2" />
+    </svg>
   );
 }
 
