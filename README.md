@@ -2,7 +2,7 @@
 
 An end to end verifiable hackathon platform running on Stellar and Soroban.
 
-An organiser sets up the hackathon, locks the prize into a contract, judges score
+An organizer sets up the hackathon, locks the prize into a contract, judges score
 the projects, the contract computes the result, and the prize is paid out to the
 winners automatically. Every step leaves a permanent, public proof.
 

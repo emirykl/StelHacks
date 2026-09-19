@@ -7,8 +7,10 @@
 //! outside this contract is allowed to decide who won.
 
 mod errors;
+mod phase;
 
 pub use errors::Error;
+pub use phase::Phase;
 
 use soroban_sdk::contract;
 

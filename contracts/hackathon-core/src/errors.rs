@@ -9,9 +9,9 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum Error {
     // Instance and authority
-    AlreadyInitialised = 1,
-    NotInitialised = 2,
-    NotOrganiser = 3,
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    NotOrganizer = 3,
     NotJudge = 4,
     NotTeamMember = 5,
     NotVault = 6,
@@ -72,8 +72,8 @@ pub enum Error {
     AlreadySigned = 126,
 
     // Result and settlement
-    ResultsAlreadyFinalised = 140,
-    ResultsNotFinalised = 141,
+    ResultsAlreadyFinalized = 140,
+    ResultsNotFinalized = 141,
     NoAwardNotDeclarable = 142,
     SettlementPaused = 143,
     SettlementNotPaused = 144,
