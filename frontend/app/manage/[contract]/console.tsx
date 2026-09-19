@@ -342,6 +342,74 @@ function Next({
     );
   }
 
+  /*
+    Reveal, not Finalization.
+
+    The ranking is what ends the reveal rather than something done once
+    finalization has been entered, and `advance_phase` refuses this stage
+    outright because it has no closing deadline. Offering the generic move here
+    is a button that always fails.
+  */
+  if (running.phase === 5) {
+    return (
+      <div className="flex flex-wrap items-center gap-5">
+        <Button
+          disabled={busy}
+          onClick={() => void run(() => send(contractId, "finalize_results", [], address))}
+        >
+          {busy ? "Signing" : "Compute the ranking"}
+        </Button>
+
+        <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
+          The contract ranks from the revealed scorecards using the formula that
+          was locked. It will not accept a ranking from anywhere else.
+        </p>
+      </div>
+    );
+  }
+
+  /* Finalization. Opening settlement is its own call rather than a phase move,
+     because it also checks that the safety window announced before the lock
+     has elapsed. */
+  if (running.phase === 6) {
+    return (
+      <div className="flex flex-wrap items-center gap-5">
+        <Button
+          disabled={busy}
+          onClick={() => void run(() => send(contractId, "open_settlement", [], address))}
+        >
+          {busy ? "Signing" : "Open settlement"}
+        </Button>
+
+        <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
+          After this the vault pays. If the rules announced a safety window, it
+          has to have passed first.
+        </p>
+      </div>
+    );
+  }
+
+  /* Settlement. Paying is done from the results, by anybody; what is left here
+     is closing the event once nothing is owed. */
+  if (running.phase === 7) {
+    return (
+      <div className="flex flex-wrap items-center gap-5">
+        <Button
+          disabled={busy}
+          onClick={() => void run(() => send(contractId, "complete", [], address))}
+        >
+          {busy ? "Signing" : "Close it"}
+        </Button>
+
+        <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
+          Only once every prize has been handed over. The contract refuses to
+          close a hackathon that still owes money, so this fails until the
+          results page is clear.
+        </p>
+      </div>
+    );
+  }
+
   /* Running. The phase only moves when its deadline has passed, and the
      contract is the one that decides that. */
   if (running.phase < PHASES.length - 2) {
@@ -370,15 +438,20 @@ function Next({
 }
 
 function headline(running: Running & { phase: number }, funded: boolean): string {
-  if (running.phase === 0) {
-    return "Lock the rules";
+  switch (running.phase) {
+    case 0:
+      return "Lock the rules";
+    case 1:
+      return running.vault === null ? "Set up the vault" : funded ? "Publish" : "Fund the prize";
+    case 5:
+      return "Compute the ranking";
+    case 6:
+      return "Open settlement";
+    case 7:
+      return "Close it";
+    default:
+      return running.phase >= PHASES.length - 2 ? "Finished" : "Move it on";
   }
-
-  if (running.phase === 1) {
-    return running.vault === null ? "Set up the vault" : funded ? "Publish" : "Fund the prize";
-  }
-
-  return running.phase >= PHASES.length - 2 ? "Finished" : "Move it on";
 }
 
 /**

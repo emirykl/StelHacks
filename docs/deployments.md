@@ -133,3 +133,33 @@ because a judge who can score nothing breaks a quorum for projects that did
 nothing wrong. And the vault's `create` is an ordinary entry point rather than a
 constructor, so deploying it with its arguments attached fails inside the wasm
 with a missing value. It has to be deployed empty and then told what it holds.
+
+## A whole hackathon in four minutes
+
+`frontend/scripts/full-lifecycle.mts` builds an event whose windows are a minute
+wide and walks it end to end: create, lock, fund, publish, apply, approve, form
+a team, submit, screen, seal a scorecard, reveal it, rank, pay, close. It
+generates its own keys and funds them from friendbot.
+
+| What | Address |
+|---|---|
+| `hackathon-core` | `CCESH6AKD7C7XFNQLVBEGL47CVZVTSFBWBY7OU3QNKLTOIWSD2UOLDOL` |
+| `prize-vault` | `CCCSTMCVU3MS3VRC5UU7XGLPW46RW6G4M54KJJG62PYOULLFDX4GMKN4` |
+
+One entry, scored 90 and 80 against a rubric weighted sixty forty, which the
+contract totalled to 860000 and ranked first. Ten lumens paid out, the vault
+emptied, the event closed. It is at `/hackathons/four-minutes`.
+
+**Five things it caught, and none of them would have failed a build.**
+
+The score root cannot be published before the scoring window shuts, which is the
+contract making sure a root cannot commit to a set still being added to. A leaf
+is one hash over the tag, the domain and the XDR together, not a hash of the
+body then tagged, and getting that wrong produces a root the contract rejects as
+not matching. `advance_phase` refuses the reveal outright because that stage has
+no closing deadline: `finalize_results` is what ends it and `open_settlement` is
+what ends the next, and the organizer console had both mapped a phase late, so
+each of its last three buttons would have failed. And the weighted score is a
+criterion out of a hundred times ten thousand basis points, so a perfect card is
+a million; dividing by anything else printed this result as eighty six hundred
+percent.
