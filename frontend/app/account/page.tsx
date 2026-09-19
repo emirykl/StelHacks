@@ -1,8 +1,10 @@
+import { redirect } from "next/navigation";
+
 import { Eyebrow, Measure } from "../components/primitives";
 import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../components/spec";
-import { SignIn, SignOut } from "../components/session";
+import { SignOut } from "../components/session";
 import { Wallet } from "./wallet";
-import { authConfigured, currentUser, serverClient } from "../../lib/supabase/server";
+import { currentUser, serverClient } from "../../lib/supabase/server";
 
 /**
  * Your account, in the order the two halves actually depend on each other.
@@ -24,50 +26,29 @@ export const dynamic = "force-dynamic";
 export default async function Account() {
   const user = await currentUser();
 
+  /* One door, and it is `/login`. This page used to draw its own sign in form,
+     which meant two surfaces could disagree about what signing in looks like
+     and one of them would eventually be the stale one. */
+  if (user === null) {
+    redirect("/login?next=%2Faccount");
+  }
+
   return (
     <main className="flex-1">
       <section className="border-b border-rule">
         <Measure wide className="py-16 sm:py-20">
           <Eyebrow>Your account</Eyebrow>
 
-          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">
-            {user === null ? "Sign in" : "Account"}
-          </h1>
+          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">Account</h1>
         </Measure>
       </section>
 
       <section className="hatch">
         <Measure wide className="py-16">
-          {user === null ? <SignedOut /> : <SignedIn user={user} />}
+          <SignedIn user={user} />
         </Measure>
       </section>
     </main>
-  );
-}
-
-function SignedOut() {
-  if (!authConfigured()) {
-    /* Said plainly rather than shown as a button that fails. A deployment
-       without the keys is one where signing in does not exist, and offering it
-       anyway teaches somebody to distrust the next button too. */
-    return (
-      <p className="max-w-[34rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-        Sign in is not configured on this deployment. Everything a signed in
-        person can verify can still be verified here without an account.
-      </p>
-    );
-  }
-
-  return (
-    <div className="max-w-[34rem]">
-      <SignIn />
-
-      <p className="mt-5 text-[0.875rem] leading-relaxed text-ink-soft">
-        Your email is only your name. Your wallet does the signing, and you
-        attach one after this. No password: a code arrives in the message and
-        you type it back here.
-      </p>
-    </div>
   );
 }
 

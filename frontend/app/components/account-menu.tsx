@@ -69,7 +69,7 @@ export function AccountMenu({ email }: { email: string | null }) {
      here and it should look like a door from across the page. */
   if (email === null) {
     return (
-      <ButtonLink href="/account" size="sm" className="bg-ink text-signal hover:bg-ink/90">
+      <ButtonLink href="/login" size="sm" className="bg-ink text-signal hover:bg-ink/90">
         Log In
       </ButtonLink>
     );
