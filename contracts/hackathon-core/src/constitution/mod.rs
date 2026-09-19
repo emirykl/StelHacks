@@ -10,8 +10,7 @@ mod voting;
 
 pub use schedule::{Deadline, ExtensionPolicy, Schedule};
 pub use voting::{
-    RegistrationGate, VotePolicy, APPROVED_REGISTRATION_REQUIRED_ABOVE_BPS,
-    MAX_COMMUNITY_SHARE_BPS, VOTE_SPLIT_TOTAL_BPS,
+    RegistrationGate, VotePolicy, APPROVED_REGISTRATION_REQUIRED_ABOVE_BPS, VOTE_SPLIT_TOTAL_BPS,
 };
 pub use scoring::{
     total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,
