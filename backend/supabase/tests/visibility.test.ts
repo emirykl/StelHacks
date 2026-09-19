@@ -334,13 +334,15 @@ describe("the derived tables", () => {
   });
 });
 
-describe("what a client cannot write yet", () => {
+describe("writing about an event you have nothing to do with", () => {
   /**
-   * The write paths are not built. Until they are, the absence of a policy is
-   * what refuses them, and that is worth pinning down: a table left writable by
-   * accident looks exactly like one nobody has got to yet.
+   * Every write path here is tied to an address the chain recorded: the
+   * organizer of that event, or a member of that team. Holding an account is
+   * not holding either, so somebody with a session and nothing else writes
+   * nothing, and the refusal comes from the policy rather than from the table
+   * happening to have no rule yet.
    */
-  it("refuses an event, a team and a project from a signed in client", async () => {
+  it("is refused for an event, a team and a project alike", async () => {
     const contract = someContract();
 
     const event = await insider.client
