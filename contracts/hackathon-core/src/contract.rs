@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::constitution::{Constitution, TeamPolicy};
 use crate::errors::Error;
@@ -9,6 +9,7 @@ use crate::phase::Phase;
 use crate::roster::{Registration, Team};
 use crate::state::HackathonState;
 use crate::storage;
+use crate::submission::Submission;
 use crate::vault::VaultClient;
 
 /// The authority for a single hackathon.
@@ -320,6 +321,127 @@ impl HackathonCore {
         events::member_joined(&env, &member, team_id);
 
         Ok(())
+    }
+
+    /// Moves the hackathon into its next stage once the clock allows it.
+    ///
+    /// Only the three stages that end on a deadline can be moved this way, and
+    /// never before that deadline passes, so this can close a window but never
+    /// cut one short. No signature is asked for: the condition is a timestamp
+    /// anyone can read, and making the organizer the only one who can act on it
+    /// would let them stall a hackathon whose submission window has closed.
+    pub fn advance_phase(env: Env) -> Result<Phase, Error> {
+        let state = storage::load_state(&env)?;
+
+        if state.phase.closing_deadline().is_none() {
+            return Err(Error::PhaseOrderInvalid);
+        }
+
+        let advanced = state.advance(env.ledger().timestamp())?;
+
+        storage::save_state(&env, &advanced);
+        events::phase_advanced(&env, advanced.phase);
+
+        Ok(advanced.phase)
+    }
+
+    /// Enters a project, or revises one already entered.
+    ///
+    /// Any member of the team may do this. Teams work together and joined by
+    /// mutual consent, and requiring the captain to be awake at the deadline is
+    /// a failure mode a hackathon does not need.
+    ///
+    /// The digest is supplied by the caller rather than computed here, because
+    /// the metadata it covers never touches the chain. A client builds it from
+    /// the fields of `SubmissionMetadata`, and anyone can later fetch the same
+    /// metadata from `uri` and check it reaches the same value.
+    pub fn submit_project(
+        env: Env,
+        member: Address,
+        team_id: u32,
+        track: Symbol,
+        metadata_hash: BytesN<32>,
+        uri: String,
+    ) -> Result<(), Error> {
+        member.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Open {
+            return Err(Error::WrongPhase);
+        }
+
+        let now = env.ledger().timestamp();
+        if now < state.schedule.submission_opens_at {
+            return Err(Error::DeadlineNotReached);
+        }
+        if now > state.schedule.submission_closes_at {
+            return Err(Error::DeadlinePassed);
+        }
+
+        let team = storage::load_team(&env, team_id)?;
+        if !team.has_member(&member) {
+            return Err(Error::NotTeamMember);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        if constitution.track(&track).is_none() {
+            return Err(Error::TrackNotFound);
+        }
+
+        let revised = storage::has_submission(&env, team_id);
+        let submission = if revised {
+            storage::load_submission(&env, team_id)?.revise(
+                track.clone(),
+                metadata_hash.clone(),
+                uri,
+                now,
+            )
+        } else {
+            Submission::new(
+                &env,
+                team_id,
+                track.clone(),
+                metadata_hash.clone(),
+                uri,
+                now,
+            )
+        };
+
+        storage::save_submission(&env, &submission);
+        events::project_submitted(&env, team_id, &track, &metadata_hash, revised);
+
+        Ok(())
+    }
+
+    /// Rules an entry out of the running, on the record.
+    ///
+    /// This is the screening round: spam, an empty repository, the wrong track,
+    /// code written before the event. It runs before any scorecard exists, so a
+    /// judge's opinion can never be the thing that shapes it, and it belongs to
+    /// the organizer rather than to a collaborator because it is a judgement
+    /// about the work rather than about who gets in the door.
+    ///
+    /// The project is not deleted. It keeps its page carrying the reason, which
+    /// is the difference between a screening round and a disappearance.
+    pub fn invalidate_submission(env: Env, team_id: u32, reason: BytesN<32>) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        if storage::load_state(&env)?.phase != Phase::Screening {
+            return Err(Error::WrongPhase);
+        }
+
+        let ruled_out = storage::load_submission(&env, team_id)?.invalidate(reason.clone())?;
+
+        storage::save_submission(&env, &ruled_out);
+        events::submission_invalidated(&env, team_id, &reason);
+
+        Ok(())
+    }
+
+    /// One team's entry.
+    pub fn submission(env: Env, team_id: u32) -> Result<Submission, Error> {
+        storage::load_submission(&env, team_id)
     }
 
     /// One person's registration.

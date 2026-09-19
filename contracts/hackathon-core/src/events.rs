@@ -10,7 +10,9 @@
 //! the whole stream. Values that a reader needs but would never filter on, such
 //! as a digest, travel in the payload.
 
-use soroban_sdk::{contractevent, Address, BytesN, Env};
+use soroban_sdk::{contractevent, Address, BytesN, Env, Symbol};
+
+use crate::phase::Phase;
 
 /// A hackathon exists and is open for configuration.
 #[contractevent]
@@ -138,6 +140,68 @@ pub fn member_joined(env: &Env, member: &Address, team: u32) {
     MemberJoined {
         member: member.clone(),
         team,
+    }
+    .publish(env);
+}
+
+/// A project entered the hackathon, or an existing entry was revised.
+///
+/// The digest travels along because this is the value that gets pinned at the
+/// deadline, and an indexer holding this event can show a participant exactly
+/// what was frozen.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectSubmitted {
+    #[topic]
+    pub team: u32,
+    pub track: Symbol,
+    pub metadata_hash: BytesN<32>,
+    pub revised: bool,
+}
+
+/// An entry was ruled out during screening.
+///
+/// The project keeps its page. What changes is its standing, and the reason has
+/// to travel with the decision.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubmissionInvalidated {
+    #[topic]
+    pub team: u32,
+    pub reason: BytesN<32>,
+}
+
+/// The hackathon moved into its next stage.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PhaseAdvanced {
+    pub phase: Phase,
+}
+
+pub fn phase_advanced(env: &Env, phase: Phase) {
+    PhaseAdvanced { phase }.publish(env);
+}
+
+pub fn project_submitted(
+    env: &Env,
+    team: u32,
+    track: &Symbol,
+    metadata_hash: &BytesN<32>,
+    revised: bool,
+) {
+    ProjectSubmitted {
+        team,
+        track: track.clone(),
+        metadata_hash: metadata_hash.clone(),
+        revised,
+    }
+    .publish(env);
+}
+
+pub fn submission_invalidated(env: &Env, team: u32, reason: &BytesN<32>) {
+    SubmissionInvalidated {
+        team,
+        reason: reason.clone(),
     }
     .publish(env);
 }

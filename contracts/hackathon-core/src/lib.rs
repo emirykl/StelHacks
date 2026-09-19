@@ -38,5 +38,5 @@ pub use phase::Phase;
 pub use roster::{ApplicationStatus, Registration, Team};
 pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
-pub use submission::{SubmissionMetadata, SubmissionRequirements};
+pub use submission::{Submission, SubmissionMetadata, SubmissionRequirements, SubmissionStatus};
 pub use vault::{Vault, VaultClient};

@@ -5,6 +5,7 @@ use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
 use crate::roster::{Registration, Team};
 use crate::state::HackathonState;
+use crate::submission::Submission;
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
 const LEDGERS_PER_DAY: u32 = 17_280;
@@ -55,6 +56,8 @@ pub enum DataKey {
     TeamCount,
     /// The teams one person belongs to.
     Membership(Address),
+    /// One team's entry, keyed by team because a team enters once.
+    Submission(u32),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -230,6 +233,28 @@ pub fn save_membership(env: &Env, who: &Address, teams: &Vec<u32>) {
     let key = DataKey::Membership(who.clone());
     env.storage().persistent().set(&key, teams);
     touch_entry(env, &key);
+}
+
+pub fn save_submission(env: &Env, submission: &Submission) {
+    let key = DataKey::Submission(submission.team);
+    env.storage().persistent().set(&key, submission);
+    touch_entry(env, &key);
+}
+
+pub fn load_submission(env: &Env, team: u32) -> Result<Submission, Error> {
+    let key = DataKey::Submission(team);
+    let submission = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::SubmissionNotFound)?;
+    touch_entry(env, &key);
+
+    Ok(submission)
+}
+
+pub fn has_submission(env: &Env, team: u32) -> bool {
+    env.storage().persistent().has(&DataKey::Submission(team))
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

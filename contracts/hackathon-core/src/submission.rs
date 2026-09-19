@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, String, Symbol};
+use soroban_sdk::{contracttype, BytesN, Env, String, Symbol};
 
 use crate::errors::Error;
 
@@ -88,6 +88,116 @@ impl SubmissionMetadata {
         }
 
         Ok(())
+    }
+}
+
+/// Whether a submission still counts.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum SubmissionStatus {
+    /// In the running.
+    Valid = 0,
+    /// Ruled out during the screening round. The project keeps its page and its
+    /// reason; it is never deleted.
+    Invalidated = 1,
+}
+
+/// A team's entry, as the contract records it.
+///
+/// The write up itself lives off chain under `uri`, and what sits here is its
+/// digest. That is the whole trick of the submission lock: at the deadline this
+/// digest stops being writable, so the project a judge scores is provably the
+/// project that was entered, without the chain ever paying to store a video
+/// link or a paragraph of prose.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Submission {
+    /// The team this entry belongs to.
+    pub team: u32,
+    /// The track it competes in.
+    pub track: Symbol,
+    /// Digest of the metadata, computed over the fields of
+    /// [`SubmissionMetadata`].
+    pub metadata_hash: BytesN<32>,
+    /// Where that metadata can be fetched.
+    pub uri: String,
+    /// When the entry first arrived.
+    ///
+    /// Later edits do not move this. Submission order is the last step of the
+    /// tie break chain, so a team that edits a typo an hour before the deadline
+    /// would otherwise lose the place their early entry earned them.
+    pub submitted_at: u64,
+    /// When it was last edited.
+    pub updated_at: u64,
+    pub status: SubmissionStatus,
+    /// Digest of the written reason when a submission is ruled out; all zeroes
+    /// otherwise.
+    pub reason: BytesN<32>,
+}
+
+impl Submission {
+    /// A new entry.
+    pub fn new(
+        env: &Env,
+        team: u32,
+        track: Symbol,
+        metadata_hash: BytesN<32>,
+        uri: String,
+        now: u64,
+    ) -> Submission {
+        Submission {
+            team,
+            track,
+            metadata_hash,
+            uri,
+            submitted_at: now,
+            updated_at: now,
+            status: SubmissionStatus::Valid,
+            reason: BytesN::from_array(env, &[0u8; 32]),
+        }
+    }
+
+    /// Replaces what the entry points at, keeping its place in the order.
+    pub fn revise(
+        &self,
+        track: Symbol,
+        metadata_hash: BytesN<32>,
+        uri: String,
+        now: u64,
+    ) -> Submission {
+        Submission {
+            team: self.team,
+            track,
+            metadata_hash,
+            uri,
+            submitted_at: self.submitted_at,
+            updated_at: now,
+            status: self.status,
+            reason: self.reason.clone(),
+        }
+    }
+
+    /// Rules the entry out, against the reason given for it.
+    pub fn invalidate(&self, reason: BytesN<32>) -> Result<Submission, Error> {
+        if self.status == SubmissionStatus::Invalidated {
+            return Err(Error::AlreadyInvalidated);
+        }
+
+        Ok(Submission {
+            team: self.team,
+            track: self.track.clone(),
+            metadata_hash: self.metadata_hash.clone(),
+            uri: self.uri.clone(),
+            submitted_at: self.submitted_at,
+            updated_at: self.updated_at,
+            status: SubmissionStatus::Invalidated,
+            reason,
+        })
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.status == SubmissionStatus::Valid
     }
 }
 
@@ -205,5 +315,91 @@ mod test {
         assert!(requirements.repository_required);
         assert!(requirements.demo_video_required);
         assert!(!requirements.live_url_required);
+    }
+
+    #[test]
+    fn a_new_entry_is_valid_and_carries_no_reason() {
+        let env = Env::default();
+        let submission = Submission::new(
+            &env,
+            1,
+            symbol_short!("payments"),
+            BytesN::from_array(&env, &[1u8; 32]),
+            String::from_str(&env, "ipfs://cid"),
+            100,
+        );
+
+        assert!(submission.is_valid());
+        assert_eq!(submission.submitted_at, 100);
+        assert_eq!(submission.updated_at, 100);
+    }
+
+    /// Editing must not buy a better place in the tie break, so the moment the
+    /// entry first arrived is the one that sticks.
+    #[test]
+    fn revising_an_entry_leaves_its_place_in_the_order_alone() {
+        let env = Env::default();
+        let original = Submission::new(
+            &env,
+            1,
+            symbol_short!("payments"),
+            BytesN::from_array(&env, &[1u8; 32]),
+            String::from_str(&env, "ipfs://one"),
+            100,
+        );
+
+        let revised = original.revise(
+            symbol_short!("defi"),
+            BytesN::from_array(&env, &[2u8; 32]),
+            String::from_str(&env, "ipfs://two"),
+            500,
+        );
+
+        assert_eq!(revised.submitted_at, 100);
+        assert_eq!(revised.updated_at, 500);
+        assert_eq!(revised.track, symbol_short!("defi"));
+        assert_eq!(revised.metadata_hash, BytesN::from_array(&env, &[2u8; 32]));
+    }
+
+    #[test]
+    fn an_entry_ruled_out_keeps_everything_but_its_standing() {
+        let env = Env::default();
+        let reason = BytesN::from_array(&env, &[7u8; 32]);
+        let submission = Submission::new(
+            &env,
+            1,
+            symbol_short!("payments"),
+            BytesN::from_array(&env, &[1u8; 32]),
+            String::from_str(&env, "ipfs://cid"),
+            100,
+        );
+
+        let ruled_out = submission.invalidate(reason.clone()).unwrap();
+
+        assert!(!ruled_out.is_valid());
+        assert_eq!(ruled_out.reason, reason);
+        assert_eq!(ruled_out.metadata_hash, submission.metadata_hash);
+        assert_eq!(ruled_out.submitted_at, submission.submitted_at);
+    }
+
+    #[test]
+    fn an_entry_cannot_be_ruled_out_twice() {
+        let env = Env::default();
+        let reason = BytesN::from_array(&env, &[7u8; 32]);
+        let ruled_out = Submission::new(
+            &env,
+            1,
+            symbol_short!("payments"),
+            BytesN::from_array(&env, &[1u8; 32]),
+            String::from_str(&env, "ipfs://cid"),
+            100,
+        )
+        .invalidate(reason.clone())
+        .unwrap();
+
+        assert_eq!(
+            ruled_out.invalidate(reason).err(),
+            Some(Error::AlreadyInvalidated)
+        );
     }
 }
