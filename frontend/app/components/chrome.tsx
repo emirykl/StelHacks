@@ -1,5 +1,5 @@
+import { AccountMenu } from "./account-menu";
 import { Measure } from "./primitives";
-import { WalletBadge } from "./wallet-badge";
 import { currentUser } from "../../lib/supabase/server";
 
 /**
@@ -48,11 +48,11 @@ export async function Header() {
           ))}
         </nav>
 
-        {/* The one control on the right, and it changes with the situation:
-            sign in, then a way to the account, then the connected address once
-            there is one. "Browse" used to sit here and said the same thing as
-            the Hackathons link beside it. */}
-        <WalletBadge signedIn={user !== null} />
+        {/* The one control on the right, and it changes with the situation: a
+            way in, then the person, then the connected address beside them.
+            "Browse" used to sit here and said the same thing as the Hackathons
+            link beside it. */}
+        <AccountMenu email={user?.email ?? null} />
       </div>
     </header>
   );

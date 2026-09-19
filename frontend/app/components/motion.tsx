@@ -55,6 +55,69 @@ export function Lift({
 }
 
 /**
+ * A small control that acknowledges being pressed.
+ *
+ * For icon buttons, where there is no label to change and no page to navigate
+ * to, so the press itself is the only confirmation available.
+ */
+export function Press({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  const still = useReducedMotion();
+
+  return (
+    <motion.div
+      className={className}
+      whileHover={still ? undefined : { scale: 1.04 }}
+      whileTap={still ? undefined : { scale: 0.94 }}
+      transition={settle}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * A panel that opens from the control that opened it.
+ *
+ * It scales up from just under full size while dropping a few pixels, which
+ * reads as the panel coming out of the button rather than appearing over it.
+ * The transform origin is what ties it there: without one the panel grows from
+ * its own centre and the connection is lost, so every caller sets it.
+ */
+export function Pop({
+  open,
+  className,
+  children,
+}: {
+  open: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const still = useReducedMotion();
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className={className}
+          initial={still ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -6 }}
+          animate={still ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+          exit={still ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -4 }}
+          transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/**
  * One step of a short flow replacing the one before it.
  *
  * The outgoing step leaves to the left and the incoming one arrives from the
