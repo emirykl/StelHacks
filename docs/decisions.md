@@ -361,6 +361,41 @@ leave a total that does not add up on the proof page.
 last share has gone, so `complete` refuses while any single member is still
 owed rather than only while a position is.
 
+## 22. The durable log is `chain_events` and `chain_reads`, not the chain
+
+**The rule said** every derived table must be droppable and rebuildable by
+replaying events from ledger zero.
+
+**Decided.** It is rebuildable by replaying `chain_events` and `chain_reads`,
+both of which the indexer fills from public chain data and neither of which any
+client can write.
+
+**Why the rule needed amending.** Three things a page needs are in no event at
+all. `visibility` and `prize_asset` live in the constitution and `RulesLocked`
+carries only its digest. A submission's `uri` is absent from `ProjectSubmitted`,
+which carries the digest and the track. And the ranking is absent from
+`TrackRanked`, which says how many projects were placed rather than which. All
+three are readable from contract state, so the authority rule itself is intact:
+nothing asks anybody to trust Postgres over the chain.
+
+What is not intact is availability. Soroban entries carry a time to live, and a
+finished hackathon is one nobody writes to, so its state expires. A rebuild that
+called `ranking(track)` would work today and fail in a year, which is precisely
+when somebody would be checking an old result. The alternative was to put every
+missing field into the events, and that means paying ledger rent forever to
+duplicate what is already readable, on every hackathon, against the chance that
+one of them is audited late.
+
+**So the read happens once, at ingest, while the state is live,** and the answer
+is recorded in `chain_reads` beside the event that prompted it. From then on the
+rebuild runs from Postgres alone.
+
+**What this costs.** The indexer is no longer a pure function of the event
+stream: it makes contract calls, and a call that fails at ingest is a gap that
+has to be retried rather than a row that is merely late. `chain_reads` also
+becomes as load bearing as `chain_events`, and losing either means losing the
+ability to rebuild. Both are append only for that reason.
+
 ---
 
 ## Still open
