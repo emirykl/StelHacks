@@ -1,5 +1,5 @@
 import { ButtonLink, Measure } from "../../components/primitives";
-import { VISIBILITY, milestonesOf, type Milestone } from "../../../lib/rules";
+import { VISIBILITY, windowsOf, type Window } from "../../../lib/rules";
 import { prizeLabel, worthOf } from "../../../lib/money";
 import { phaseName } from "../../../lib/phase";
 import type { HackathonDetail } from "../../../lib/chain";
@@ -24,7 +24,7 @@ import type { HackathonDetail } from "../../../lib/chain";
 export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
   const worth = await worthOf(hackathon.asset, hackathon.prize);
   const prize = prizeLabel(worth, hackathon.prize);
-  const milestones = hackathon.rules === null ? [] : milestonesOf(hackathon.rules);
+  const windows = hackathon.rules === null ? [] : windowsOf(hackathon.rules);
 
   return (
     <section className="border-b border-rule">
@@ -68,7 +68,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
           <div className="border border-rule">
             <Panel label="Prize pool">
               {hackathon.prize === null ? (
-                <p className="label text-ink-faint">not readable from the contract</p>
+                <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>
               ) : (
                 <p className="tabular text-[2rem] font-bold leading-none text-verified">
                   {prize.figure}{" "}
@@ -77,15 +77,15 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               )}
             </Panel>
 
-            <Panel label="Timeline">
+            <Panel label="Timeline · UTC">
               <Countdown closesAt={hackathon.closesAt} phase={hackathon.phase} />
 
-              {milestones.length === 0 ? (
-                <p className="label mt-3 text-ink-faint">no schedule readable</p>
+              {windows.length === 0 ? (
+                <p className="mt-3 text-[0.875rem] text-ink-faint">no schedule readable</p>
               ) : (
-                <ol className="mt-4 grid gap-2">
-                  {milestones.map((moment) => (
-                    <Moment key={moment.label} moment={moment} />
+                <ol className="mt-4 grid gap-2.5">
+                  {windows.map((span) => (
+                    <Span key={span.label} span={span} />
                   ))}
                 </ol>
               )}
@@ -94,7 +94,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
             {(hackathon.location !== null || hackathon.tags.length > 0) && (
               <Panel label="Where and what">
                 {hackathon.location !== null && (
-                  <p className="label flex items-center gap-1.5 font-bold text-ink">
+                  <p className="flex items-center gap-1.5 text-[0.9375rem] font-semibold text-ink">
                     <Pin />
                     {hackathon.location}
                   </p>
@@ -103,7 +103,10 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
                 {hackathon.tags.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {hackathon.tags.map((tag) => (
-                      <span key={tag} className="label bg-paper-sunk px-2 py-1 text-ink-soft">
+                      <span
+                        key={tag}
+                        className="bg-paper-sunk px-2 py-1 text-[0.8125rem] text-ink-soft"
+                      >
                         {tag}
                       </span>
                     ))}
@@ -181,8 +184,8 @@ function Countdown({ closesAt, phase }: { closesAt: number | null; phase: number
 
   if (finished || closesAt === null || left <= 0) {
     return (
-      <p className="label bg-paper-sunk px-2.5 py-1.5 text-ink-soft ring-1 ring-inset ring-rule">
-        {closesAt === null ? "no deadline set" : "submissions closed"}
+      <p className="bg-paper-sunk px-3 py-2 text-[0.875rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
+        {closesAt === null ? "No deadline set" : "Submissions closed"}
       </p>
     );
   }
@@ -191,7 +194,7 @@ function Countdown({ closesAt, phase }: { closesAt: number | null; phase: number
   const hours = Math.floor((left % 86_400) / 3_600);
 
   return (
-    <p className="label bg-verified px-2.5 py-1.5 font-bold text-paper">
+    <p className="bg-verified px-3 py-2 text-[0.9375rem] font-bold text-paper">
       {days > 0
         ? `${days} ${days === 1 ? "day" : "days"} left to submit`
         : `${hours} ${hours === 1 ? "hour" : "hours"} left to submit`}
@@ -200,48 +203,71 @@ function Countdown({ closesAt, phase }: { closesAt: number | null; phase: number
 }
 
 /**
- * One announced moment, and whether it has happened.
+ * One window, on one line.
  *
- * The next one still to come is the only line set in full ink. Everything
- * behind it is history and everything past it is somebody else's problem; the
- * one a reader is looking for is the one about to happen.
+ * The window running right now is the only line in full ink. What is behind it
+ * is history and what is past it is somebody else's week; the one a reader is
+ * looking for is the one they are standing in, or the next one if they are
+ * between two.
+ *
+ * The label is set in the interface face rather than in tracked out capitals.
+ * "Registration" and "Submissions" are words a person reads, not values the
+ * chain is quoting, and the capitals were costing legibility for a distinction
+ * that does not apply here.
  */
-function Moment({ moment }: { moment: Milestone }) {
+function Span({ span }: { span: Window }) {
+  const lit = span.standing === "now";
+
   return (
     <li className="flex items-baseline justify-between gap-4">
       <span
-        className={`label ${
-          moment.next ? "font-bold text-ink" : moment.passed ? "text-ink-faint" : "text-ink-soft"
+        className={`text-[0.875rem] ${
+          lit ? "font-bold text-ink" : span.standing === "past" ? "text-ink-faint" : "text-ink-soft"
         }`}
       >
-        {moment.label}
+        {span.label}
       </span>
 
       <span
-        className={`tabular shrink-0 text-[0.75rem] ${
-          moment.next ? "font-bold text-ink" : "text-ink-faint"
+        className={`tabular shrink-0 text-[0.8125rem] ${
+          lit ? "font-bold text-ink" : "text-ink-faint"
         }`}
       >
-        {stamp(moment.at)}
+        {span.to === null ? (
+          stamp(span.from)
+        ) : (
+          <>
+            {stamp(span.from)} <span className="text-ink-faint">→</span> {stamp(span.to)}
+          </>
+        )}
       </span>
     </li>
   );
 }
 
 /**
- * A moment, in UTC, in a shape that sorts.
+ * A moment, in UTC, short enough that two fit on one line.
  *
- * Not the reader's own timezone, and deliberately. Every other timestamp this
- * product shows is a ledger time, and a deadline printed in local time here and
- * in UTC on the explorer is two deadlines a reader has to reconcile.
+ * It was `2026/08/27 20:27Z`, which is twenty characters, and two of those on
+ * a line in a rail this narrow do not fit at all. The year is dropped unless
+ * the date is not in this one, which is the only case where its absence could
+ * mislead anybody.
+ *
+ * Still UTC, and deliberately. Every other timestamp this product shows is a
+ * ledger time, and a deadline printed in local time here and in UTC on the
+ * explorer is two deadlines a reader has to reconcile.
  */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 function stamp(at: number): string {
   const when = new Date(at * 1_000);
   const pad = (value: number) => String(value).padStart(2, "0");
+  const year =
+    when.getUTCFullYear() === new Date().getUTCFullYear() ? "" : ` ${when.getUTCFullYear()}`;
 
-  return `${when.getUTCFullYear()}/${pad(when.getUTCMonth() + 1)}/${pad(when.getUTCDate())} ${pad(
+  return `${when.getUTCDate()} ${MONTHS[when.getUTCMonth()]}${year} ${pad(
     when.getUTCHours(),
-  )}:${pad(when.getUTCMinutes())}Z`;
+  )}:${pad(when.getUTCMinutes())}`;
 }
 
 /**
@@ -254,7 +280,7 @@ function stamp(at: number): string {
  */
 function Gallery({ visibility }: { visibility: number | null }) {
   if (visibility === null) {
-    return <p className="label text-ink-faint">not readable from the contract</p>;
+    return <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>;
   }
 
   const said = [
@@ -265,9 +291,9 @@ function Gallery({ visibility }: { visibility: number | null }) {
 
   return (
     <>
-      <p className="label font-bold text-ink">{said[0]}</p>
+      <p className="text-[0.9375rem] font-bold text-ink">{said[0]}</p>
 
-      <p className="mt-2 text-[0.8125rem] leading-relaxed text-ink-soft">{said[1]}</p>
+      <p className="mt-2 text-[0.875rem] leading-relaxed text-ink-soft">{said[1]}</p>
 
       <p className="label mt-3 text-ink-faint">frozen as {VISIBILITY[visibility] ?? "unknown"}</p>
     </>

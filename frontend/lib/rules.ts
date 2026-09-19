@@ -194,48 +194,60 @@ function within(value: unknown, count: number): boolean {
 }
 
 /**
- * The schedule as a reader follows it, in order, with today marked.
+ * The schedule as a reader follows it: windows, not moments.
+ *
+ * There were eight lines here and they were six too many. Registration opening
+ * and registration closing are not two facts a person holds separately, they
+ * are one window with two ends, and printing them as separate rows made
+ * somebody read six dates to answer "when can I still get in". A window is one
+ * row with an arrow in it and the answer is on the line.
  *
  * The community vote is left out when the crowd has no share of the score.
  * Both of its timestamps are still in the document and the contract ignores
  * them, so showing them would put two dates on a page that decide nothing.
  */
-export interface Milestone {
+export interface Window {
   label: string;
-  at: number;
-  passed: boolean;
-  /** The next one still to come, which is the line a reader is looking for. */
-  next: boolean;
+  from: number;
+  /** Absent for a deadline, which is an end with no matching beginning. */
+  to: number | null;
+  /** Whether it is behind us, running now, or still ahead. */
+  standing: "past" | "now" | "ahead";
 }
 
-export function milestonesOf(rules: Rules, now = Math.floor(Date.now() / 1000)): Milestone[] {
+export function windowsOf(rules: Rules, now = Math.floor(Date.now() / 1000)): Window[] {
   const { schedule } = rules;
 
-  const moments: [string, number][] = [
-    ["Registration opens", schedule.registrationOpens],
-    ["Registration closes", schedule.registrationCloses],
-    ["Submissions open", schedule.submissionOpens],
-    ["Submissions close", schedule.submissionCloses],
-    ["Screening closes", schedule.screeningCloses],
+  const spans: [string, number, number | null][] = [
+    ["Registration", schedule.registrationOpens, schedule.registrationCloses],
+    ["Submissions", schedule.submissionOpens, schedule.submissionCloses],
+    ["Screening ends", schedule.screeningCloses, null],
     ...(rules.communityBps > 0
-      ? ([
-          ["Community vote opens", schedule.communityVoteOpens],
-          ["Community vote closes", schedule.communityVoteCloses],
-        ] as [string, number][])
+      ? ([["Community vote", schedule.communityVoteOpens, schedule.communityVoteCloses]] as [
+          string,
+          number,
+          number | null,
+        ][])
       : []),
-    ["Judging closes", schedule.judgingCloses],
+    ["Judging ends", schedule.judgingCloses, null],
   ];
 
-  const ordered = moments
-    .filter(([, at]) => at > 0)
-    .sort((left, right) => left[1] - right[1]);
-
-  const upcoming = ordered.findIndex(([, at]) => at > now);
-
-  return ordered.map(([label, at], index) => ({
-    label,
-    at,
-    passed: at <= now,
-    next: index === upcoming,
-  }));
+  return spans
+    .filter(([, from]) => from > 0)
+    .map(([label, from, to]) => ({
+      label,
+      from,
+      to,
+      /* A deadline with no window is "now" only in the sense that it has not
+         happened; it is never something you are inside of. */
+      standing: (to === null
+        ? now >= from
+          ? "past"
+          : "ahead"
+        : now >= to
+          ? "past"
+          : now >= from
+            ? "now"
+            : "ahead") as Window["standing"],
+    }));
 }
