@@ -79,5 +79,9 @@ blocks, so nothing quietly becomes a gap nobody agreed to.
 `docs/roadmap.md` is the live plan and its "Current position" section is kept
 up to date. `docs/roadmap.md` is gitignored on purpose; it lives on disk only.
 
-The contract layer is complete through settlement: a hackathon runs from
-creation to paying winners, and the vault empties exactly when it closes.
+The contract layer is complete through settlement and the discretion paths: a
+hackathon runs from creation to paying winners, the vault empties exactly when
+it closes, and every use of organizer discretion (deadline extension,
+disqualification with an appeal, cancellation) is bounded by something announced
+before the lock and leaves a reason hash behind. M10, hardening and the testnet
+deployment, is next.
