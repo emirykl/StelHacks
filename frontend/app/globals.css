@@ -223,25 +223,34 @@
   }
 
   /*
-    A label in the chain's voice.
+    A label: the small word above a value, saying what the value is.
 
-    Monospaced, capitalised and tracked. It names a value; it is never the
-    value itself and it is never a sentence. Both of those were tried across
-    this build and both were a mistake: tracked out capitals in a mono face
-    cost a reader real speed, which is nothing over two words and unbearable
-    over twelve.
+    Set in the interface face, and that is a correction. It used to be
+    monospaced capitals, tracked well apart, on the argument that a label
+    naming something the chain holds should be in the chain's voice. The
+    argument was fine and the result was unreadable. A mono face is drawn so
+    that every character occupies the same width, which is exactly what you
+    want when somebody is comparing two digests character by character and
+    exactly what you do not want when they are reading the words "registration
+    closes" at twelve pixels.
 
-    A little larger and a good deal tighter than it started. It was set at
-    eleven pixels with a seventh of an em between the letters, on the theory
-    that small capitals set tight stop being legible. They do, but they stop
-    being legible at both ends of that dial, and the earlier value was past the
-    far one.
+    So the rule moved. Monospace now means one thing only: a value somebody
+    might compare by eye, which is `.tabular` and nothing else. Everything a
+    person reads as language, including every label, is the interface face.
+    The chain still has its own voice on these surfaces, and it is carried by
+    the dark ground, the square corners and the hairline rows rather than by
+    making twelve pixel type harder to read.
+
+    Capitals and a little tracking stay. They are what keeps a label from
+    being mistaken for the value under it, and at this weight and this size
+    they cost a reader nothing.
   */
   .label {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 0.75rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.045em;
     font-variant-numeric: tabular-nums;
   }
 
