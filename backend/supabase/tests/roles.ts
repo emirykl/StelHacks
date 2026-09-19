@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
 import { randomUUID } from "node:crypto";
 
-config({ path: new URL("../../../.env.local", import.meta.url).pathname, quiet: true });
+config({ path: new URL("../../.env.local", import.meta.url).pathname, quiet: true });
 
 /**
  * The three ways somebody reaches this database, set up the way they really
@@ -23,8 +23,8 @@ function required(name: string): string {
 
   if (value === undefined || value === "") {
     throw new Error(
-      `${name} is not set. Copy .env.example to .env.local and fill it in; ` +
-        "these tests run against the linked Supabase project.",
+      `${name} is not set. Copy backend/.env.example to backend/.env.local and ` +
+        "fill it in; these tests run against the linked Supabase project.",
     );
   }
 
