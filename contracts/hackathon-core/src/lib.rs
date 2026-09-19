@@ -9,6 +9,7 @@
 mod constitution;
 mod errors;
 mod phase;
+mod team;
 
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, Criterion, Deadline, ExtensionPolicy, PrizeTier,
@@ -16,6 +17,7 @@ pub use constitution::{
 };
 pub use errors::Error;
 pub use phase::Phase;
+pub use team::OrganizingTeam;
 
 use soroban_sdk::contract;
 

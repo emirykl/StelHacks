@@ -12,9 +12,13 @@ pub enum Error {
     AlreadyInitialized = 1,
     NotInitialized = 2,
     NotOrganizer = 3,
-    NotJudge = 4,
-    NotTeamMember = 5,
-    NotVault = 6,
+    NotOnOrganizingTeam = 4,
+    NotJudge = 5,
+    NotTeamMember = 6,
+    NotVault = 7,
+    CollaboratorAlreadyAdded = 8,
+    CollaboratorNotFound = 9,
+    OrganizerCannotBeCollaborator = 10,
 
     // Configuration
     TrackNotFound = 20,
