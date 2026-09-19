@@ -6,7 +6,7 @@ import { Button } from "../../components/primitives";
 import { SpecHeading, SpecLabel, SpecRow, SpecRows, SpecValue } from "../../components/spec";
 import { useWallet } from "../../components/wallet-context";
 import { entriesOf, type Entry } from "../../../lib/submissions";
-import { runningOf } from "../../../lib/running";
+import { phaseOf } from "../../../lib/running";
 import { rubricOf, type Rubric } from "../../../lib/rubric";
 import {
   leafOf,
@@ -48,22 +48,30 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
   const [refused, setRefused] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [found, tracks, running] = await Promise.all([
+    const [found, tracks, at] = await Promise.all([
       entriesOf(contractId),
       rubricOf(contractId),
-      runningOf(contractId),
+      phaseOf(contractId),
     ]);
 
     setEntries(found);
     setRubric(tracks);
-    setPhase(running.phase);
+    setPhase(at);
   }, [contractId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!known || entries === null || rubric === null) {
+  /*
+    The wallet is not waited on.
+
+    Nothing above depends on it: the projects and the rubric come from the
+    contract, and only signing needs a key. Holding the whole page until the
+    kit has loaded and the extension has answered meant a judge with a wallet
+    already connected waited longer than one without, which is backwards.
+  */
+  if (entries === null || rubric === null) {
     return <p className="label text-ink-faint">Reading the contract</p>;
   }
 
@@ -72,15 +80,6 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
       <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
         No collection service is configured for this deployment, so there is
         nowhere to hand a scorecard.
-      </p>
-    );
-  }
-
-  if (wallet === null) {
-    return (
-      <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-        Connect the wallet the rules name as a judge. Your card is signed by it,
-        and a card signed by any other key is refused.
       </p>
     );
   }
@@ -111,7 +110,8 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
             key={entry.team}
             entry={entry}
             criteria={rubric.find((track) => track.track === entry.track)?.criteria ?? []}
-            judge={wallet.address}
+            judge={wallet?.address ?? null}
+            ready={known}
             contractId={contractId}
             held={held[entry.team]}
             busy={busy === entry.team}
@@ -133,6 +133,7 @@ function Card({
   entry,
   criteria,
   judge,
+  ready,
   contractId,
   held,
   busy,
@@ -142,7 +143,8 @@ function Card({
 }: {
   entry: Entry;
   criteria: { id: string; weightBps: number }[];
-  judge: string;
+  judge: string | null;
+  ready: boolean;
   contractId: string;
   held: Held | undefined;
   busy: boolean;
@@ -156,6 +158,10 @@ function Card({
   const filled = criteria.every((criterion) => (scores[criterion.id] ?? "").length > 0);
 
   async function submit() {
+    if (judge === null) {
+      return;
+    }
+
     onBusy(true);
     onRefused(null);
 
@@ -228,9 +234,24 @@ function Card({
             ))}
           </div>
 
-          <Button className="mt-5" disabled={busy || !filled} onClick={() => void submit()}>
-            {busy ? "Signing" : "Seal this card"}
-          </Button>
+          <div className="mt-5 flex flex-wrap items-center gap-4">
+            <Button
+              disabled={busy || !filled || judge === null}
+              onClick={() => void submit()}
+            >
+              {busy ? "Signing" : "Seal this card"}
+            </Button>
+
+            {/* Only the button waits on the wallet, and it says why rather
+                than sitting there greyed out for a reason nobody can see. */}
+            {judge === null && (
+              <p className="text-[0.875rem] leading-relaxed text-ink-soft">
+                {ready
+                  ? "Connect the wallet the rules name as a judge. A card signed by any other key is refused."
+                  : "Checking your wallet"}
+              </p>
+            )}
+          </div>
         </>
       ) : (
         <div className="mt-6">

@@ -103,6 +103,48 @@ export async function runningOf(contractId: string): Promise<Running> {
   };
 }
 
+/**
+ * Just the phase, for surfaces that only need to know whether they are open.
+ *
+ * `runningOf` asks six questions because an organizer's console needs all six.
+ * A page that only has to decide whether to show a form was paying for five it
+ * throws away, and on a page opened by somebody with work to do that showed up
+ * as seconds of waiting.
+ */
+export async function phaseOf(contractId: string): Promise<number | null> {
+  if (rpcUrl === undefined || passphrase === undefined) {
+    return null;
+  }
+
+  const [{ Account, Contract, TransactionBuilder, BASE_FEE, scValToNative }, rpc] =
+    await Promise.all([
+      import("@stellar/stellar-sdk/base"),
+      import("@stellar/stellar-sdk/rpc"),
+    ]);
+
+  const server = new rpc.Server(rpcUrl);
+
+  try {
+    const tx = new TransactionBuilder(
+      new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
+      { fee: BASE_FEE, networkPassphrase: passphrase },
+    )
+      .addOperation(new Contract(contractId).call("phase"))
+      .setTimeout(30)
+      .build();
+
+    const simulated = await server.simulateTransaction(tx);
+
+    if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
+      return null;
+    }
+
+    return Number(scValToNative(simulated.result.retval));
+  } catch {
+    return null;
+  }
+}
+
 /** The prize asset named in the frozen rules, which the vault has to match. */
 export async function prizeAssetOf(contractId: string): Promise<string | null> {
   if (rpcUrl === undefined || passphrase === undefined) {
