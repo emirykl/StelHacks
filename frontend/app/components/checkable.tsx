@@ -59,50 +59,44 @@ export function CheckableProofStrip({
   }
 
   return (
-    <div>
-      <ProofStrip proofs={stage.at === "answered" ? settle(proofs, stage.findings) : proofs} />
+    <ProofStrip
+      proofs={stage.at === "answered" ? settle(proofs, stage.findings) : proofs}
+      action={
+        canCheck() ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-[0.8125rem] text-night-ink-soft">{said(stage)}</p>
 
-      {canCheck() && (
-        <div className="border-b border-rule bg-paper-sunk">
-          <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-3 px-6 py-5 sm:flex-row sm:items-start sm:gap-6">
             <button
               type="button"
               onClick={run}
               disabled={stage.at === "asking"}
-              className="h-10 shrink-0 bg-ink px-5 text-[0.875rem] font-semibold text-paper transition-colors duration-150 ease-settle hover:bg-ink/85 active:translate-y-px disabled:opacity-50"
+              className="h-8 shrink-0 rounded-full bg-night-ink px-4 text-[0.8125rem] font-semibold text-night transition-colors duration-150 ease-settle hover:bg-night-ink/85 active:translate-y-px disabled:opacity-50"
             >
-              {stage.at === "asking" ? "Asking the contract" : "Check the four myself"}
+              {stage.at === "asking" ? "Asking" : "Check these"}
             </button>
-
-            <p className="max-w-[52rem] text-[0.875rem] leading-relaxed text-ink-soft">
-              {said(stage)}
-            </p>
           </div>
-        </div>
-      )}
-    </div>
+        ) : undefined
+      }
+    />
   );
 }
 
 /**
  * What the reader is told at each stage, and never more than is true.
  *
- * The idle sentence has to do the whole job of explaining the button, because
- * it is the only thing anybody reads before deciding whether to press it. It
- * has been both too short and too long. "Your browser asks the contract" is
- * accurate and answers a question nobody had yet; the paragraph that replaced
- * it said everything and was read by nobody. One sentence, saying what changes
- * when you press it, is the size this is worth.
+ * It sits beside the button rather than under a heading, so it has one line
+ * and has to spend it saying what pressing the button changes. Everything else
+ * that could be said about verification lives on `/how-it-works`.
  */
 function said(stage: Stage): string {
   switch (stage.at) {
     case "idle":
-      return "Your browser reads all four straight from the contract and compares them with what this page said. If we had moved a deadline, the line above would turn red.";
+      return "Our word for it so far. Read them from the contract instead:";
     case "asking":
       return "Reading the contract.";
     case "unreachable":
-      return `Nothing was checked: ${stage.why}. A network problem, not a sign anything is wrong here.`;
+      return `Could not reach the contract: ${stage.why}.`;
     case "answered":
-      return "Checked just now, by your browser, against the contract.";
+      return "Read from the contract by your browser, just now.";
   }
 }

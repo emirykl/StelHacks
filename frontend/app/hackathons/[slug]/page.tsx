@@ -151,55 +151,40 @@ function TakePart({ hackathon }: { hackathon: HackathonDetail }) {
 }
 
 /**
- * The four promises the strip makes, in the words a person would use.
+ * The four promises the strip makes, in as few words as carry them.
  *
  * Every one of them leaves here reading `unchecked`, and that is not a
  * placeholder. The page is server rendered and nothing on this side has
  * compared a digest against the contract; saying so is the honest state. The
  * reader changes it by pressing the button, which asks the contract from their
- * own browser.
+ * own browser. Nobody has to: the whole page works unchecked, and the point of
+ * the control is that a sceptic has somewhere to go.
  */
 function proofsFor(hackathon: HackathonDetail): Proof[] {
   return [
     {
       key: "digest",
-      claim: "The rules cannot change now",
-      because: "Frozen before anybody registered. This is their fingerprint.",
+      claim: "Rules locked",
       value: hackathon.constitution_hash ?? "not locked yet",
       standing: "unchecked",
     },
     {
       key: "phase",
-      /* Not "the event is at Open", which would say the same word twice: once
-         as the claim and again as the value under it. The claim is what the
-         phase machine guarantees; the value is where that machine has got to. */
-      claim: "No stage can be skipped",
-      because: "Fixed order, enforced by the contract. It has got to:",
+      claim: `Stage: ${phaseName(hackathon.phase)}`,
       value: phaseName(hackathon.phase),
       standing: "unchecked",
     },
     {
       key: "contract",
-      claim: "A program runs this, not us",
-      because: "It holds the rules and computes the ranking. Open it and read it.",
-      value: shorten(hackathon.contract_id),
+      claim: "Run by a contract",
+      value: hackathon.contract_id,
       standing: "unchecked",
-      href: `https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`,
     },
     {
       key: "vault",
-      claim: "The prize money is already deposited",
-      because: "Paid in up front. The vault has no withdraw function, for anyone.",
-      value: hackathon.vault_id === null ? "not bound yet" : shorten(hackathon.vault_id),
+      claim: "Prize deposited",
+      value: hackathon.vault_id ?? "not bound yet",
       standing: "unchecked",
-      ...(hackathon.vault_id === null
-        ? {}
-        : { href: `https://stellar.expert/explorer/testnet/contract/${hackathon.vault_id}` }),
     },
   ];
-}
-
-/** Enough of an address to recognise, with the middle left out. */
-function shorten(address: string): string {
-  return `${address.slice(0, 8)}\u2026${address.slice(-6)}`;
 }

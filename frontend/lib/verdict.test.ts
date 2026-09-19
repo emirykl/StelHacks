@@ -105,10 +105,10 @@ describe("folding the findings back into the strip", () => {
      found by their key, and a test that reused the real copy would pass even
      if the matching went back to comparing sentences. */
   const proofs: Proof[] = [
-    { key: "digest", claim: "d", because: "", value: "abc", standing: "unchecked" },
-    { key: "phase", claim: "p", because: "", value: "Funding", standing: "unchecked" },
-    { key: "contract", claim: "c", because: "", value: "CCQ7…HNB", standing: "unchecked" },
-    { key: "vault", claim: "v", because: "", value: "not bound yet", standing: "unchecked" },
+    { key: "digest", claim: "d", value: "abc", standing: "unchecked" },
+    { key: "phase", claim: "p", value: "Funding", standing: "unchecked" },
+    { key: "contract", claim: "c", value: "CCQ7…HNB", standing: "unchecked" },
+    { key: "vault", claim: "v", value: "not bound yet", standing: "unchecked" },
   ];
 
   const standings = (findings: Findings) =>
