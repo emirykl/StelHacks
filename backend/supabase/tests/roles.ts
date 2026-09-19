@@ -88,8 +88,17 @@ export async function remove(user: TestUser): Promise<void> {
   await backend().auth.admin.deleteUser(user.id);
 }
 
+/** A syntactically real Soroban contract address, distinct per call. */
+export function someContract(): string {
+  return `C${strkeyBody()}`;
+}
+
 /** A syntactically real Stellar address, distinct per call. */
 export function someAddress(): string {
+  return `G${strkeyBody()}`;
+}
+
+function strkeyBody(): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   let body = "";
 
@@ -97,5 +106,5 @@ export function someAddress(): string {
     body += alphabet[Math.floor(Math.random() * alphabet.length)];
   }
 
-  return `G${body}`;
+  return body;
 }
