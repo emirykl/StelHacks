@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * Narrowing the list, in the URL rather than in a component's memory.
@@ -16,13 +17,11 @@ import type { ReactNode } from "react";
  * which is the difference between a list that pages and one that gets slower
  * the more hackathons exist.
  *
- * What it looks like is a separate problem, and it was the one this got wrong.
- * Two rows of bare capitals with nothing naming them read as a navigation bar
- * somebody had run out of room for: you could see that one word was filled in
- * black and not that the row was a question or that the black one was your
- * answer. So the block now says it is a filter, each row says which question it
- * asks, and the filled marker is one object that travels between the answers
- * instead of appearing in a new place each time.
+ * The search box is the newest part and the one that was missing longest. The
+ * `q` filter has matched names and taglines since the listing was built and
+ * nothing on any screen ever set it, so the feature existed and could not be
+ * reached. A row of category chips with no way to type a name is a filter that
+ * answers questions nobody asked and refuses the one everybody does.
  */
 
 export interface Applied {
@@ -53,19 +52,20 @@ export function Filters({
     (applied.stage ?? "") !== "" || (applied.tag ?? "") !== "" || (applied.q ?? "") !== "";
 
   return (
-    <section aria-labelledby="filter-heading" className="border-y border-rule">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-rule py-3">
-        <h2 id="filter-heading" className="label flex items-center gap-2 text-ink">
-          <Funnel />
-          Filter
-        </h2>
+    <section aria-label="Find a hackathon" className="border-y border-rule">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-rule py-3">
+        <Search applied={applied} />
 
         <div className="flex items-center gap-4">
-          {/* Said plainly rather than left to be counted. A page showing twelve
-              of thirty three should say so, or a reader takes the twelve for
-              all of them. */}
+          {/* Said plainly rather than left to be counted, and said differently
+              once something is filtered. "1 in all" under a search reads as a
+              site with one hackathon on it rather than as one that matched. */}
           <p className="label text-ink-faint">
-            {showing === total ? `${total} in all` : `${showing} of ${total}`}
+            {narrowed
+              ? `${showing} ${showing === 1 ? "match" : "matches"}`
+              : showing === total
+                ? `${total} in all`
+                : `${showing} of ${total}`}
           </p>
 
           {/* Only once there is something to undo. A permanent clear on an
@@ -83,7 +83,7 @@ export function Filters({
         </div>
       </div>
 
-      <Row label="Stage">
+      <Row label="Status">
         {stages.map((stage) => (
           <Choice
             key={stage.value}
@@ -123,6 +123,61 @@ export function Filters({
 }
 
 /**
+ * Typing a name, which is what somebody with one in mind actually wants.
+ *
+ * It navigates on submit rather than on every keystroke. A list that reorders
+ * itself under a half typed word is a list somebody has to stop typing to read,
+ * and each of those keystrokes is a round trip to the chain for every card on
+ * the page.
+ *
+ * The field keeps the URL's own value when that changes underneath it, so
+ * pressing back after a search leaves the box holding what the results are
+ * actually for rather than what was last typed into it.
+ */
+function Search({ applied }: { applied: Applied }) {
+  const router = useRouter();
+  const asked = applied.q ?? "";
+  const [typed, setTyped] = useState(asked);
+
+  useEffect(() => setTyped(asked), [asked]);
+
+  return (
+    <form
+      role="search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        router.push(linkTo({ ...applied, q: typed.trim() }));
+      }}
+      className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-[24rem]"
+    >
+      <label className="flex min-w-0 flex-1 items-center gap-2.5 bg-paper-sunk px-3 ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus-within:ring-ink">
+        <Glass />
+
+        <input
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          type="search"
+          placeholder="Search by name"
+          aria-label="Search hackathons by name"
+          className="h-9 min-w-0 flex-1 bg-transparent text-[0.875rem] text-ink outline-none placeholder:text-ink-faint"
+        />
+      </label>
+
+      {/* Only once there is something to submit. An always visible Search beside
+          an empty box is a button whose only job is to reload the page. */}
+      {typed.trim() !== asked && (
+        <button
+          type="submit"
+          className="label h-9 shrink-0 bg-ink px-3 text-paper transition-colors duration-150 ease-settle hover:bg-ink/85 active:translate-y-px"
+        >
+          Search
+        </button>
+      )}
+    </form>
+  );
+}
+
+/**
  * One question and its answers, on a line of their own.
  *
  * The label on the left is what turns a row of words into a question. Without
@@ -131,10 +186,10 @@ export function Filters({
  */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-rule py-3 last:border-b-0 sm:flex-row sm:items-center sm:gap-5">
+    <div className="flex flex-col gap-2 border-b border-rule py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:gap-5">
       <span className="label shrink-0 text-ink-faint sm:w-16">{label}</span>
 
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-2">{children}</div>
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">{children}</div>
     </div>
   );
 }
@@ -142,9 +197,10 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /**
  * One answer, and whether it is the one in force.
  *
- * The chosen one is filled rather than outlined. An outline that thickens is
- * the usual way to show this and it is the one that disappears on a screen
- * somebody is glancing at.
+ * Set in sentence case rather than capitals. These are choices somebody is
+ * scanning, not values the chain is quoting, and a row of tracked out capitals
+ * reads as a specification a reader is meant to study rather than a control
+ * they are meant to press.
  *
  * The fill is a single shared element per row rather than a background on
  * whichever link happens to be current, so choosing a different answer slides
@@ -170,8 +226,8 @@ function Choice({
     <Link
       href={href}
       aria-current={chosen ? "true" : undefined}
-      className={`label relative px-3 py-2 transition-colors duration-150 ease-settle ${
-        chosen ? "text-paper" : "text-ink-soft hover:bg-paper-sunk hover:text-ink"
+      className={`relative px-3 py-1.5 text-[0.875rem] transition-colors duration-150 ease-settle ${
+        chosen ? "font-semibold text-paper" : "text-ink-soft hover:bg-paper-sunk hover:text-ink"
       }`}
     >
       {chosen && (
@@ -194,20 +250,20 @@ function Choice({
   );
 }
 
-/** The mark everybody already reads as narrowing something down. */
-function Funnel() {
+/** The mark everybody already reads as "type here to look for something". */
+function Glass() {
   return (
     <svg
       aria-hidden
-      viewBox="0 0 12 12"
+      viewBox="0 0 14 14"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.2"
+      strokeWidth="1.4"
       strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-3 shrink-0"
+      className="size-3.5 shrink-0 text-ink-faint"
     >
-      <path d="M1.5 2h9L7 6.2v3.4L5 10.7V6.2L1.5 2Z" />
+      <circle cx="6" cy="6" r="4.2" />
+      <path d="M9.2 9.2 12.5 12.5" />
     </svg>
   );
 }
