@@ -5,12 +5,16 @@
 //! to prove the running competition is still the one it read.
 
 mod discretion;
+mod judging;
+mod ranking;
 mod schedule;
 mod scoring;
 mod visibility;
 mod voting;
 
 pub use discretion::{DiscretionPolicy, RefundRoute, SettlementMode, MAX_SETTLEMENT_SAFETY_WINDOW};
+pub use judging::JudgingMode;
+pub use ranking::{validate_tie_break, TieBreakRule};
 pub use schedule::{Deadline, ExtensionPolicy, Schedule};
 pub use scoring::{
     total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,
