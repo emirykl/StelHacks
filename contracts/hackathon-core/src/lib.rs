@@ -11,8 +11,8 @@ mod errors;
 mod phase;
 
 pub use constitution::{
-    total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,
-    WEIGHT_TOTAL_BPS,
+    total_prize_amount, validate_prize_tiers, Criterion, Deadline, ExtensionPolicy, PrizeTier,
+    Schedule, Track, MAX_CRITERION_SCORE, WEIGHT_TOTAL_BPS,
 };
 pub use errors::Error;
 pub use phase::Phase;

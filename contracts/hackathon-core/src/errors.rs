@@ -36,6 +36,9 @@ pub enum Error {
     DeadlineNotReached = 44,
     DeadlinePassed = 45,
     ScheduleInvalid = 46,
+    DeadlineCannotShorten = 47,
+    ExtensionLimitReached = 48,
+    ExtensionPolicyInvalid = 49,
 
     // Registration and submission
     TeamAlreadyRegistered = 60,
