@@ -439,6 +439,62 @@ impl HackathonCore {
         Ok(())
     }
 
+    /// Steps a judge away from one project.
+    ///
+    /// The protocol cannot detect that a judge used to work with a team, so the
+    /// declaration is theirs to make. What it can do is make the declaration
+    /// permanent and public, and stop that judge counting toward the project's
+    /// quorum, so a conflict handled honestly looks different from a judge who
+    /// simply never got round to scoring.
+    ///
+    /// It has to happen before the judging window closes, for the same reason
+    /// scores are sealed: a judge who could step away after seeing where a
+    /// project stood would be choosing which results to touch.
+    pub fn recuse(env: Env, judge: Address, team_id: u32) -> Result<(), Error> {
+        judge.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Judging {
+            return Err(Error::WrongPhase);
+        }
+        if env.ledger().timestamp() > state.schedule.judging_closes_at {
+            return Err(Error::DeadlinePassed);
+        }
+
+        let submission = storage::load_submission(&env, team_id)?;
+        let constitution = storage::load_constitution(&env)?;
+
+        if !constitution.judges_track(&judge, &submission.track) {
+            return Err(Error::NotJudge);
+        }
+
+        if storage::has_recused(&env, &judge, team_id) {
+            return Err(Error::AlreadyRecused);
+        }
+
+        storage::save_recusal(&env, &judge, team_id);
+        events::judge_recused(&env, &judge, team_id);
+
+        Ok(())
+    }
+
+    /// Whether this judge stepped away from this project.
+    pub fn is_recused(env: Env, judge: Address, team_id: u32) -> bool {
+        storage::has_recused(&env, &judge, team_id)
+    }
+
+    /// How many judges are left to score a project, after recusals.
+    ///
+    /// This is the number the quorum is measured against, so a project whose
+    /// bench emptied out through honest conflicts is visibly short of judges
+    /// rather than mysteriously unfinishable.
+    pub fn available_judges(env: Env, team_id: u32) -> Result<u32, Error> {
+        let submission = storage::load_submission(&env, team_id)?;
+        let assigned = storage::load_constitution(&env)?.judges_on_track(&submission.track);
+
+        Ok(assigned.saturating_sub(storage::recusal_count(&env, team_id)))
+    }
+
     /// One team's entry.
     pub fn submission(env: Env, team_id: u32) -> Result<Submission, Error> {
         storage::load_submission(&env, team_id)

@@ -58,6 +58,11 @@ pub enum DataKey {
     Membership(Address),
     /// One team's entry, keyed by team because a team enters once.
     Submission(u32),
+    /// A judge who stepped away from one project.
+    Recusal(Address, u32),
+    /// How many judges stepped away from one project, so the quorum can be
+    /// checked without walking the whole bench.
+    RecusalCount(u32),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -255,6 +260,30 @@ pub fn load_submission(env: &Env, team: u32) -> Result<Submission, Error> {
 
 pub fn has_submission(env: &Env, team: u32) -> bool {
     env.storage().persistent().has(&DataKey::Submission(team))
+}
+
+pub fn has_recused(env: &Env, judge: &Address, team: u32) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Recusal(judge.clone(), team))
+}
+
+pub fn save_recusal(env: &Env, judge: &Address, team: u32) {
+    let key = DataKey::Recusal(judge.clone(), team);
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
+
+    let count = recusal_count(env, team) + 1;
+    let counter = DataKey::RecusalCount(team);
+    env.storage().persistent().set(&counter, &count);
+    touch_entry(env, &counter);
+}
+
+pub fn recusal_count(env: &Env, team: u32) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::RecusalCount(team))
+        .unwrap_or(0u32)
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

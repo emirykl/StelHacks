@@ -83,6 +83,8 @@ pub enum Error {
 
     // Judging
     ScorecardAlreadyRecorded = 80,
+    ScorecardIncomplete = 88,
+    AlreadyRecused = 89,
     ScorecardNotFound = 81,
     ScoreOutOfRange = 82,
     JudgeRecused = 83,

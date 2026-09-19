@@ -178,6 +178,26 @@ pub struct PhaseAdvanced {
     pub phase: Phase,
 }
 
+/// A judge stepped away from one project.
+///
+/// Recorded rather than silent, because a judge quietly not scoring a project
+/// and a judge declaring a conflict look identical from outside otherwise.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JudgeRecused {
+    #[topic]
+    pub judge: Address,
+    pub team: u32,
+}
+
+pub fn judge_recused(env: &Env, judge: &Address, team: u32) {
+    JudgeRecused {
+        judge: judge.clone(),
+        team,
+    }
+    .publish(env);
+}
+
 pub fn phase_advanced(env: &Env, phase: Phase) {
     PhaseAdvanced { phase }.publish(env);
 }
