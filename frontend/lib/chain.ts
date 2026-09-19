@@ -38,6 +38,13 @@ export interface HackathonSummary {
   visibility: number | null;
   /** The prize table's total, in the smallest unit. Absent if unreadable. */
   prize: bigint | null;
+  /** When submissions shut, seconds since the epoch. From the frozen rules. */
+  closesAt: number | null;
+  logo_url: string | null;
+  banner_url: string | null;
+  /** Null when the organizer has not said, which is not the same as remote. */
+  location: string | null;
+  tags: string[];
 }
 
 export interface HackathonDetail extends HackathonSummary {
@@ -66,12 +73,33 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
     return [];
   }
 
+  /*
+    The presentation columns arrived in a later migration, and code and schema
+    do not deploy at the same instant. Asking for a column that is not there
+    yet fails the whole select, and the first version of this then returned an
+    empty list, so a database one migration behind reported that no hackathon
+    existed. A query that failed and a world with nothing in it are not the same
+    answer and must never render the same.
+  */
+  const columns = "contract_id, slug, name, tagline, logo_url";
+  const dressed = `${columns}, banner_url, location, tags`;
+
   const [written, chain] = await Promise.all([
-    db.from("hackathons").select("contract_id, slug, name, tagline").order("created_at", {
-      ascending: false,
-    }),
+    db
+      .from("hackathons")
+      .select(dressed)
+      .order("created_at", { ascending: false })
+      .then((answer) =>
+        answer.error === null
+          ? answer
+          : db.from("hackathons").select(columns).order("created_at", { ascending: false }),
+      ),
     db.from("hackathon_state").select("contract_id, phase, visibility"),
   ]);
+
+  if (written.error !== null) {
+    throw new Error(`the hackathon list could not be read: ${written.error.message}`);
+  }
 
   const byContract = new Map((chain.data ?? []).map((row) => [String(row.contract_id), row]));
 
@@ -89,12 +117,16 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
     All of them at once, and a hackathon whose prize cannot be read keeps its
     card rather than losing it. A slow node should cost a number, not a row.
   */
-  const prizes = await Promise.all(
-    summaries.map((summary) => prizeOf(summary.contract_id).catch(() => null)),
+  const rules = await Promise.all(
+    summaries.map((summary) => rulesOf(summary.contract_id).catch(() => null)),
   );
 
   return summaries
-    .map((summary, index) => ({ ...summary, prize: prizes[index] ?? null }))
+    .map((summary, index) => ({
+      ...summary,
+      prize: rules[index]?.prize ?? null,
+      closesAt: rules[index]?.closesAt ?? null,
+    }))
     .sort((a, b) => standing(a) - standing(b));
 }
 
@@ -118,8 +150,16 @@ function standing(hackathon: HackathonSummary): number {
   return hackathon.phase >= 2 ? 0 : 1;
 }
 
-/** What a hackathon's prize table adds up to, straight from the contract. */
-async function prizeOf(contractId: string): Promise<bigint | null> {
+/**
+ * The two things a card needs from the frozen rules, in one call.
+ *
+ * The prize and the deadline both live in the constitution, so asking for it
+ * once and taking both is a round trip rather than two, on a page that makes
+ * one of these per hackathon.
+ */
+async function rulesOf(
+  contractId: string,
+): Promise<{ prize: bigint; closesAt: number } | null> {
   const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
   const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 
@@ -139,7 +179,7 @@ async function prizeOf(contractId: string): Promise<bigint | null> {
     new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
     { fee: BASE_FEE, networkPassphrase: passphrase },
   )
-    .addOperation(new Contract(contractId).call("required_funding"))
+    .addOperation(new Contract(contractId).call("constitution"))
     .setTimeout(30)
     .build();
 
@@ -149,7 +189,20 @@ async function prizeOf(contractId: string): Promise<bigint | null> {
     return null;
   }
 
-  return BigInt(scValToNative(simulated.result.retval) as bigint);
+  const constitution = scValToNative(simulated.result.retval) as {
+    prize_tiers?: unknown;
+    schedule?: { submission_closes_at?: unknown };
+  };
+
+  const tiers = Array.isArray(constitution.prize_tiers) ? constitution.prize_tiers : [];
+
+  return {
+    prize: tiers.reduce(
+      (sum: bigint, tier) => sum + BigInt((tier as { amount?: bigint }).amount ?? 0),
+      BigInt(0),
+    ),
+    closesAt: Number(constitution.schedule?.submission_closes_at ?? 0),
+  };
 }
 
 export async function findHackathon(slug: string): Promise<HackathonDetail | null> {
@@ -196,6 +249,11 @@ function merge(
     phase: chain["phase"] === undefined ? null : Number(chain["phase"]),
     visibility: chain["visibility"] === undefined ? null : Number(chain["visibility"]),
     prize: null,
+    closesAt: null,
+    logo_url: (written["logo_url"] as string | null) ?? null,
+    banner_url: (written["banner_url"] as string | null) ?? null,
+    location: (written["location"] as string | null) ?? null,
+    tags: Array.isArray(written["tags"]) ? (written["tags"] as string[]) : [],
     organizer: (chain["organizer"] as string | null) ?? null,
     constitution_hash: hex(chain["constitution_hash"]),
     prize_asset: (chain["prize_asset"] as string | null) ?? null,
