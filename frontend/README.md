@@ -107,6 +107,23 @@ it registers the same tokens unconditionally and the last one written wins. It
 type checked, it built, and it was wrong in a way only a screenshot could show.
 `npm run shoot` exists because of it.
 
+## The applications queue, and why it is slow
+
+The organizer's queue is built from `Applied` events read straight from an RPC
+node, because nothing else has the list. The contract can answer "what is this
+person's application" but keeps no roll of them, and `participants` in our
+schema records who was let in rather than who is waiting.
+
+That read takes about four seconds, and it took two attempts to make it correct
+at all. `getEvents` scans a bounded slice of ledgers per call, so the first
+version stopped at the first empty page and reported no applications on a
+contract that had them; and the event names on the wire are the contract's snake
+case ones, so a filter looking for `Applied` never matched `applied`.
+
+The right fix is for the indexer to record applications, which would also lift
+the seven day event window this inherits. Until then an organizer who leaves a
+queue for a week sees a short list rather than a complete one.
+
 ## Not built yet
 
 ## Identity, and the two layers of it

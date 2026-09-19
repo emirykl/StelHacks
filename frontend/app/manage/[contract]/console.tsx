@@ -8,6 +8,7 @@ import { useWallet } from "../../components/wallet-context";
 import { arg, deploy, send, type Sent } from "../../../lib/send";
 import { prizeAssetOf, runningOf, type Running } from "../../../lib/running";
 import { PHASES, phaseName } from "../../../lib/phase";
+import { Applications } from "./applications";
 
 /**
  * Getting a hackathon from written to open, one legal call at a time.
@@ -130,6 +131,16 @@ export function Console({ contractId }: { contractId: string }) {
           )}
         </div>
       </section>
+
+      {/* Only once registration is open. Before that there is nothing to
+          review, and a queue that is empty because the event has not started
+          reads the same as one that is empty because nobody came. */}
+      {state.phase >= 2 && state.phase <= 3 && (
+        <Applications
+          contractId={contractId}
+          reviewer={mine ? (wallet?.address ?? null) : null}
+        />
+      )}
 
       {result !== null && (
         <p
