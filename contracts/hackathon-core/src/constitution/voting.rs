@@ -6,28 +6,6 @@ use crate::errors::Error;
 /// up to this total.
 pub const VOTE_SPLIT_TOTAL_BPS: u32 = 10_000;
 
-/// Above this share the community vote carries enough weight that the door has
-/// to be narrowed as well: registration must be approved by the organizer, so
-/// every ballot belongs to a person somebody vetted.
-///
-/// The share itself is not capped. An organizer may run a hackathon decided
-/// entirely by the crowd, as long as the crowd was let in one applicant at a
-/// time.
-pub const APPROVED_REGISTRATION_REQUIRED_ABOVE_BPS: u32 = 3_000;
-
-/// How a participant gets in.
-#[contracttype]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[repr(u32)]
-pub enum RegistrationGate {
-    /// Anyone who signs up is registered.
-    Open = 0,
-    /// Applicants are reviewed by the organizer and registered once approved.
-    /// This is what an in person event with limited seats needs, and it is
-    /// also the Sybil barrier behind a heavy community vote.
-    Approved = 1,
-}
-
 /// How the final score is split between the judges and the crowd.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -72,27 +50,19 @@ impl VotePolicy {
         self.judge_bps > 0
     }
 
-    /// Rejects a split that does not add up, or one that gives the crowd real
-    /// weight behind an open door.
+    /// Rejects a split that does not add up.
     ///
-    /// The second rule is the reason `gate` is an argument. The community share
-    /// and the registration gate are two halves of one security decision, and
-    /// checking them apart lets an organizer set a heavy vote on a hackathon
-    /// anybody can sign up for. The share has no ceiling of its own; the gate
-    /// is what has to keep up with it.
-    pub fn validate(&self, gate: RegistrationGate) -> Result<(), Error> {
+    /// The share itself has no ceiling. A hackathon may be decided entirely by
+    /// its judges, entirely by its crowd, or anywhere in between, because every
+    /// hackathon admits its participants by application and the crowd casting
+    /// those ballots was let in one approval at a time.
+    pub fn validate(&self) -> Result<(), Error> {
         let total = self
             .judge_bps
             .checked_add(self.community_bps)
             .ok_or(Error::VoteSplitInvalid)?;
 
         if total != VOTE_SPLIT_TOTAL_BPS {
-            return Err(Error::VoteSplitInvalid);
-        }
-
-        if self.community_bps > APPROVED_REGISTRATION_REQUIRED_ABOVE_BPS
-            && gate != RegistrationGate::Approved
-        {
             return Err(Error::VoteSplitInvalid);
         }
 
@@ -108,86 +78,55 @@ mod test {
     fn a_judges_only_hackathon_needs_no_vote_window() {
         let policy = VotePolicy::judges_only();
 
-        assert_eq!(policy.validate(RegistrationGate::Open), Ok(()));
+        assert_eq!(policy.validate(), Ok(()));
         assert!(!policy.community_vote_enabled());
     }
 
     #[test]
-    fn a_light_community_share_works_behind_an_open_door() {
+    fn a_mixed_split_opens_the_community_vote() {
         let policy = VotePolicy {
             judge_bps: 8_000,
             community_bps: 2_000,
         };
 
-        assert_eq!(policy.validate(RegistrationGate::Open), Ok(()));
+        assert_eq!(policy.validate(), Ok(()));
         assert!(policy.community_vote_enabled());
     }
 
     #[test]
-    fn a_heavy_community_share_demands_approved_registration() {
-        let policy = VotePolicy {
-            judge_bps: 5_000,
-            community_bps: 5_000,
-        };
-
-        assert_eq!(
-            policy.validate(RegistrationGate::Open),
-            Err(Error::VoteSplitInvalid)
-        );
-        assert_eq!(policy.validate(RegistrationGate::Approved), Ok(()));
-    }
-
-    #[test]
-    fn the_threshold_for_approved_registration_is_thirty_percent() {
-        let at_threshold = VotePolicy {
-            judge_bps: 7_000,
-            community_bps: 3_000,
-        };
-        let over_threshold = VotePolicy {
-            judge_bps: 6_999,
-            community_bps: 3_001,
-        };
-
-        assert_eq!(at_threshold.validate(RegistrationGate::Open), Ok(()));
-        assert_eq!(
-            over_threshold.validate(RegistrationGate::Open),
-            Err(Error::VoteSplitInvalid)
-        );
-    }
-
-    #[test]
-    fn the_community_share_has_no_ceiling_behind_an_approved_door() {
+    fn the_community_share_has_no_ceiling() {
         let crowd_led = VotePolicy {
             judge_bps: 1_000,
             community_bps: 9_000,
         };
 
-        assert_eq!(crowd_led.validate(RegistrationGate::Approved), Ok(()));
-        assert_eq!(
-            VotePolicy::community_only().validate(RegistrationGate::Approved),
-            Ok(())
-        );
+        assert_eq!(crowd_led.validate(), Ok(()));
+        assert_eq!(VotePolicy::community_only().validate(), Ok(()));
     }
 
     #[test]
     fn a_split_that_does_not_add_up_is_rejected() {
-        let policy = VotePolicy {
+        let short = VotePolicy {
             judge_bps: 8_000,
             community_bps: 1_000,
         };
+        let over = VotePolicy {
+            judge_bps: 8_000,
+            community_bps: 3_000,
+        };
 
-        assert_eq!(
-            policy.validate(RegistrationGate::Approved),
-            Err(Error::VoteSplitInvalid)
-        );
+        assert_eq!(short.validate(), Err(Error::VoteSplitInvalid));
+        assert_eq!(over.validate(), Err(Error::VoteSplitInvalid));
     }
 
     #[test]
-    fn a_crowd_led_hackathon_still_needs_an_approved_door() {
-        assert_eq!(
-            VotePolicy::community_only().validate(RegistrationGate::Open),
-            Err(Error::VoteSplitInvalid)
-        );
+    fn a_split_that_overflows_is_rejected() {
+        let policy = VotePolicy {
+            judge_bps: u32::MAX,
+            community_bps: 1,
+        };
+
+        assert_eq!(policy.validate(), Err(Error::VoteSplitInvalid));
     }
 
     #[test]

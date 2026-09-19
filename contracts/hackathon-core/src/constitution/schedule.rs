@@ -276,7 +276,10 @@ mod test {
 
         let moved = schedule.with_deadline(Deadline::Submission, moved_to);
         assert_eq!(moved.submission_closes_at, moved_to);
-        assert_eq!(moved.registration_closes_at, schedule.registration_closes_at);
+        assert_eq!(
+            moved.registration_closes_at,
+            schedule.registration_closes_at
+        );
     }
 
     #[test]

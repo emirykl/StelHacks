@@ -148,14 +148,13 @@ mod test {
     fn a_rubric_whose_weights_add_up_is_accepted() {
         let env = Env::default();
         let track = track(vec![
-                &env,
-                criterion(symbol_short!("technical"), 3_000),
-                criterion(symbol_short!("novelty"), 2_500),
-                criterion(symbol_short!("ux"), 1_500),
-                criterion(symbol_short!("stellar"), 2_000),
-                criterion(symbol_short!("impact"), 1_000),
-            ],
-        );
+            &env,
+            criterion(symbol_short!("technical"), 3_000),
+            criterion(symbol_short!("novelty"), 2_500),
+            criterion(symbol_short!("ux"), 1_500),
+            criterion(symbol_short!("stellar"), 2_000),
+            criterion(symbol_short!("impact"), 1_000),
+        ]);
 
         assert_eq!(track.validate(), Ok(()));
         assert_eq!(track.weight_of(&symbol_short!("ux")), Some(1_500));
@@ -166,11 +165,10 @@ mod test {
     fn a_rubric_that_does_not_add_up_is_rejected() {
         let env = Env::default();
         let track = track(vec![
-                &env,
-                criterion(symbol_short!("technical"), 3_000),
-                criterion(symbol_short!("novelty"), 3_000),
-            ],
-        );
+            &env,
+            criterion(symbol_short!("technical"), 3_000),
+            criterion(symbol_short!("novelty"), 3_000),
+        ]);
 
         assert_eq!(track.validate(), Err(Error::CriteriaWeightsInvalid));
     }
@@ -179,11 +177,10 @@ mod test {
     fn a_zero_weight_criterion_is_rejected() {
         let env = Env::default();
         let track = track(vec![
-                &env,
-                criterion(symbol_short!("technical"), 10_000),
-                criterion(symbol_short!("novelty"), 0),
-            ],
-        );
+            &env,
+            criterion(symbol_short!("technical"), 10_000),
+            criterion(symbol_short!("novelty"), 0),
+        ]);
 
         assert_eq!(track.validate(), Err(Error::CriteriaWeightsInvalid));
     }
@@ -192,11 +189,10 @@ mod test {
     fn a_repeated_criterion_is_rejected() {
         let env = Env::default();
         let track = track(vec![
-                &env,
-                criterion(symbol_short!("technical"), 5_000),
-                criterion(symbol_short!("technical"), 5_000),
-            ],
-        );
+            &env,
+            criterion(symbol_short!("technical"), 5_000),
+            criterion(symbol_short!("technical"), 5_000),
+        ]);
 
         assert_eq!(track.validate(), Err(Error::CriteriaWeightsInvalid));
     }
@@ -214,9 +210,21 @@ mod test {
         let env = Env::default();
         let tiers = vec![
             &env,
-            PrizeTier { track: symbol_short!("payments"), rank: 1, amount: 5_000 },
-            PrizeTier { track: symbol_short!("payments"), rank: 2, amount: 3_000 },
-            PrizeTier { track: symbol_short!("defi"), rank: 1, amount: 2_000 },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 1,
+                amount: 5_000,
+            },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 2,
+                amount: 3_000,
+            },
+            PrizeTier {
+                track: symbol_short!("defi"),
+                rank: 1,
+                amount: 2_000,
+            },
         ];
 
         assert_eq!(validate_prize_tiers(&tiers), Ok(()));
@@ -228,8 +236,16 @@ mod test {
         let env = Env::default();
         let tiers = vec![
             &env,
-            PrizeTier { track: symbol_short!("payments"), rank: 1, amount: 5_000 },
-            PrizeTier { track: symbol_short!("payments"), rank: 1, amount: 3_000 },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 1,
+                amount: 5_000,
+            },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 1,
+                amount: 3_000,
+            },
         ];
 
         assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
@@ -240,8 +256,16 @@ mod test {
         let env = Env::default();
         let tiers = vec![
             &env,
-            PrizeTier { track: symbol_short!("payments"), rank: 1, amount: 5_000 },
-            PrizeTier { track: symbol_short!("defi"), rank: 1, amount: 5_000 },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 1,
+                amount: 5_000,
+            },
+            PrizeTier {
+                track: symbol_short!("defi"),
+                rank: 1,
+                amount: 5_000,
+            },
         ];
 
         assert_eq!(validate_prize_tiers(&tiers), Ok(()));
@@ -252,7 +276,11 @@ mod test {
         let env = Env::default();
         let tiers = vec![
             &env,
-            PrizeTier { track: symbol_short!("payments"), rank: 1, amount: 0 },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 1,
+                amount: 0,
+            },
         ];
 
         assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
@@ -263,7 +291,11 @@ mod test {
         let env = Env::default();
         let tiers = vec![
             &env,
-            PrizeTier { track: symbol_short!("payments"), rank: 0, amount: 1_000 },
+            PrizeTier {
+                track: symbol_short!("payments"),
+                rank: 0,
+                amount: 1_000,
+            },
         ];
 
         assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
