@@ -101,6 +101,63 @@ pub enum SubmissionStatus {
     /// Ruled out during the screening round. The project keeps its page and its
     /// reason; it is never deleted.
     Invalidated = 1,
+    /// Removed after the screening round, through the disqualification process.
+    ///
+    /// Kept apart from `Invalidated` rather than folded into it, because the two
+    /// carry very different weight. Screening is one organizer's call on an
+    /// entry nobody has scored yet; a disqualification takes a stated reason, a
+    /// window for the team to answer, and a bench of judges signing, and a page
+    /// that showed them as the same thing would flatter the first and slander
+    /// the second.
+    Disqualified = 2,
+}
+
+/// A case for removing an entry after the screening round has closed.
+///
+/// This is the heaviest power in the product, so every condition the PRD
+/// attaches to it is a field here rather than a promise made elsewhere: the
+/// reason is recorded before anything happens, the team gets a window to answer
+/// on the record, judges other than the organizer have to sign, and only after
+/// the window closes does anyone find out whether it carried. A case that
+/// gathers no signatures ends with the project still in the running, because a
+/// team that entered is in unless somebody clears the bar to remove them.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisqualificationCase {
+    /// The entry the case is against.
+    pub team: u32,
+    /// When it was opened, which is where the appeal window counts from.
+    pub opened_at: u64,
+    /// Digest of the written reason.
+    pub reason: BytesN<32>,
+    /// Digest of the team's written answer; all zeroes until they file one.
+    pub appeal: BytesN<32>,
+    /// When they filed it, zero until then.
+    pub appealed_at: u64,
+    /// How many judges have signed.
+    pub approvals: u32,
+    /// Whether it has been settled one way or the other.
+    pub resolved: bool,
+}
+
+impl DisqualificationCase {
+    /// A case just opened, with nothing decided and no answer yet.
+    pub fn open(env: &Env, team: u32, reason: BytesN<32>, now: u64) -> DisqualificationCase {
+        DisqualificationCase {
+            team,
+            opened_at: now,
+            reason,
+            appeal: BytesN::from_array(env, &[0u8; 32]),
+            appealed_at: 0,
+            approvals: 0,
+            resolved: false,
+        }
+    }
+
+    /// Whether the team still has time to answer.
+    pub fn appeal_window_open(&self, now: u64, window: u64) -> bool {
+        now < self.opened_at + window
+    }
 }
 
 /// A team's entry, as the contract records it.
@@ -180,7 +237,22 @@ impl Submission {
 
     /// Rules the entry out, against the reason given for it.
     pub fn invalidate(&self, reason: BytesN<32>) -> Result<Submission, Error> {
-        if self.status == SubmissionStatus::Invalidated {
+        self.rule_out(SubmissionStatus::Invalidated, reason)
+    }
+
+    /// Removes the entry at the end of a disqualification case.
+    pub fn disqualify(&self, reason: BytesN<32>) -> Result<Submission, Error> {
+        self.rule_out(SubmissionStatus::Disqualified, reason)
+    }
+
+    /// Takes an entry out of the running, whichever route got it there.
+    ///
+    /// An entry already out cannot be taken out again, by either route. The two
+    /// processes can overlap in time, and a second ruling would overwrite the
+    /// first one's reason, leaving the page showing an explanation that belongs
+    /// to a decision nobody made.
+    fn rule_out(&self, status: SubmissionStatus, reason: BytesN<32>) -> Result<Submission, Error> {
+        if !self.is_valid() {
             return Err(Error::AlreadyInvalidated);
         }
 
@@ -191,7 +263,7 @@ impl Submission {
             uri: self.uri.clone(),
             submitted_at: self.submitted_at,
             updated_at: self.updated_at,
-            status: SubmissionStatus::Invalidated,
+            status,
             reason,
         })
     }
@@ -380,6 +452,58 @@ mod test {
         assert_eq!(ruled_out.reason, reason);
         assert_eq!(ruled_out.metadata_hash, submission.metadata_hash);
         assert_eq!(ruled_out.submitted_at, submission.submitted_at);
+    }
+
+    /// Screening and disqualification reach the same outcome by very different
+    /// roads, so the page has to be able to tell a reader which one applies.
+    #[test]
+    fn a_disqualified_entry_is_marked_apart_from_a_screened_one() {
+        let env = Env::default();
+        let reason = BytesN::from_array(&env, &[7u8; 32]);
+        let submission = Submission::new(
+            &env,
+            1,
+            symbol_short!("payments"),
+            BytesN::from_array(&env, &[1u8; 32]),
+            String::from_str(&env, "ipfs://cid"),
+            100,
+        );
+
+        let removed = submission.disqualify(reason.clone()).unwrap();
+
+        assert_eq!(removed.status, SubmissionStatus::Disqualified);
+        assert!(!removed.is_valid());
+        assert_eq!(removed.reason, reason);
+        assert_eq!(removed.metadata_hash, submission.metadata_hash);
+    }
+
+    /// Either route closes the entry to the other. A second ruling would
+    /// overwrite the first one's reason, leaving the page carrying an
+    /// explanation that belongs to a decision nobody made.
+    #[test]
+    fn an_entry_out_by_one_route_cannot_be_taken_out_by_the_other() {
+        let env = Env::default();
+        let reason = BytesN::from_array(&env, &[7u8; 32]);
+        let submission = Submission::new(
+            &env,
+            1,
+            symbol_short!("payments"),
+            BytesN::from_array(&env, &[1u8; 32]),
+            String::from_str(&env, "ipfs://cid"),
+            100,
+        );
+
+        let screened = submission.invalidate(reason.clone()).unwrap();
+        assert_eq!(
+            screened.disqualify(reason.clone()).err(),
+            Some(Error::AlreadyInvalidated)
+        );
+
+        let disqualified = submission.disqualify(reason.clone()).unwrap();
+        assert_eq!(
+            disqualified.invalidate(reason).err(),
+            Some(Error::AlreadyInvalidated)
+        );
     }
 
     #[test]

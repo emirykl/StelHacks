@@ -33,6 +33,16 @@ impl Settled {
     /// Two teams enter the payments track, the judges prefer the first, the
     /// scorecards are sealed and opened, and the ranking is closed.
     fn through_finalization() -> Settled {
+        let settled = Settled::through_reveal();
+        settled.fixture.client.finalize_results();
+
+        settled
+    }
+
+    /// The same hackathon carried as far as the reveal, with every scorecard
+    /// opened and the ranking still to be closed. This is the last moment a
+    /// disqualification can still change who wins.
+    fn through_reveal() -> Settled {
         let fixture = Fixture::funded_and_open();
         let env = fixture.env.clone();
         let schedule = fixture.client.state().schedule;
@@ -101,8 +111,6 @@ impl Settled {
                 .client
                 .reveal_score(&cards.get(index).unwrap(), &proofs.get(index).unwrap());
         }
-
-        fixture.client.finalize_results();
 
         let vault_address = fixture.client.vault();
         let vault = PrizeVaultClient::new(&env, &vault_address);
@@ -420,6 +428,151 @@ fn the_pool_falls_by_exactly_the_prize_that_was_paid() {
     settled.fixture.client.settle_prize(&payments(), &2);
 
     assert_eq!(settled.vault.balance(), before - 8_000);
+}
+
+/// What a disqualification actually costs a project, proved against a real
+/// ranking rather than against a status field.
+///
+/// The process itself is tested in `discretion`. What matters here is the one
+/// thing that makes the process worth having: an entry removed on the last day
+/// of judging never reaches the prize table, and the team behind it never
+/// reaches the vault.
+mod disqualification {
+    use super::*;
+
+    /// The bar the sample rules set.
+    const SIGNATURES_NEEDED: u32 = 2;
+
+    fn open_and_uphold(settled: &Settled, team: u32) {
+        let reason = BytesN::from_array(&settled.fixture.env, &[9u8; 32]);
+        settled.fixture.client.open_disqualification(&team, &reason);
+
+        for index in 0..SIGNATURES_NEEDED {
+            let judge = settled
+                .fixture
+                .client
+                .constitution()
+                .judges
+                .get(index)
+                .unwrap()
+                .judge;
+            settled
+                .fixture
+                .client
+                .approve_disqualification(&judge, &team);
+        }
+
+        let case = settled.fixture.client.disqualification(&team);
+        let window = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .appeal_window;
+
+        settled
+            .fixture
+            .env
+            .ledger()
+            .set_timestamp(case.opened_at + window);
+
+        assert!(settled.fixture.client.resolve_disqualification(&team));
+    }
+
+    /// The winner is removed after every scorecard is already open, which is
+    /// the case that matters: the scores stay exactly where they were and the
+    /// ranking is rebuilt without the entry rather than around it.
+    #[test]
+    fn a_disqualified_project_never_reaches_the_ranking() {
+        let settled = Settled::through_reveal();
+        let removed = settled.teams.get(0).unwrap();
+        let survivor = settled.teams.get(1).unwrap();
+
+        open_and_uphold(&settled, removed);
+        settled.fixture.client.finalize_results();
+
+        let ranking = settled.fixture.client.ranking(&payments());
+
+        assert_eq!(ranking.len(), 1);
+        assert_eq!(ranking.get(0).unwrap().team, survivor);
+        assert_eq!(
+            ranking.get(0).unwrap().rank,
+            1,
+            "the project that was left takes the place the removed one held"
+        );
+    }
+
+    /// The reason the ranking waits. Closing the result around an entry whose
+    /// case is still running would decide it by timing, and nothing can be
+    /// undone once the result is final.
+    #[test]
+    fn the_result_cannot_close_while_a_case_is_still_open() {
+        let settled = Settled::through_reveal();
+        let team = settled.teams.get(0).unwrap();
+        let reason = BytesN::from_array(&settled.fixture.env, &[9u8; 32]);
+
+        settled.fixture.client.open_disqualification(&team, &reason);
+
+        assert_eq!(
+            settled.fixture.client.try_finalize_results().err(),
+            Some(Ok(Error::DisqualificationUnresolved))
+        );
+
+        let case = settled.fixture.client.disqualification(&team);
+        let window = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .appeal_window;
+        settled
+            .fixture
+            .env
+            .ledger()
+            .set_timestamp(case.opened_at + window);
+        settled.fixture.client.resolve_disqualification(&team);
+
+        settled.fixture.client.finalize_results();
+
+        assert_eq!(settled.fixture.client.phase(), Phase::Finalization);
+    }
+
+    /// A case that failed leaves nothing behind. The team is ranked exactly as
+    /// though it had never been opened, which is what stops an accusation from
+    /// being a penalty in itself.
+    #[test]
+    fn a_case_that_failed_costs_the_team_nothing() {
+        let settled = Settled::through_reveal();
+        let accused = settled.teams.get(0).unwrap();
+        let reason = BytesN::from_array(&settled.fixture.env, &[9u8; 32]);
+
+        settled
+            .fixture
+            .client
+            .open_disqualification(&accused, &reason);
+
+        let case = settled.fixture.client.disqualification(&accused);
+        let window = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .appeal_window;
+        settled
+            .fixture
+            .env
+            .ledger()
+            .set_timestamp(case.opened_at + window);
+
+        assert!(!settled.fixture.client.resolve_disqualification(&accused));
+
+        settled.fixture.client.finalize_results();
+
+        let ranking = settled.fixture.client.ranking(&payments());
+
+        assert_eq!(ranking.len(), 2);
+        assert_eq!(ranking.get(0).unwrap().team, accused);
+    }
 }
 
 /// The move to award nothing, which is the sharpest power an organizer keeps

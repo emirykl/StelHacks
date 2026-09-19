@@ -7,7 +7,7 @@ use crate::results::{NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionTally, ScoreTally};
 use crate::state::{ExtensionUsage, HackathonState};
-use crate::submission::Submission;
+use crate::submission::{DisqualificationCase, Submission};
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
 const LEDGERS_PER_DAY: u32 = 17_280;
@@ -65,6 +65,10 @@ pub enum DataKey {
     Membership(Address),
     /// One team's entry, keyed by team because a team enters once.
     Submission(u32),
+    /// A case for removing one team's entry after screening has closed.
+    Disqualification(u32),
+    /// One judge's signature on that case.
+    DisqualificationApproval(u32, Address),
     /// A judge who stepped away from one project.
     Recusal(Address, u32),
     /// How many judges stepped away from one project, so the quorum can be
@@ -310,6 +314,42 @@ pub fn load_submission(env: &Env, team: u32) -> Result<Submission, Error> {
 
 pub fn has_submission(env: &Env, team: u32) -> bool {
     env.storage().persistent().has(&DataKey::Submission(team))
+}
+
+pub fn save_disqualification(env: &Env, case: &DisqualificationCase) {
+    let key = DataKey::Disqualification(case.team);
+    env.storage().persistent().set(&key, case);
+    touch_entry(env, &key);
+}
+
+pub fn load_disqualification(env: &Env, team: u32) -> Result<DisqualificationCase, Error> {
+    let key = DataKey::Disqualification(team);
+    let case = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::DisqualificationNotOpen)?;
+    touch_entry(env, &key);
+
+    Ok(case)
+}
+
+pub fn has_disqualification(env: &Env, team: u32) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Disqualification(team))
+}
+
+pub fn has_disqualification_approval(env: &Env, team: u32, judge: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::DisqualificationApproval(team, judge.clone()))
+}
+
+pub fn save_disqualification_approval(env: &Env, team: u32, judge: &Address) {
+    let key = DataKey::DisqualificationApproval(team, judge.clone());
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
 }
 
 pub fn has_recused(env: &Env, judge: &Address, team: u32) -> bool {

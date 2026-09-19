@@ -217,3 +217,509 @@ fn a_deadline_cannot_be_moved_while_the_rules_are_still_a_draft() {
         Some(Ok(Error::RulesNotLocked))
     );
 }
+
+/// Removing an entry from the running, on the record.
+///
+/// This is the heaviest power the product hands anyone, so the tests here are
+/// mostly about what it cannot do: not without a stated reason, not without the
+/// team's window to answer, not without judges who are not the organizer, not
+/// once the result is closed, and never quietly.
+mod disqualification {
+    use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::{symbol_short, Address, BytesN, String};
+
+    use crate::errors::Error;
+    use crate::fixtures::HOUR;
+    use crate::submission::SubmissionStatus;
+    use crate::test::Fixture;
+
+    /// An approved captain with a project entered in the payments track.
+    fn enter(fixture: &Fixture) -> u32 {
+        let env = fixture.env.clone();
+
+        let captain = Address::generate(&env);
+        fixture.client.apply(&captain);
+        let organizer = fixture.organizer.clone();
+        fixture.client.approve_application(&organizer, &captain);
+
+        let team = fixture.client.create_team(&captain);
+        fixture.client.submit_project(
+            &captain,
+            &team,
+            &symbol_short!("payments"),
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &String::from_str(&env, "ipfs://cid"),
+        );
+
+        team
+    }
+
+    /// A hackathon in its screening round with one project entered.
+    struct Screening {
+        fixture: Fixture,
+        team: u32,
+    }
+
+    impl Screening {
+        fn new() -> Screening {
+            let fixture = Fixture::funded_and_open();
+            let schedule = fixture.client.state().schedule;
+            let env = fixture.env.clone();
+
+            env.ledger()
+                .set_timestamp(schedule.registration_opens_at + 3_600);
+            let team = enter(&fixture);
+
+            env.ledger()
+                .set_timestamp(schedule.submission_closes_at + 1);
+            fixture.client.advance_phase();
+
+            Screening { fixture, team }
+        }
+    }
+
+    /// The same hackathon carried on into its judging window.
+    struct Contested {
+        fixture: Fixture,
+        team: u32,
+    }
+
+    impl Contested {
+        fn new() -> Contested {
+            let screening = Screening::new();
+            let closes_at = screening
+                .fixture
+                .client
+                .state()
+                .schedule
+                .screening_closes_at;
+
+            screening.fixture.env.ledger().set_timestamp(closes_at + 1);
+            screening.fixture.client.advance_phase();
+
+            Contested {
+                fixture: screening.fixture,
+                team: screening.team,
+            }
+        }
+
+        fn captain(&self) -> Address {
+            self.fixture.client.team_by_id(&self.team).captain
+        }
+
+        fn judge(&self, index: u32) -> Address {
+            self.fixture
+                .client
+                .constitution()
+                .judges
+                .get(index)
+                .unwrap()
+                .judge
+        }
+
+        fn reason(&self) -> BytesN<32> {
+            BytesN::from_array(&self.fixture.env, &[9u8; 32])
+        }
+
+        fn open(&self) {
+            self.fixture
+                .client
+                .open_disqualification(&self.team, &self.reason());
+        }
+
+        /// Moves the clock past the window the team was given to answer.
+        fn past_the_window(&self) {
+            let opened_at = self.fixture.client.disqualification(&self.team).opened_at;
+            let window = self.fixture.client.constitution().discretion.appeal_window;
+
+            self.fixture.env.ledger().set_timestamp(opened_at + window);
+        }
+
+        fn status(&self) -> SubmissionStatus {
+            self.fixture.client.submission(&self.team).status
+        }
+    }
+
+    /// The accusation alone changes nothing. A team accused on the last evening
+    /// of judging is still competing while the case runs, which is the whole
+    /// difference between a process and a removal.
+    #[test]
+    fn an_open_case_leaves_the_project_in_the_running() {
+        let contested = Contested::new();
+        contested.open();
+
+        let case = contested.fixture.client.disqualification(&contested.team);
+
+        assert_eq!(case.team, contested.team);
+        assert_eq!(case.reason, contested.reason());
+        assert_eq!(case.approvals, 0);
+        assert!(!case.resolved);
+        assert_eq!(contested.status(), SubmissionStatus::Valid);
+    }
+
+    #[test]
+    fn judges_who_reach_the_announced_threshold_remove_the_entry() {
+        let contested = Contested::new();
+        contested.open();
+
+        // The sample rules ask for two signatures.
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(0), &contested.team);
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(1), &contested.team);
+
+        contested.past_the_window();
+
+        assert!(contested
+            .fixture
+            .client
+            .resolve_disqualification(&contested.team));
+
+        let submission = contested.fixture.client.submission(&contested.team);
+
+        assert_eq!(submission.status, SubmissionStatus::Disqualified);
+        assert_eq!(
+            submission.reason,
+            contested.reason(),
+            "the entry carries the reason the case was opened with"
+        );
+        assert_eq!(
+            submission.metadata_hash,
+            BytesN::from_array(&contested.fixture.env, &[1u8; 32]),
+            "the project keeps its page rather than disappearing"
+        );
+    }
+
+    /// The default that makes this discretion rather than a loophole. An
+    /// organizer who cannot convince the bench has removed nobody.
+    #[test]
+    fn a_case_the_judges_did_not_sign_leaves_the_team_competing() {
+        let contested = Contested::new();
+        contested.open();
+
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(0), &contested.team);
+
+        contested.past_the_window();
+
+        assert!(!contested
+            .fixture
+            .client
+            .resolve_disqualification(&contested.team));
+        assert_eq!(contested.status(), SubmissionStatus::Valid);
+        assert!(
+            contested
+                .fixture
+                .client
+                .disqualification(&contested.team)
+                .resolved,
+            "the case is closed on the record rather than left hanging"
+        );
+    }
+
+    /// Settling early would take the team's window away by simply not waiting
+    /// for it, which is the cheapest way to make an appeal right meaningless.
+    #[test]
+    fn a_case_cannot_be_settled_before_the_team_has_had_its_window() {
+        let contested = Contested::new();
+        contested.open();
+
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(0), &contested.team);
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(1), &contested.team);
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_resolve_disqualification(&contested.team)
+                .err(),
+            Some(Ok(Error::AppealWindowOpen))
+        );
+        assert_eq!(contested.status(), SubmissionStatus::Valid);
+    }
+
+    #[test]
+    fn a_team_can_answer_on_the_record_while_the_window_is_open() {
+        let contested = Contested::new();
+        contested.open();
+
+        let answer = BytesN::from_array(&contested.fixture.env, &[3u8; 32]);
+        let captain = contested.captain();
+        contested
+            .fixture
+            .client
+            .submit_appeal(&captain, &contested.team, &answer);
+
+        let case = contested.fixture.client.disqualification(&contested.team);
+
+        assert_eq!(case.appeal, answer);
+        assert!(case.appealed_at >= case.opened_at);
+    }
+
+    #[test]
+    fn an_answer_filed_after_the_window_is_refused() {
+        let contested = Contested::new();
+        contested.open();
+        contested.past_the_window();
+
+        let captain = contested.captain();
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_submit_appeal(
+                    &captain,
+                    &contested.team,
+                    &BytesN::from_array(&contested.fixture.env, &[3u8; 32])
+                )
+                .err(),
+            Some(Ok(Error::AppealWindowClosed))
+        );
+    }
+
+    #[test]
+    fn somebody_outside_the_team_cannot_answer_for_it() {
+        let contested = Contested::new();
+        contested.open();
+
+        let stranger = Address::generate(&contested.fixture.env);
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_submit_appeal(
+                    &stranger,
+                    &contested.team,
+                    &BytesN::from_array(&contested.fixture.env, &[3u8; 32])
+                )
+                .err(),
+            Some(Ok(Error::NotTeamMember))
+        );
+    }
+
+    /// A threshold one judge could reach twice is not a threshold.
+    #[test]
+    fn a_judge_cannot_sign_the_same_case_twice() {
+        let contested = Contested::new();
+        contested.open();
+
+        let judge = contested.judge(0);
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&judge, &contested.team);
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_approve_disqualification(&judge, &contested.team)
+                .err(),
+            Some(Ok(Error::AlreadySigned))
+        );
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .disqualification(&contested.team)
+                .approvals,
+            1
+        );
+    }
+
+    #[test]
+    fn somebody_who_is_not_a_judge_here_cannot_sign() {
+        let contested = Contested::new();
+        contested.open();
+
+        let stranger = Address::generate(&contested.fixture.env);
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_approve_disqualification(&stranger, &contested.team)
+                .err(),
+            Some(Ok(Error::NotJudge))
+        );
+    }
+
+    #[test]
+    fn a_case_cannot_be_opened_twice_against_the_same_entry() {
+        let contested = Contested::new();
+        contested.open();
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_open_disqualification(&contested.team, &contested.reason())
+                .err(),
+            Some(Ok(Error::DisqualificationAlreadyOpen))
+        );
+    }
+
+    #[test]
+    fn a_settled_case_cannot_be_settled_again() {
+        let contested = Contested::new();
+        contested.open();
+        contested.past_the_window();
+        contested
+            .fixture
+            .client
+            .resolve_disqualification(&contested.team);
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_resolve_disqualification(&contested.team)
+                .err(),
+            Some(Ok(Error::DisqualificationNotOpen))
+        );
+    }
+
+    /// The heavier route has to be available during screening too. An organizer
+    /// who finds plagiarism while the screening round is still open would
+    /// otherwise have to reach for the lighter one, which is exactly the route
+    /// that gives the team no window to answer and asks no judge to agree.
+    #[test]
+    fn a_case_can_be_opened_while_screening_is_still_running() {
+        let screening = Screening::new();
+        let reason = BytesN::from_array(&screening.fixture.env, &[9u8; 32]);
+
+        screening
+            .fixture
+            .client
+            .open_disqualification(&screening.team, &reason);
+
+        assert_eq!(
+            screening
+                .fixture
+                .client
+                .disqualification(&screening.team)
+                .reason,
+            reason
+        );
+        assert_eq!(
+            screening.fixture.client.submission(&screening.team).status,
+            SubmissionStatus::Valid
+        );
+    }
+
+    /// One entry, one process. Ruling the entry out through screening while a
+    /// case is running would leave the heavier process holding a verdict it can
+    /// no longer apply, and would take away a window the team had already been
+    /// given.
+    #[test]
+    fn screening_cannot_rule_out_an_entry_that_already_has_a_case() {
+        let screening = Screening::new();
+        let reason = BytesN::from_array(&screening.fixture.env, &[9u8; 32]);
+
+        screening
+            .fixture
+            .client
+            .open_disqualification(&screening.team, &reason);
+
+        assert_eq!(
+            screening
+                .fixture
+                .client
+                .try_invalidate_submission(&screening.team, &reason)
+                .err(),
+            Some(Ok(Error::DisqualificationAlreadyOpen))
+        );
+    }
+
+    /// Nothing is pinned before the submission deadline, so there is no entry
+    /// to build a case against.
+    #[test]
+    fn a_case_cannot_be_opened_while_projects_are_still_arriving() {
+        let fixture = Fixture::funded_and_open();
+        let env = fixture.env.clone();
+        let schedule = fixture.client.state().schedule;
+
+        env.ledger()
+            .set_timestamp(schedule.registration_opens_at + 3_600);
+        let team = enter(&fixture);
+
+        assert_eq!(
+            fixture
+                .client
+                .try_open_disqualification(&team, &BytesN::from_array(&env, &[9u8; 32]))
+                .err(),
+            Some(Ok(Error::WrongPhase))
+        );
+    }
+
+    /// An entry already out cannot be taken out again. A second ruling would
+    /// overwrite the first one's reason, leaving the page carrying an
+    /// explanation that belongs to a decision nobody made.
+    #[test]
+    fn an_entry_already_out_of_the_running_cannot_be_charged_again() {
+        let contested = Contested::new();
+        contested.open();
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(0), &contested.team);
+        contested
+            .fixture
+            .client
+            .approve_disqualification(&contested.judge(1), &contested.team);
+        contested.past_the_window();
+        contested
+            .fixture
+            .client
+            .resolve_disqualification(&contested.team);
+
+        // A fresh case needs the old one gone, and it is not; even if it were,
+        // the entry itself is no longer in the running.
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_open_disqualification(&contested.team, &contested.reason())
+                .err(),
+            Some(Ok(Error::SubmissionNotEligible))
+        );
+    }
+
+    /// A case opened an hour before the judging window closes still runs its
+    /// full course, so the clock cannot be used to outlast the process.
+    #[test]
+    fn the_window_the_team_was_promised_survives_the_end_of_judging() {
+        let contested = Contested::new();
+        let closes_at = contested.fixture.client.state().schedule.judging_closes_at;
+
+        contested
+            .fixture
+            .env
+            .ledger()
+            .set_timestamp(closes_at - HOUR);
+        contested.open();
+
+        assert_eq!(
+            contested
+                .fixture
+                .client
+                .try_resolve_disqualification(&contested.team)
+                .err(),
+            Some(Ok(Error::AppealWindowOpen))
+        );
+    }
+}

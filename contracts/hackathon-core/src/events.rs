@@ -362,6 +362,88 @@ pub fn no_award_resolved(env: &Env, track: &Symbol, declared: bool, returned: i1
     .publish(env);
 }
 
+/// A case was opened to remove an entry after screening had closed.
+///
+/// The reason travels with it from the first moment, before any judge has
+/// signed and before the team has answered, because the order matters: a
+/// removal that states its grounds only once it has already succeeded is not a
+/// process, it is an announcement.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisqualificationOpened {
+    #[topic]
+    pub team: u32,
+    pub reason: BytesN<32>,
+}
+
+/// The team answered, on the record.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppealSubmitted {
+    #[topic]
+    pub team: u32,
+    pub member: Address,
+    pub appeal: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisqualificationApproved {
+    #[topic]
+    pub team: u32,
+    pub judge: Address,
+    pub approvals: u32,
+}
+
+/// The case was settled, whichever way it went.
+///
+/// A case that fell short of the threshold is published just as loudly as one
+/// that carried, so a team cleared by the process can point at the same record
+/// the accusation was made on.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisqualificationResolved {
+    #[topic]
+    pub team: u32,
+    pub upheld: bool,
+    pub approvals: u32,
+}
+
+pub fn disqualification_opened(env: &Env, team: u32, reason: &BytesN<32>) {
+    DisqualificationOpened {
+        team,
+        reason: reason.clone(),
+    }
+    .publish(env);
+}
+
+pub fn appeal_submitted(env: &Env, team: u32, member: &Address, appeal: &BytesN<32>) {
+    AppealSubmitted {
+        team,
+        member: member.clone(),
+        appeal: appeal.clone(),
+    }
+    .publish(env);
+}
+
+pub fn disqualification_approved(env: &Env, team: u32, judge: &Address, approvals: u32) {
+    DisqualificationApproved {
+        team,
+        judge: judge.clone(),
+        approvals,
+    }
+    .publish(env);
+}
+
+pub fn disqualification_resolved(env: &Env, team: u32, upheld: bool, approvals: u32) {
+    DisqualificationResolved {
+        team,
+        upheld,
+        approvals,
+    }
+    .publish(env);
+}
+
 /// A prize nobody claimed went back along the announced route.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -12,7 +12,7 @@ use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard};
 use crate::state::{ExtensionUsage, HackathonState};
 use crate::storage;
-use crate::submission::Submission;
+use crate::submission::{DisqualificationCase, Submission};
 use crate::vault::VaultClient;
 
 /// The authority for a single hackathon.
@@ -491,6 +491,11 @@ impl HackathonCore {
     ///
     /// The project is not deleted. It keeps its page carrying the reason, which
     /// is the difference between a screening round and a disappearance.
+    ///
+    /// An entry with a disqualification case open is out of reach here. Two
+    /// processes running on one entry would let the lighter one land first and
+    /// leave the heavier one holding a verdict it can no longer apply, and the
+    /// team would lose the appeal window they had already been given.
     pub fn invalidate_submission(env: Env, team_id: u32, reason: BytesN<32>) -> Result<(), Error> {
         let organizers = storage::load_organizing_team(&env)?;
         organizers.organizer.require_auth();
@@ -499,12 +504,197 @@ impl HackathonCore {
             return Err(Error::WrongPhase);
         }
 
+        if let Ok(case) = storage::load_disqualification(&env, team_id) {
+            if !case.resolved {
+                return Err(Error::DisqualificationAlreadyOpen);
+            }
+        }
+
         let ruled_out = storage::load_submission(&env, team_id)?.invalidate(reason.clone())?;
 
         storage::save_submission(&env, &ruled_out);
         events::submission_invalidated(&env, team_id, &reason);
 
         Ok(())
+    }
+
+    /// Opens a case for removing an entry, on the record.
+    ///
+    /// This runs alongside screening rather than after it. The two answer
+    /// different problems: screening is for the entries nobody would argue
+    /// about, and this is for the ones somebody would, whenever they surface.
+    /// An organizer who finds plagiarism on the last morning of screening
+    /// should not have to choose between waiting and using the lighter route,
+    /// because the lighter route is the one that gives the team no window to
+    /// answer and asks no judge to agree.
+    ///
+    /// It closes at the reveal. Past that point the ranking is being computed,
+    /// and a removal landing after the result is announced would put every
+    /// payment back in doubt.
+    ///
+    /// Opening a case removes nothing by itself. The entry stays in the running
+    /// the entire time the case is open, and only `resolve_disqualification`
+    /// can take it out.
+    pub fn open_disqualification(env: Env, team_id: u32, reason: BytesN<32>) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        Self::require_disqualification_phase(&env)?;
+
+        if !storage::load_submission(&env, team_id)?.is_valid() {
+            return Err(Error::SubmissionNotEligible);
+        }
+        if storage::has_disqualification(&env, team_id) {
+            return Err(Error::DisqualificationAlreadyOpen);
+        }
+
+        let now = env.ledger().timestamp();
+        storage::save_disqualification(
+            &env,
+            &DisqualificationCase::open(&env, team_id, reason.clone(), now),
+        );
+
+        events::disqualification_opened(&env, team_id, &reason);
+
+        Ok(())
+    }
+
+    /// Files the team's answer, inside the window they were given.
+    ///
+    /// Any member may file it, for the same reason any member may enter the
+    /// project: a team whose captain is asleep would otherwise lose its right
+    /// of reply to a timezone.
+    ///
+    /// The answer changes nothing on its own and is not required for the case
+    /// to be settled. What it does is put the team's account on the same public
+    /// record as the accusation, so a reader of the proof page sees both sides
+    /// or knows that only one was offered.
+    pub fn submit_appeal(
+        env: Env,
+        member: Address,
+        team_id: u32,
+        appeal: BytesN<32>,
+    ) -> Result<(), Error> {
+        member.require_auth();
+
+        if !storage::load_team(&env, team_id)?.has_member(&member) {
+            return Err(Error::NotTeamMember);
+        }
+
+        let mut case = storage::load_disqualification(&env, team_id)?;
+        if case.resolved {
+            return Err(Error::AppealWindowClosed);
+        }
+
+        let window = storage::load_constitution(&env)?.discretion.appeal_window;
+        let now = env.ledger().timestamp();
+
+        if !case.appeal_window_open(now, window) {
+            return Err(Error::AppealWindowClosed);
+        }
+        if case.appealed_at != 0 {
+            return Err(Error::AlreadySigned);
+        }
+
+        case.appeal = appeal.clone();
+        case.appealed_at = now;
+        storage::save_disqualification(&env, &case);
+
+        events::appeal_submitted(&env, team_id, &member, &appeal);
+
+        Ok(())
+    }
+
+    /// Adds a judge's signature to the case.
+    ///
+    /// Only a judge assigned to the entry's own track may sign. A bench that
+    /// never saw the project has no basis to remove it, and letting them sign
+    /// would turn the threshold into a headcount the organizer could reach by
+    /// asking whoever was easiest to convince.
+    pub fn approve_disqualification(env: Env, judge: Address, team_id: u32) -> Result<(), Error> {
+        judge.require_auth();
+
+        let submission = storage::load_submission(&env, team_id)?;
+        if !storage::load_constitution(&env)?.judges_track(&judge, &submission.track) {
+            return Err(Error::NotJudge);
+        }
+
+        let mut case = storage::load_disqualification(&env, team_id)?;
+        if case.resolved {
+            return Err(Error::DisqualificationNotOpen);
+        }
+        if storage::has_disqualification_approval(&env, team_id, &judge) {
+            return Err(Error::AlreadySigned);
+        }
+
+        storage::save_disqualification_approval(&env, team_id, &judge);
+        case.approvals += 1;
+        storage::save_disqualification(&env, &case);
+
+        events::disqualification_approved(&env, team_id, &judge, case.approvals);
+
+        Ok(())
+    }
+
+    /// Settles the case, one way or the other.
+    ///
+    /// The window has to have run out first, so a case cannot be rushed through
+    /// before the team has had the time they were promised to answer. If the
+    /// judges reached the announced threshold the entry comes out of the
+    /// running carrying the reason it was opened with; if they did not, the
+    /// case closes and the project competes as though it had never been opened.
+    /// That default is the same one the no award path uses: a team that entered
+    /// is in unless somebody clears the bar to remove them.
+    ///
+    /// Nobody has to sign this. Both conditions are public values anyone can
+    /// read, and leaving the call to the organizer would let them park a case
+    /// they had lost.
+    pub fn resolve_disqualification(env: Env, team_id: u32) -> Result<bool, Error> {
+        Self::require_disqualification_phase(&env)?;
+
+        let mut case = storage::load_disqualification(&env, team_id)?;
+        if case.resolved {
+            return Err(Error::DisqualificationNotOpen);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        if case.appeal_window_open(
+            env.ledger().timestamp(),
+            constitution.discretion.appeal_window,
+        ) {
+            return Err(Error::AppealWindowOpen);
+        }
+
+        let upheld = case.approvals >= constitution.discretion.disqualification_threshold;
+
+        case.resolved = true;
+        storage::save_disqualification(&env, &case);
+
+        if upheld {
+            let removed = storage::load_submission(&env, team_id)?.disqualify(case.reason)?;
+            storage::save_submission(&env, &removed);
+        }
+
+        events::disqualification_resolved(&env, team_id, upheld, case.approvals);
+
+        Ok(upheld)
+    }
+
+    /// The case against one team's entry, if one was opened.
+    pub fn disqualification(env: Env, team_id: u32) -> Result<DisqualificationCase, Error> {
+        storage::load_disqualification(&env, team_id)
+    }
+
+    /// The stretch of the event where a removal can still be opened or settled.
+    ///
+    /// It starts when the entries are pinned, because there is nothing to
+    /// remove before that, and ends when the ranking closes, because a removal
+    /// after the result is announced would reopen every payment behind it.
+    fn require_disqualification_phase(env: &Env) -> Result<(), Error> {
+        match storage::load_state(env)?.phase {
+            Phase::Screening | Phase::Judging | Phase::Reveal => Ok(()),
+            _ => Err(Error::WrongPhase),
+        }
     }
 
     /// Steps a judge away from one project.
@@ -746,10 +936,23 @@ impl HackathonCore {
     /// judge quorum, is left out of the ranking rather than placed last. Those
     /// are different situations from a project that was judged and came last,
     /// and the page shows which one applies.
+    ///
+    /// A disqualification case still open holds this call back. Closing the
+    /// ranking around an entry whose standing is undecided would force the
+    /// outcome one way while the team still had time to answer, and there is no
+    /// way back once the result is final.
     pub fn finalize_results(env: Env) -> Result<(), Error> {
         let state = storage::load_state(&env)?;
         if state.phase != Phase::Reveal {
             return Err(Error::WrongPhase);
+        }
+
+        for team_id in 1..=storage::team_count(&env) {
+            if let Ok(case) = storage::load_disqualification(&env, team_id) {
+                if !case.resolved {
+                    return Err(Error::DisqualificationUnresolved);
+                }
+            }
         }
 
         let constitution = storage::load_constitution(&env)?;

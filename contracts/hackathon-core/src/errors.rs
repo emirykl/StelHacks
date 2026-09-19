@@ -113,6 +113,7 @@ pub enum Error {
     AppealWindowClosed = 124,
     JudgeApprovalThresholdNotMet = 125,
     AlreadySigned = 126,
+    DisqualificationUnresolved = 127,
 
     // Result and settlement
     ResultsAlreadyFinalized = 140,

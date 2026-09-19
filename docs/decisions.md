@@ -214,6 +214,49 @@ other winner's money; paid separately, they block only themselves.
 walked. Accepting the setting and quietly not honouring it would be worse than
 not offering it. Recorded in the roadmap's deferred table.
 
+## 17. An extension moves the schedule in force, never the announced one
+
+**Decided.** `extend_deadline` writes to the schedule held in `HackathonState`.
+The schedule inside the constitution stays exactly as it was hashed at the lock,
+and the allowance is spent per deadline rather than from one shared budget.
+
+**Why.** If an extension rewrote the locked rules, an hour granted after an
+outage would change the constitution digest, and a legitimate announced
+extension would be indistinguishable from tampering. Keeping the two apart means
+a reader can hold both and see the difference as a list of recorded moves. The
+budget is per deadline because that is how it is announced; one shared counter
+would let a slipping submission window silently consume the room the judges were
+promised.
+
+**Consequence.** Two schedules exist and every reader has to know which one they
+are looking at. The contract answers the question directly: `constitution()`
+carries what was announced, `state()` carries what is in force.
+
+## 18. Disqualification runs from screening to the reveal, and holds the ranking
+
+**PRD said** disqualification is initiated in the screening phase, and no
+disqualification is possible after the result is final.
+
+**We decided** a case can be opened from screening through the reveal, and
+`finalize_results` refuses while any case is still unresolved. An entry with an
+open case cannot also be ruled out by screening.
+
+**Why.** The PRD's timing rule only fixes the far end. The near end matters just
+as much: an organizer who finds plagiarism during screening would otherwise have
+to choose between waiting for the round to close and reaching for
+`invalidate_submission`, which is the route that gives the team no window to
+answer and asks no judge to agree. Making the heavier process available
+throughout means the lighter one is never the only option for a contested call.
+
+Holding the ranking closes the other end of the same problem. Ranking around an
+entry whose standing is undecided would settle it by timing rather than by the
+process, and there is no way back once the result is final. Blocking screening
+while a case runs keeps one entry under one process, so the lighter route cannot
+land first and leave the heavier one holding a verdict it can no longer apply.
+
+**Consequence.** A case opened late in the reveal holds finalization for the
+length of the appeal window. That delay is the announced cost of the process.
+
 ---
 
 ## Still open
