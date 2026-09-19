@@ -88,20 +88,27 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
           )}
 
           <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-rule pt-4">
-            <p className="tabular text-[1.25rem] text-ink">
+            {/* The two numbers somebody is actually comparing across a grid of
+                these, so they are the two things given weight. The money is
+                green because money is; the countdown is full ink because it is
+                the other half of the same decision, and a deadline set in the
+                soft grey the tags use loses to them. Everything else on the
+                card stays quiet so that this pair reads first. */}
+            <p className="tabular text-[1.25rem] font-bold text-verified">
               {/* Absent rather than zero when the contract could not be reached.
                   A prize shown as nothing is a claim; a prize shown as unknown
                   is the truth. */}
               {hackathon.prize === null ? (
-                <span className="label text-ink-faint">prize not readable</span>
+                <span className="label font-normal text-ink-faint">prize not readable</span>
               ) : (
                 <>
-                  {prize.figure} <span className="label text-ink-faint">{prize.code}</span>
+                  {prize.figure}{" "}
+                  <span className="label font-normal text-ink-faint">{prize.code}</span>
                 </>
               )}
             </p>
 
-            <p className="label text-ink-soft">
+            <p className="label font-bold text-ink">
               <Remaining closesAt={hackathon.closesAt} finished={finished} />
             </p>
           </div>
