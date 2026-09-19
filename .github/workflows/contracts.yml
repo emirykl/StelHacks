@@ -21,7 +21,7 @@ jobs:
     name: Format, lint and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # rust-toolchain.toml pins the compiler, the components and the wasm
       # target, so this both reports and installs what the repository asks for.
@@ -45,7 +45,7 @@ jobs:
     name: Reproducible wasm build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve the pinned toolchain
         run: rustup show
