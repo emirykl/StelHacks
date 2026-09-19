@@ -44,7 +44,7 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
   return (
     <main className="flex-1">
       <section className="border-b border-rule">
-        <Measure widest className="py-16 sm:py-20">
+        <Measure wide className="py-16 sm:py-20">
           <Eyebrow>Every event</Eyebrow>
 
           <h1 className="mt-4 text-[clamp(2rem,4.5vw,3.25rem)]">Hackathons</h1>
@@ -56,7 +56,7 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
         </Measure>
       </section>
 
-      <Measure widest className="pb-12">
+      <Measure wide className="pb-12">
         <Filters
           applied={{ stage: filter.stage, tag: filter.tag, q: filter.q }}
           tags={tags}
