@@ -7,7 +7,9 @@
 //! outside this contract is allowed to decide who won.
 
 mod constitution;
+mod contract;
 mod errors;
+mod events;
 #[cfg(test)]
 mod fixtures;
 mod hashing;
@@ -16,6 +18,8 @@ mod state;
 mod storage;
 mod submission;
 mod team;
+#[cfg(test)]
+mod test;
 
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, validate_tie_break, Constitution, Criterion,
@@ -24,6 +28,7 @@ pub use constitution::{
     CONSTITUTION_VERSION, MAX_CRITERION_SCORE, MAX_SETTLEMENT_SAFETY_WINDOW, VOTE_SPLIT_TOTAL_BPS,
     WEIGHT_TOTAL_BPS,
 };
+pub use contract::{HackathonCore, HackathonCoreClient};
 pub use errors::Error;
 pub use hashing::{hash_constitution, hash_submission_metadata};
 pub use phase::Phase;
@@ -31,8 +36,3 @@ pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
 pub use submission::{SubmissionMetadata, SubmissionRequirements};
 pub use team::OrganizingTeam;
-
-use soroban_sdk::contract;
-
-#[contract]
-pub struct HackathonCore;

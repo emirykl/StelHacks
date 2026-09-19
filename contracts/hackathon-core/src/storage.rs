@@ -1,13 +1,8 @@
-// The accessors below are exercised by this module's own tests but have no
-// caller in the library yet, because the contract entry points that will use
-// them are the next milestone. The attribute comes off with the first one.
-#![allow(dead_code)]
+use soroban_sdk::{contracttype, BytesN, Env};
 
-use soroban_sdk::{contracttype, Address, BytesN, Env};
-
-use crate::constitution::{Constitution, Deadline};
+use crate::constitution::Constitution;
 use crate::errors::Error;
-use crate::state::{ExtensionUsage, HackathonState};
+use crate::state::HackathonState;
 use crate::team::OrganizingTeam;
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
@@ -42,10 +37,6 @@ pub enum DataKey {
     ConstitutionHash,
     /// Phase, effective schedule and the rest of what changes as the event runs.
     State,
-    /// How much of the extension allowance one deadline has spent.
-    Extension(Deadline),
-    /// The vault paired with this hackathon.
-    Vault,
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -85,18 +76,11 @@ pub fn load_state(env: &Env) -> Result<HackathonState, Error> {
         .ok_or(Error::NotInitialized)
 }
 
-/// Writes the rules and their digest together.
-///
-/// The two are stored in one call because a constitution without its digest,
-/// or a digest without its constitution, is a state no reader can make sense
-/// of, and there is no reason to allow it to exist.
-pub fn save_constitution(env: &Env, constitution: &Constitution, hash: &BytesN<32>) {
+/// Writes the rules while they are still a draft and still editable.
+pub fn save_constitution(env: &Env, constitution: &Constitution) {
     env.storage()
         .instance()
         .set(&DataKey::Constitution, constitution);
-    env.storage()
-        .instance()
-        .set(&DataKey::ConstitutionHash, hash);
     touch(env);
 }
 
@@ -104,7 +88,20 @@ pub fn load_constitution(env: &Env) -> Result<Constitution, Error> {
     env.storage()
         .instance()
         .get(&DataKey::Constitution)
-        .ok_or(Error::RulesNotLocked)
+        .ok_or(Error::NotInitialized)
+}
+
+/// Freezes the rules by recording their digest.
+///
+/// The phase remains the authority on whether a hackathon is locked, so that
+/// there is one answer to that question rather than two that could drift
+/// apart. This digest is the consequence of the lock and the value every later
+/// reader compares against.
+pub fn lock_constitution(env: &Env, hash: &BytesN<32>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ConstitutionHash, hash);
+    touch(env);
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {
@@ -114,44 +111,10 @@ pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {
         .ok_or(Error::RulesNotLocked)
 }
 
-pub fn has_constitution(env: &Env) -> bool {
-    env.storage().instance().has(&DataKey::Constitution)
-}
-
-/// What a deadline has spent of its extension allowance so far.
-///
-/// An untouched deadline reads as unused rather than as missing, because the
-/// two mean the same thing here and a caller should not have to handle both.
-pub fn load_extension_usage(env: &Env, deadline: Deadline) -> ExtensionUsage {
-    env.storage()
-        .instance()
-        .get(&DataKey::Extension(deadline))
-        .unwrap_or_else(ExtensionUsage::unused)
-}
-
-pub fn save_extension_usage(env: &Env, deadline: Deadline, usage: &ExtensionUsage) {
-    env.storage()
-        .instance()
-        .set(&DataKey::Extension(deadline), usage);
-    touch(env);
-}
-
-pub fn save_vault(env: &Env, vault: &Address) {
-    env.storage().instance().set(&DataKey::Vault, vault);
-    touch(env);
-}
-
-pub fn load_vault(env: &Env) -> Result<Address, Error> {
-    env.storage()
-        .instance()
-        .get(&DataKey::Vault)
-        .ok_or(Error::NotInitialized)
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::fixtures::{sample_constitution, sample_schedule as schedule, DAY};
+    use crate::fixtures::{sample_constitution, sample_schedule as schedule};
     use crate::hashing::hash_constitution;
     use crate::phase::Phase;
     use crate::HackathonCore;
@@ -173,7 +136,6 @@ mod test {
             assert!(!is_initialized(&env));
             assert_eq!(load_team(&env), Err(Error::NotInitialized));
             assert_eq!(load_state(&env), Err(Error::NotInitialized));
-            assert_eq!(load_vault(&env), Err(Error::NotInitialized));
         });
     }
 
@@ -222,12 +184,11 @@ mod test {
     }
 
     #[test]
-    fn the_rules_are_missing_until_they_are_locked() {
+    fn nothing_is_stored_before_the_hackathon_is_created() {
         let env = Env::default();
 
         in_contract(&env, || {
-            assert!(!has_constitution(&env));
-            assert_eq!(load_constitution(&env).err(), Some(Error::RulesNotLocked));
+            assert_eq!(load_constitution(&env).err(), Some(Error::NotInitialized));
             assert_eq!(
                 load_constitution_hash(&env).err(),
                 Some(Error::RulesNotLocked)
@@ -236,16 +197,21 @@ mod test {
     }
 
     #[test]
-    fn the_rules_and_their_digest_are_stored_together() {
+    fn a_draft_becomes_locked_only_when_its_digest_is_written() {
         let env = Env::default();
 
         in_contract(&env, || {
             let constitution = sample_constitution(&env);
             let hash = hash_constitution(&env, &constitution);
 
-            save_constitution(&env, &constitution, &hash);
+            save_constitution(&env, &constitution);
+            assert!(
+                load_constitution_hash(&env).is_err(),
+                "a draft carries no digest"
+            );
 
-            assert!(has_constitution(&env));
+            lock_constitution(&env, &hash);
+
             assert_eq!(load_constitution(&env), Ok(constitution.clone()));
             assert_eq!(load_constitution_hash(&env), Ok(hash.clone()));
 
@@ -255,50 +221,6 @@ mod test {
                 hash_constitution(&env, &load_constitution(&env).unwrap()),
                 hash
             );
-        });
-    }
-
-    #[test]
-    fn an_untouched_deadline_reads_as_unused_rather_than_missing() {
-        let env = Env::default();
-
-        in_contract(&env, || {
-            assert_eq!(
-                load_extension_usage(&env, Deadline::Submission),
-                ExtensionUsage::unused()
-            );
-        });
-    }
-
-    #[test]
-    fn extension_usage_is_tracked_per_deadline() {
-        let env = Env::default();
-
-        in_contract(&env, || {
-            let spent = ExtensionUsage {
-                times: 1,
-                seconds_added: DAY,
-            };
-            save_extension_usage(&env, Deadline::Submission, &spent);
-
-            assert_eq!(load_extension_usage(&env, Deadline::Submission), spent);
-            assert_eq!(
-                load_extension_usage(&env, Deadline::Judging),
-                ExtensionUsage::unused(),
-                "moving one deadline must not spend another one's allowance"
-            );
-        });
-    }
-
-    #[test]
-    fn the_vault_address_survives_a_write_and_a_read() {
-        let env = Env::default();
-
-        in_contract(&env, || {
-            let vault = Address::generate(&env);
-            save_vault(&env, &vault);
-
-            assert_eq!(load_vault(&env), Ok(vault));
         });
     }
 }

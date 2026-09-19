@@ -34,3 +34,6 @@ docs/roadmap.md
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Soroban test snapshots
+test_snapshots/
