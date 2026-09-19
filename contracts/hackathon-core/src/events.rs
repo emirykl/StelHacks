@@ -12,6 +12,7 @@
 
 use soroban_sdk::{contractevent, Address, BytesN, Env, Symbol};
 
+use crate::constitution::Deadline;
 use crate::phase::Phase;
 
 /// A hackathon exists and is open for configuration.
@@ -176,6 +177,41 @@ pub struct SubmissionInvalidated {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PhaseAdvanced {
     pub phase: Phase,
+}
+
+/// One deadline moved, inside the allowance the rules announced.
+///
+/// This event is the entire difference between the schedule that was hashed and
+/// the schedule in force, so an indexer holding the constitution and this
+/// stream can show both and say which is which. The reason travels with it
+/// because time is the resource participants plan around, and a window that
+/// moved without a stated cause is indistinguishable from one that moved to
+/// suit somebody.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeadlineExtended {
+    #[topic]
+    pub deadline: Deadline,
+    pub moved_to: u64,
+    /// What this move cost against the deadline's announced budget.
+    pub seconds_added: u64,
+    pub reason: BytesN<32>,
+}
+
+pub fn deadline_extended(
+    env: &Env,
+    deadline: Deadline,
+    moved_to: u64,
+    seconds_added: u64,
+    reason: &BytesN<32>,
+) {
+    DeadlineExtended {
+        deadline,
+        moved_to,
+        seconds_added,
+        reason: reason.clone(),
+    }
+    .publish(env);
 }
 
 /// A judge stepped away from one project.

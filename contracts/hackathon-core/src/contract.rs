@@ -1,6 +1,6 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec};
 
-use crate::constitution::{Constitution, TeamPolicy, TieBreakRule};
+use crate::constitution::{Constitution, Deadline, TeamPolicy, TieBreakRule};
 use crate::errors::Error;
 use crate::events;
 use crate::hashing::{self, hash_constitution};
@@ -10,7 +10,7 @@ use crate::phase::Phase;
 use crate::results::{self, Candidate, NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard};
-use crate::state::HackathonState;
+use crate::state::{ExtensionUsage, HackathonState};
 use crate::storage;
 use crate::submission::Submission;
 use crate::vault::VaultClient;
@@ -348,6 +348,69 @@ impl HackathonCore {
         events::phase_advanced(&env, advanced.phase);
 
         Ok(advanced.phase)
+    }
+
+    /// Gives one deadline more time, inside the allowance the rules announced.
+    ///
+    /// The announced schedule stays in the constitution and stays hashed. What
+    /// moves is the schedule in force, and the gap between the two is this
+    /// call's event trail, so an extension always reads as an extension rather
+    /// than as rules that quietly say something else.
+    ///
+    /// Three limits make that safe, and each one closes a specific way an
+    /// organizer could otherwise steer a result. The move has to fit the budget
+    /// published before the lock, so nobody is surprised by a window that keeps
+    /// growing. A deadline that has passed is closed for good, so an organizer
+    /// cannot read what arrived and only then decide to give more time. And the
+    /// whole schedule is revalidated afterwards, so a submission window pushed
+    /// past the screening round is refused rather than stranding the event.
+    ///
+    /// A reason digest is required for the same reason a screening decision
+    /// needs one: this is discretion, and discretion has to be answerable.
+    ///
+    /// Before the lock there is nothing to extend. The organizer edits the
+    /// schedule through `configure` and no allowance is spent.
+    pub fn extend_deadline(
+        env: Env,
+        deadline: Deadline,
+        moved_to: u64,
+        reason: BytesN<32>,
+    ) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase.is_configurable() {
+            return Err(Error::RulesNotLocked);
+        }
+        if state.phase.is_terminal() {
+            return Err(Error::WrongPhase);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        let usage = storage::load_extension_usage(&env, deadline);
+
+        let (extended, spent) = state.extend(
+            deadline,
+            moved_to,
+            env.ledger().timestamp(),
+            &constitution.extensions,
+            &usage,
+            constitution.community_vote_enabled(),
+        )?;
+
+        storage::save_state(&env, &extended);
+        storage::save_extension_usage(&env, deadline, &spent);
+
+        events::deadline_extended(
+            &env,
+            deadline,
+            moved_to,
+            spent.seconds_added - usage.seconds_added,
+            &reason,
+        );
+
+        Ok(())
     }
 
     /// Enters a project, or revises one already entered.
@@ -1293,6 +1356,15 @@ impl HackathonCore {
     /// Where the hackathon is in its lifecycle, and the deadlines in force.
     pub fn state(env: Env) -> Result<HackathonState, Error> {
         storage::load_state(&env)
+    }
+
+    /// What one deadline has spent of its announced allowance.
+    ///
+    /// Read beside `constitution().extensions`, this is what tells a
+    /// participant how much further a window could still move, which is the
+    /// question an announced allowance exists to answer.
+    pub fn extension_usage(env: Env, deadline: Deadline) -> ExtensionUsage {
+        storage::load_extension_usage(&env, deadline)
     }
 
     /// The organizer and their collaborators.

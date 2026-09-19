@@ -8,6 +8,7 @@
 //! product's promises live at that level, so this is where they are checked.
 
 mod community;
+mod discretion;
 mod funding;
 mod judging;
 mod registration;

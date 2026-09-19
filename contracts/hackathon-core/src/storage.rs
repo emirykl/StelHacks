@@ -1,12 +1,12 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol, Vec};
 
-use crate::constitution::Constitution;
+use crate::constitution::{Constitution, Deadline};
 use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
 use crate::results::{NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionTally, ScoreTally};
-use crate::state::HackathonState;
+use crate::state::{ExtensionUsage, HackathonState};
 use crate::submission::Submission;
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
@@ -48,6 +48,11 @@ pub enum DataKey {
     ConstitutionHash,
     /// Phase, effective schedule and the rest of what changes as the event runs.
     State,
+    /// How much of its announced allowance one deadline has spent. Kept per
+    /// deadline rather than as one counter, because the allowance is declared
+    /// per deadline and a single counter would let a slipping submission window
+    /// silently eat the judging window's room.
+    Extensions(Deadline),
     /// The vault holding this hackathon's prize.
     Vault,
     /// One person's request to take part.
@@ -128,6 +133,23 @@ pub fn load_state(env: &Env) -> Result<HackathonState, Error> {
         .instance()
         .get(&DataKey::State)
         .ok_or(Error::NotInitialized)
+}
+
+/// What a deadline has spent of its allowance. A deadline nobody has moved has
+/// spent nothing, which is the same answer as no entry, so the caller never
+/// handles both.
+pub fn load_extension_usage(env: &Env, deadline: Deadline) -> ExtensionUsage {
+    env.storage()
+        .instance()
+        .get(&DataKey::Extensions(deadline))
+        .unwrap_or_else(ExtensionUsage::unused)
+}
+
+pub fn save_extension_usage(env: &Env, deadline: Deadline, usage: &ExtensionUsage) {
+    env.storage()
+        .instance()
+        .set(&DataKey::Extensions(deadline), usage);
+    touch(env);
 }
 
 /// Writes the rules while they are still a draft and still editable.
