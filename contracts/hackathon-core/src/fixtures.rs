@@ -13,10 +13,26 @@ use crate::constitution::{
     PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy, TieBreakRule,
     Track, VotePolicy, CONSTITUTION_VERSION,
 };
+use crate::scorecard::{CriterionScore, Scorecard};
 use crate::submission::{SubmissionMetadata, SubmissionRequirements};
 
 pub const HOUR: u64 = 60 * 60;
 pub const DAY: u64 = 24 * HOUR;
+
+/// Addresses written out in full rather than generated.
+///
+/// Everything else in this file may use `Address::generate`, because a random
+/// address is fine when only one language is looking at it. The canonical
+/// fixture below is read by the TypeScript SDK as well, and a value that
+/// differs between the two runs would make the whole comparison meaningless.
+pub const CANONICAL_PRIZE_ASSET: &str = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+pub const CANONICAL_SEALER: &str = "GAF6IFHHU3QF3LFFDYCJ3WDB3JFLUWF73LBLWF3UK3GK5GXHH7PHWQWY";
+pub const CANONICAL_JUDGES: [&str; 3] = [
+    "GA3A3NY4VLTTUPJCJSTJ457KAOXKPZ3PQER4M2F5TQRFG5TTNEOBQZ3K",
+    "GD5UICFSMKGZAEP67EPBIXVENKEUXSUWT7RUT27YH4HHYVGRQURDMVXL",
+    "GCZYAVTGEEWBFJNBFNPWOYNFPBA4C5O7YFYVZXUHWLKXZCV4LCAJH2QC",
+];
+pub const CANONICAL_VOTER: &str = "GDWL4D6IKDN4OQIA5PISXXN7TCT3Q7S45SXAKHHEONCUCHDHV2CXUVJ4";
 
 /// A schedule with room between its deadlines, so a test that moves one by a
 /// day is not immediately refused for running into the next.
@@ -128,6 +144,109 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
             max_extensions_per_deadline: 2,
             max_total_seconds_per_deadline: 2 * DAY,
         },
+    }
+}
+
+/// The hackathon both languages hash.
+///
+/// Every value here is written out rather than derived, and nothing about it
+/// depends on the machine it runs on, because the whole point is that a
+/// TypeScript client building the same object from the same numbers arrives at
+/// the same digest. It is deliberately not the same as [`sample_constitution`]:
+/// this one has to stay frozen, and that one is free to change whenever a test
+/// needs a different shape.
+pub fn canonical_constitution(env: &Env) -> Constitution {
+    let payments = symbol_short!("payments");
+    let defi = symbol_short!("defi");
+
+    let mut judges = Vec::new(env);
+    for address in CANONICAL_JUDGES {
+        judges.push_back(JudgeAssignment {
+            judge: Address::from_str(env, address),
+            tracks: vec![env, payments.clone(), defi.clone()],
+        });
+    }
+
+    Constitution {
+        version: CONSTITUTION_VERSION,
+        metadata_hash: BytesN::from_array(env, &[7u8; 32]),
+        prize_asset: Address::from_str(env, CANONICAL_PRIZE_ASSET),
+        tracks: vec![
+            env,
+            Track {
+                id: payments.clone(),
+                criteria: sample_criteria(env),
+                no_award_allowed: false,
+            },
+            Track {
+                id: defi.clone(),
+                criteria: sample_criteria(env),
+                no_award_allowed: true,
+            },
+        ],
+        judges,
+        judge_quorum: 3,
+        judging_mode: JudgingMode::Easy(Address::from_str(env, CANONICAL_SEALER)),
+        vote: VotePolicy {
+            judge_bps: 8_000,
+            community_bps: 2_000,
+        },
+        visibility: ProjectVisibility::Public,
+        submission_requirements: SubmissionRequirements::code_and_video(),
+        teams: TeamPolicy::small_teams(),
+        prize_tiers: vec![
+            env,
+            PrizeTier {
+                track: payments.clone(),
+                rank: 1,
+                amount: 5_000,
+            },
+            PrizeTier {
+                track: payments,
+                rank: 2,
+                amount: 3_000,
+            },
+            PrizeTier {
+                track: defi,
+                rank: 1,
+                amount: 2_000,
+            },
+        ],
+        tie_break: vec![env, TieBreakRule::JudgeScore, TieBreakRule::SubmissionOrder],
+        discretion: DiscretionPolicy {
+            disqualification_threshold: 2,
+            appeal_window: 48 * HOUR,
+            settlement: SettlementMode::SafetyWindow(24 * HOUR),
+            prize_claim_period: 90 * DAY,
+            unclaimed_refund: RefundRoute::Organizer,
+            no_award_refund: RefundRoute::Organizer,
+            cancellation_threshold: 2,
+            cancellation_refund: RefundRoute::Organizer,
+        },
+        schedule: sample_schedule(),
+        extensions: ExtensionPolicy {
+            max_extensions_per_deadline: 2,
+            max_total_seconds_per_deadline: 2 * DAY,
+        },
+    }
+}
+
+/// The scorecard both languages turn into a leaf.
+pub fn canonical_scorecard(env: &Env) -> Scorecard {
+    Scorecard {
+        judge: Address::from_str(env, CANONICAL_JUDGES[0]),
+        team: 1,
+        scores: vec![
+            env,
+            CriterionScore {
+                criterion: symbol_short!("technical"),
+                score: 82,
+            },
+            CriterionScore {
+                criterion: symbol_short!("novelty"),
+                score: 64,
+            },
+        ],
     }
 }
 

@@ -11,6 +11,7 @@ mod adversarial;
 mod community;
 mod discretion;
 mod funding;
+mod interop;
 mod judging;
 mod lifecycle;
 mod registration;
