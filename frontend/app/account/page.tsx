@@ -7,7 +7,7 @@ import { authConfigured, currentUser, serverClient } from "../../lib/supabase/se
 /**
  * Your account, in the order the two halves actually depend on each other.
  *
- * Google says who you are. A wallet says what you hold. They are separate
+ * An email says who you are. A wallet says what you hold. They are separate
  * layers and neither is a login for the other, but they are not
  * interchangeable in time: a wallet is attached to a profile, so there has to
  * be a profile first.
@@ -65,8 +65,9 @@ function SignedOut() {
       <SignIn />
 
       <p className="mt-5 text-[0.875rem] leading-relaxed text-ink-soft">
-        Google is only your name. Your wallet does the signing, and you attach
-        one after this.
+        Your email is only your name. Your wallet does the signing, and you
+        attach one after this. No password: a code arrives in the message and
+        you type it back here.
       </p>
     </div>
   );

@@ -100,8 +100,9 @@ export function Wizard() {
     };
 
     /* The organizer is the connected wallet, not the signed in account. The
-       contract knows nothing about Google; what it records as the organizer is
-       the address that will later lock the rules and move the phase. */
+       contract knows nothing about an email address; what it records as the
+       organizer is the address that will later lock the rules and move the
+       phase. */
     const args = await createArgs(wallet.address, draft);
 
     const outcome = await send(

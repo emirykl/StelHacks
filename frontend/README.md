@@ -148,11 +148,18 @@ cannot be.
 
 ## Identity, and the two layers of it
 
-Google says who somebody is. A wallet says what they hold. They are separate on
-purpose and `/account` shows them as two sections rather than one: a Google
-account with no address attached can read every page and do nothing on chain,
-and an address with no Google account behind it still wins prizes perfectly
-well. Neither is a login for the other.
+An email address says who somebody is. A wallet says what they hold. They are
+separate on purpose and `/account` shows them as two sections rather than one:
+an account with no address attached can read every page and do nothing on chain,
+and an address with no account behind it still wins prizes perfectly well.
+Neither is a login for the other.
+
+Signing in is a six digit code sent to the address, checked in the tab it was
+asked for. There is no password to store and no third party to register a client
+with, and the proof is the same one an OAuth provider would have been selling:
+a message arrived somewhere only that person can open. The link in the same
+message works too, and `app/auth/callback` accepts either shape it can arrive
+in.
 
 Sessions are cookies, through `@supabase/ssr`, so a server component renders the
 signed in state rather than flashing signed out and correcting itself. Reads go
@@ -180,5 +187,4 @@ built, they implement what that page already says.
 
 The check currently covers the four claims on the strip; the ranking, the
 scorecard proofs and the payments are the next things a reader should be able to
-confirm the same way. Google sign in needs OAuth credentials, which are tracked
-in the roadmap's deferred table.
+confirm the same way.
