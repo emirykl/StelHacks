@@ -65,7 +65,7 @@ export function WalletBadge({ signedIn }: { signedIn: boolean }) {
            way in from across the page. */
         className="bg-ink text-signal hover:bg-ink/90"
       >
-        {signedIn ? "My account" : "Log in"}
+        {signedIn ? "My account" : "Log In"}
       </ButtonLink>
     );
   }

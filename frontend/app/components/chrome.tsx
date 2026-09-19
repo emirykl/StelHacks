@@ -33,11 +33,11 @@ export async function Header() {
         </a>
 
         <nav className="hidden items-center gap-1 sm:flex" aria-label="Sections">
-          {[
-            ["Hackathons", "/hackathons"],
-            ["How it works", "/how-it-works"],
-            ["Create", "/create"],
-          ].map(([label, href]) => (
+          {/* One link, because there is one thing to go to. "How it works" and
+              "Create" belong to the landing page's argument rather than to the
+              header: a nav with three items and no hierarchy makes a reader
+              choose before they know what any of them are. */}
+          {[["Hackathons", "/hackathons"]].map(([label, href]) => (
             <a
               key={href}
               href={href}
