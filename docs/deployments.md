@@ -93,3 +93,31 @@ hackathon.
 ## Mainnet
 
 Nothing. M19.
+
+## A second event, made to try the surfaces on
+
+The first hackathon on this page is stuck in `Funding`, so nothing that only
+happens once an event is open could be exercised against it: the participant
+flow, the applications queue, the organizer's console past the first step.
+
+`frontend/scripts/seed-testnet.mts` makes another and walks it all the way to
+`Open`. It generates its own key and funds it from friendbot, so it needs
+nothing from anybody and the key it prints is worth exactly the testnet lumens
+it was given.
+
+| What | Address |
+|---|---|
+| `hackathon-core` | `CAURPTIPWAPOYRAQV5RVMV4QDTQUI5UJDCIYDASBCSFINPSEKCS5N5ZG` |
+| `prize-vault` | `CDC5LBLUC7QWIV473BHZQYT77NUXWRRJSCRUH76GV7OVUHOVGQV2767B` |
+
+Locked under digest
+`a5ed56f7e812fd4e283b098e90286d8f2d600c64996f48cde611f4cef329faea`, funded with
+ten lumens against a single ten lumen first prize, and open for registration.
+One address has applied and is waiting.
+
+**Two things it caught, both of which the frontend had wrong.** A judge with an
+empty track list is refused: the contract will not read that as "every track",
+because a judge who can score nothing breaks a quorum for projects that did
+nothing wrong. And the vault's `create` is an ordinary entry point rather than a
+constructor, so deploying it with its arguments attached fails inside the wasm
+with a missing value. It has to be deployed empty and then told what it holds.

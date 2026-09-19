@@ -220,18 +220,32 @@ function Next({
                 return { ok: false, why: "the rules do not name a prize asset", refused: false };
               }
 
-              /* Deployed and bound as two calls, because the vault has to
-                 exist before the core can be pointed at it. The core checks
-                 the binding from both sides, so a vault built for a different
-                 hackathon is refused here rather than discovered later. */
-              const built = await deploy(
-                VAULT_WASM,
+              /*
+                Three calls, in this order, because each one needs the last.
+
+                The vault is deployed empty: its `create` is an ordinary entry
+                point rather than a constructor, so passing the arguments to
+                the deployment fails inside the wasm. Then it is told which
+                hackathon and which token it serves. Only then can the core be
+                pointed at it, and the core checks the binding from both sides,
+                so a vault built for a different hackathon is refused here
+                rather than discovered later.
+              */
+              const built = await deploy(VAULT_WASM, [], address);
+
+              if (!built.ok || built.contractId === undefined) {
+                return built;
+              }
+
+              const initialised = await send(
+                built.contractId,
+                "create",
                 [await arg.address(contractId), await arg.address(asset)],
                 address,
               );
 
-              if (!built.ok || built.contractId === undefined) {
-                return built;
+              if (!initialised.ok) {
+                return initialised;
               }
 
               return send(
@@ -247,8 +261,8 @@ function Next({
         </Button>
 
         <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
-          Two signatures: one to put the vault on chain, one to point this
-          hackathon at it.
+          Three signatures: one to put the vault on chain, one to tell it what
+          it holds, one to point this hackathon at it.
         </p>
       </div>
     );

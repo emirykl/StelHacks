@@ -37,7 +37,13 @@ export interface Track {
 
 export interface Judge {
   address: string;
-  /** Empty means every track. */
+  /**
+   * Which tracks this judge scores, and it may not be empty.
+   *
+   * The contract refuses a judge with no assignment rather than reading it as
+   * every track, because a judge who can score nothing is a judge whose
+   * absence breaks a quorum for projects that did nothing wrong.
+   */
   tracks: string[];
 }
 
@@ -125,10 +131,10 @@ export async function createArgs(organizer: string, draft: Draft) {
 
     judges: draft.judges.map((judge) => ({
       judge: judge.address,
-      /* An empty list means every track, which is what a small event wants and
-         what a judge with no assignment would otherwise be: unable to score
-         anything at all. */
-      tracks: judge.tracks,
+      /* Falling back to every track rather than sending an empty list, which
+         the contract refuses. A small event wants every judge on everything,
+         and that is what the form means when it asks for no assignment. */
+      tracks: judge.tracks.length > 0 ? judge.tracks : draft.tracks.map((track) => track.id),
     })),
 
     judge_quorum: draft.judgeQuorum,
