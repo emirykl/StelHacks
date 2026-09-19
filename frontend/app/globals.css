@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+/*
+  The design system, as tokens.
+
+  Two traditions meet here and they do not mix evenly, so the split is written
+  down rather than left to taste.
+
+  Apple's Human Interface Guidelines supply the system: the spacing scale, the
+  type hierarchy, the restraint. Neutral surfaces, one accent, hairline rules,
+  motion you notice only when it is missing. Ninety percent of any screen is
+  this, and it is what makes an interface feel calm.
+
+  The editorial tradition behind stellar.org supplies the accent: a high
+  contrast serif for display type, halftone texture, spot colour. Used at three
+  points and no more, because riso texture and Apple calm are opposites, and an
+  interface that shouts in both loses the character of each.
+
+  The rule: never both loud at once.
+*/
+
+@theme {
+  /* Type ------------------------------------------------------------------
+     The UI face is the system stack, which on Apple hardware is literally SF
+     Pro. Shipping a lookalike would be a worse version of a font the reader
+     already has installed.
+
+     The display face is the one editorial borrowing that appears on every
+     page. Instrument Serif is high contrast and narrow, which is what makes a
+     large headline read as considered rather than merely big. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "Menlo", monospace;
+
+  /* Surfaces ---------------------------------------------------------------
+     Warm rather than pure. A hackathon page is read for a long time, and pure
+     white at full brightness is where that starts to hurt; the paper tint is
+     also what lets the editorial serif sit on it without looking clinical. */
+  --color-paper: oklch(99.2% 0.003 95);
+  --color-paper-sunk: oklch(97.4% 0.004 95);
+  --color-ink: oklch(19% 0.008 60);
+  --color-ink-soft: oklch(46% 0.01 60);
+  --color-ink-faint: oklch(66% 0.008 60);
+
+  /* The inverted section, which the editorial layout uses to change register
+     between one part of a page and the next. Not black: a true black next to
+     warm paper reads as a hole rather than as a surface. */
+  --color-night: oklch(17% 0.006 60);
+  --color-night-raised: oklch(22% 0.006 60);
+  --color-night-ink: oklch(96% 0.004 95);
+  --color-night-ink-soft: oklch(72% 0.008 60);
+
+  /* Accent -----------------------------------------------------------------
+     One colour, and it means one thing: this is the chain speaking. Proof
+     strips, verified digests, settled payments. Spending it on ordinary
+     buttons would make the one place it matters unremarkable. */
+  --color-signal: oklch(84% 0.16 92);
+  --color-signal-ink: oklch(28% 0.09 92);
+
+  /* Reserved for the two states a verifiable product has to be able to show
+     plainly, and for nothing decorative. */
+  --color-verified: oklch(62% 0.14 155);
+  --color-broken: oklch(58% 0.19 27);
+
+  /* Lines ------------------------------------------------------------------
+     Hairlines, not borders. A rule you can see the weight of is a rule that
+     competes with the content it is separating. */
+  --color-rule: oklch(90% 0.004 95);
+  --color-rule-strong: oklch(83% 0.005 95);
+  --color-night-rule: oklch(28% 0.006 60);
+
+  /* Rhythm -----------------------------------------------------------------
+     A four point grid, which is Apple's, halved. Everything on a page lands on
+     it, and the reason spacing feels considered is almost always that it does. */
+  --spacing: 0.25rem;
+
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  /* Motion -----------------------------------------------------------------
+     Short and eased out. Apple's timing curves decelerate, which is what makes
+     a transition read as something settling rather than something arriving. */
+  --ease-settle: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+  Dark is a first class mode rather than an inversion.
+
+  The night surfaces are the same ones the editorial layout already uses for its
+  inverted sections, so a page in dark mode is the same design rather than a
+  photographic negative of it.
+
+  These are plain custom properties rather than a second `@theme`. A `@theme`
+  block nested in a media query is not conditional in Tailwind v4: it registers
+  the same tokens unconditionally, and the last one written wins. Written that
+  way, this file served the dark palette to everybody and light mode looked
+  identical to dark, which is how it was found.
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: oklch(16% 0.006 60);
+    --color-paper-sunk: oklch(13% 0.006 60);
+    --color-ink: oklch(96% 0.004 95);
+    --color-ink-soft: oklch(72% 0.008 60);
+    --color-ink-faint: oklch(58% 0.008 60);
+    --color-rule: oklch(26% 0.006 60);
+    --color-rule-strong: oklch(34% 0.006 60);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Slightly tightened, because the system face is set a touch loose for
+       interface text at reading sizes. */
+    letter-spacing: -0.011em;
+  }
+
+  /* Every display heading, in one place, so a page never has to remember to
+     ask for the serif. */
+  h1,
+  h2,
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  /* A digest, an address, an amount. Tabular figures so a column of them lines
+     up and a changed character is visible where it changed. */
+  code,
+  kbd,
+  samp,
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  /* Focus is never removed, only made to match. Somebody navigating by
+     keyboard is using the same product. */
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::selection {
+    background: var(--color-signal);
+    color: var(--color-signal-ink);
+  }
+}
+
+@layer utilities {
+  /*
+    The halftone, which is the second of the three editorial borrowings.
+
+    Two offset dot grids at very low opacity, fading out downward. It reads as
+    paper texture rather than as a pattern, which is the whole intent: at the
+    opacity where you can name it, it has already become decoration.
+  */
+  .halftone {
+    background-image:
+      radial-gradient(circle at center, var(--color-signal) 1px, transparent 1.2px),
+      radial-gradient(circle at center, var(--color-signal) 1px, transparent 1.2px);
+    background-size: 14px 14px, 14px 14px;
+    background-position: 0 0, 7px 7px;
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
+  }
+
+  /* The grain that makes a flat surface read as printed. Kept separate from
+     the halftone so a surface can carry one without the other. */
+  .grain {
+    position: relative;
+  }
+
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Somebody who has asked their system to stop animating things has asked
+     this product too. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
