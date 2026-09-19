@@ -65,11 +65,18 @@ hackathon has been created on it, and it says so with its own error code, which
 is how we know the deployed binary is executing this repository's logic and not
 merely occupying an address.
 
-**The core instance is deliberately left uninitialized.** `create` can be called
-once per instance and would need a full constitution passed over the command
-line. The first real hackathon on testnet is created through the TypeScript SDK,
-which is the point at which building a constitution stops being an exercise in
-hand written JSON.
+**The core instance now holds the first real hackathon**, created through the
+SDK by `sdk/examples/create-hackathon.ts` rather than by hand written JSON. Its
+rules are locked under
+
+```
+f9fe741a6e8554376e759462d577e751bf95abab6382cdf4f1fcd02ebc3a0b3b
+```
+
+which is the digest the SDK computed before anything was signed, the digest the
+contract stored, and the digest the indexer wrote into Postgres. Three
+independent implementations of the same hash agreeing on a live network is the
+claim the whole product rests on, and this is where it stopped being a test.
 
 ### Superseded
 

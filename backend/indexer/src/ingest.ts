@@ -1,6 +1,8 @@
 import { rpc, xdr } from "@stellar/stellar-sdk";
 
 import { settings } from "./config.js";
+import { decode } from "./decode.js";
+import { gather } from "./reads.js";
 import { db } from "./supabase.js";
 import type { StoredEvent, StoredRead } from "./records.js";
 
@@ -49,7 +51,10 @@ export async function read(contract: string, after: number): Promise<Pass> {
 
   return {
     events,
-    reads: [],
+    // The reads a batch calls for are worked out from the decoded events, so
+    // knowing which team submitted or which track was ranked does not mean
+    // guessing at an XDR blob here.
+    reads: await gather(contract, decode(events)),
     // How far this call actually got, which is not how far it was asked to go.
     //
     // RPC scans a bounded stretch per request and hands back a cursor saying

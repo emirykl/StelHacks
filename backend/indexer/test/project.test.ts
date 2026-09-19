@@ -32,6 +32,7 @@ function at(name: string, payload: Record<string, unknown>): ProjectedEvent {
     event_index: 0,
     name,
     fields: payload,
+    tx_hash: "\\xfeed",
     occurred_at: new Date(Date.UTC(2026, 7, 25, 0, 0, ledger)).toISOString(),
   };
 }

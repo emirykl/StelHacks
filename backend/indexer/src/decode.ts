@@ -24,7 +24,7 @@ export function decode(events: readonly StoredEvent[]): ProjectedEvent[] {
     const raw = raws(event);
 
     if (raw === null) {
-      return { ...event, fields: {} };
+      return { ...event, fields: {}, tx_hash: hashOf(event) };
     }
 
     const decoded = decodeEvent(raw);
@@ -38,9 +38,17 @@ export function decode(events: readonly StoredEvent[]): ProjectedEvent[] {
       // most a later reader can be told about it honestly.
       name: decoded.name ?? event.name,
       fields: decoded.name === null ? {} : decoded.fields,
+      tx_hash: hashOf(event),
       occurred_at: event.occurred_at,
     };
   });
+}
+
+/** The transaction hash the log kept beside the event. */
+function hashOf(event: StoredEvent): string {
+  const hash = event.payload["tx_hash"];
+
+  return typeof hash === "string" ? `\\x${hash}` : "\\x";
 }
 
 /**

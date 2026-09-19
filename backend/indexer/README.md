@@ -56,6 +56,14 @@ than a table kept here.
 event whose shape it does not recognise instead of coercing a missing field,
 which it was doing until the database refused an address shaped `undefined`.
 
+**Bytes are not text.** A digest arrives from the decoder as bytes, and putting
+it through `String` decodes it as UTF-8: every byte that is not valid UTF-8
+becomes the replacement character, and a thirty two byte hash comes out longer,
+different and irreversible. Postgres stored it without complaint. The first
+locked constitution was recorded under a digest matching nothing at all, which
+is the exact failure the whole product exists to make impossible, sitting in the
+one place nobody was looking.
+
 ## Tests
 
 ```bash

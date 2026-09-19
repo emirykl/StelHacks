@@ -37,6 +37,13 @@ export interface ProjectedEvent {
   event_index: number;
   name: string;
   fields: Record<string, unknown>;
+  /**
+   * The transaction that carried the event.
+   *
+   * Not one of the event's declared parameters, which is why it travels beside
+   * them: it belongs to how the event arrived rather than to what it said.
+   */
+  tx_hash: string;
   occurred_at: string;
 }
 

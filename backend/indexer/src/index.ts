@@ -1,6 +1,7 @@
 import { settings } from "./config.js";
 import { advanceTo, resumeFrom, rewind } from "./cursor.js";
 import { decode } from "./decode.js";
+import { health } from "./health.js";
 import { read, replayable, store } from "./ingest.js";
 import { project } from "./project.js";
 import { apply, discard } from "./write.js";
@@ -52,6 +53,20 @@ async function rebuild(contract: string): Promise<void> {
 async function follow(contract: string): Promise<never> {
   for (;;) {
     const found = await pass(contract);
+    const behind = await health(contract);
+
+    if (behind.strandedBehindRetention) {
+      // Saying this every pass is deliberate. It is the one condition running
+      // longer does not fix, and an indexer that quietly kept up from a point
+      // past the gap would look healthy while missing everything before it.
+      console.error(
+        `stranded: the cursor is at ${behind.cursor}, older than anything RPC still serves`,
+      );
+    }
+
+    if (found > 0 || behind.lag > 0) {
+      console.log(`ingested ${found}, ${behind.lag} ledgers behind ${behind.latest}`);
+    }
 
     if (found === 0) {
       await new Promise((wake) => setTimeout(wake, settings.idleMs));
@@ -70,7 +85,9 @@ if (mode === "--rebuild") {
   await rebuild(contract);
 } else if (mode === "--once") {
   const found = await pass(contract);
-  console.log(`ingested ${found} events`);
+  const behind = await health(contract);
+
+  console.log(`ingested ${found} events, ${behind.lag} ledgers behind ${behind.latest}`);
 } else {
   await follow(contract);
 }

@@ -80,7 +80,7 @@ export function project(events: readonly ProjectedEvent[], reads: readonly Store
         const locked = readIndex.get(key(contract, "constitution", "")) ?? {};
 
         update(state, contract, at, {
-          constitution_hash: text(field["constitution_hash"]),
+          constitution_hash: bytes(field["constitution_hash"]),
           phase: Phase.Funding,
           // Until the constitution has been read the gallery stays closed,
           // which is the same direction the policy fails in.
@@ -144,7 +144,7 @@ export function project(events: readonly ProjectedEvent[], reads: readonly Store
           contract_id: contract,
           team_id: team,
           track: text(field["track"]),
-          metadata_hash: text(field["metadata_hash"]),
+          metadata_hash: bytes(field["metadata_hash"]),
           uri: entry["uri"] === undefined ? "" : text(entry["uri"]),
           // A revision keeps the moment the entry first arrived, because
           // submission order is the last step of the tie break and editing a
@@ -158,7 +158,7 @@ export function project(events: readonly ProjectedEvent[], reads: readonly Store
       }
 
       case "SubmissionInvalidated":
-        ruleOut(submissions, contract, Number(field["team"]), SubmissionStatus.Invalidated, text(field["reason"]));
+        ruleOut(submissions, contract, Number(field["team"]), SubmissionStatus.Invalidated, bytes(field["reason"]));
         break;
 
       case "DisqualificationResolved":
@@ -351,7 +351,7 @@ function pay(
     amount: String(event.fields["amount"]),
     kind,
     ledger: event.ledger,
-    tx_hash: text(event.fields["tx_hash"] ?? "\\x"),
+    tx_hash: bytes(event.tx_hash),
   });
 }
 
@@ -377,6 +377,25 @@ function sorted<T>(rows: T[], by: (row: T) => string[]): T[] {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : String(value);
+}
+
+/**
+ * Raw bytes, in the form Postgres accepts for a `bytea`.
+ *
+ * A digest arrives from the decoder as bytes, and running it through `String`
+ * decodes it as UTF-8: every byte that is not valid UTF-8 becomes the
+ * replacement character, and a thirty two byte hash comes out as a longer,
+ * different, irreversible thing. It stored without complaint, which is how a
+ * locked constitution ended up recorded under a digest that matched nothing.
+ */
+function bytes(value: unknown): string {
+  if (value instanceof Uint8Array) {
+    return `\\x${Buffer.from(value).toString("hex")}`;
+  }
+
+  // Already a hex literal, which is what the fixtures and a round trip through
+  // Postgres both look like.
+  return typeof value === "string" && value.startsWith("\\x") ? value : "\\x";
 }
 
 /**
