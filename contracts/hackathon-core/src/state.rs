@@ -1,4 +1,4 @@
-use soroban_sdk::contracttype;
+use soroban_sdk::{contracttype, BytesN};
 
 use crate::constitution::{Deadline, ExtensionPolicy, Schedule};
 use crate::errors::Error;
@@ -36,6 +36,24 @@ impl ExtensionUsage {
                 .ok_or(Error::ExtensionLimitReached)?,
         })
     }
+}
+
+/// A move to end the hackathon early, and how far along it is.
+///
+/// Cancellation is the only power that reaches everybody at once, so it carries
+/// the same shape as the others rather than a shortcut: it is opened with a
+/// reason, it is signed by judges against a threshold announced before the lock,
+/// and only then does it take effect and send the pool back along the route the
+/// rules named.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CancellationCase {
+    /// When the organizer opened it.
+    pub opened_at: u64,
+    /// Digest of the written reason.
+    pub reason: BytesN<32>,
+    /// How many judges have signed.
+    pub approvals: u32,
 }
 
 /// Everything about a hackathon that changes while it runs.
@@ -97,6 +115,27 @@ impl HackathonState {
 
         Ok(HackathonState {
             phase: next,
+            schedule: self.schedule.clone(),
+            settlement_paused: self.settlement_paused,
+            finalized_at: self.finalized_at,
+            settlement_opened_at: self.settlement_opened_at,
+        })
+    }
+
+    /// Ends the hackathon early, under the policy declared before the lock.
+    ///
+    /// This is the one transition that does not follow the phase order, because
+    /// cancellation is not a stage the event reaches but a stop it comes to. A
+    /// hackathon that already finished cannot be stopped: its winners are paid
+    /// and its proof page is permanent, and reopening either would be worse than
+    /// whatever the cancellation was meant to fix.
+    pub fn cancel(&self) -> Result<HackathonState, Error> {
+        if self.phase.is_terminal() {
+            return Err(Error::WrongPhase);
+        }
+
+        Ok(HackathonState {
+            phase: Phase::Cancelled,
             schedule: self.schedule.clone(),
             settlement_paused: self.settlement_paused,
             finalized_at: self.finalized_at,

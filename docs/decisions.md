@@ -257,6 +257,28 @@ land first and leave the heavier one holding a verdict it can no longer apply.
 **Consequence.** A case opened late in the reveal holds finalization for the
 length of the appeal window. That delay is the announced cost of the process.
 
+## 19. Cancellation is free until submissions open and closed once the ranking does
+
+**PRD said** cancellation is unrestricted in draft and funding, and bound to the
+declared policy once submission has opened.
+
+**We decided** that, plus a far end the PRD left open: cancellation is refused
+from finalization onward. `cancel` is the organizer alone in draft and funding;
+`open_cancellation`, `approve_cancellation` and `resolve_cancellation` carry the
+judge threshold from the open phase through the reveal; after that there is no
+route at all.
+
+**Why.** The moment `finalize_results` runs there are winners with a claim on
+the pool. Cancelling then would take money from the people who won it and hand
+it back to the organizer, which is the exact outcome the settlement path exists
+to make impossible. Everything before that point costs teams their time, which
+is why the judges sign; nothing before that point costs anyone their prize,
+which is why the pool can still be returned in full.
+
+**Consequence.** An organizer who wants out after the ranking has to use the no
+award clause track by track, which they can only reach on tracks marked for it
+before the lock. That is the intended asymmetry.
+
 ---
 
 ## Still open

@@ -362,6 +362,60 @@ pub fn no_award_resolved(env: &Env, track: &Symbol, declared: bool, returned: i1
     .publish(env);
 }
 
+/// A move to end the hackathon early was opened.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CancellationOpened {
+    pub reason: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CancellationApproved {
+    #[topic]
+    pub judge: Address,
+    pub approvals: u32,
+}
+
+/// The hackathon stopped, and the pool went back along the declared route.
+///
+/// The returned amount travels with it because a cancellation is the one ending
+/// where nobody receives a prize, and the only question anybody has afterwards
+/// is where the money went.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HackathonCancelled {
+    pub reason: BytesN<32>,
+    /// How many judges signed. Zero when the organizer cancelled alone, which
+    /// is only possible before anybody had entered.
+    pub approvals: u32,
+    pub returned: i128,
+}
+
+pub fn cancellation_opened(env: &Env, reason: &BytesN<32>) {
+    CancellationOpened {
+        reason: reason.clone(),
+    }
+    .publish(env);
+}
+
+pub fn cancellation_approved(env: &Env, judge: &Address, approvals: u32) {
+    CancellationApproved {
+        judge: judge.clone(),
+        approvals,
+    }
+    .publish(env);
+}
+
+pub fn hackathon_cancelled(env: &Env, reason: &BytesN<32>, approvals: u32, returned: i128) {
+    HackathonCancelled {
+        reason: reason.clone(),
+        approvals,
+        returned,
+    }
+    .publish(env);
+}
+
 /// A case was opened to remove an entry after screening had closed.
 ///
 /// The reason travels with it from the first moment, before any judge has

@@ -723,3 +723,228 @@ mod disqualification {
         );
     }
 }
+
+/// Calling the whole thing off.
+///
+/// The only power that reaches everybody at once, so the tests are about who is
+/// allowed to use it and when. Before anybody has entered it costs nothing and
+/// the organizer acts alone; from the moment teams start building it costs them
+/// work, and the person whose deposit comes back stops being the only person
+/// who decides.
+mod cancellation {
+    use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::token::TokenClient;
+    use soroban_sdk::{Address, BytesN};
+
+    use crate::errors::Error;
+    use crate::phase::Phase;
+    use crate::test::Fixture;
+
+    /// The bar the sample rules set.
+    const SIGNATURES_NEEDED: u32 = 2;
+
+    fn reason(fixture: &Fixture) -> BytesN<32> {
+        BytesN::from_array(&fixture.env, &[4u8; 32])
+    }
+
+    fn judge(fixture: &Fixture, index: u32) -> Address {
+        fixture
+            .client
+            .constitution()
+            .judges
+            .get(index)
+            .unwrap()
+            .judge
+    }
+
+    fn token(fixture: &Fixture) -> TokenClient<'static> {
+        TokenClient::new(&fixture.env, &fixture.client.constitution().prize_asset)
+    }
+
+    /// Nothing has been spent yet, by anyone, so there is nobody to protect
+    /// from the organizer changing their mind.
+    #[test]
+    fn a_hackathon_nobody_has_entered_can_be_called_off_alone() {
+        let fixture = Fixture::created();
+
+        assert_eq!(fixture.client.cancel(&reason(&fixture)), 0);
+        assert_eq!(fixture.client.phase(), Phase::Cancelled);
+    }
+
+    /// A sponsor's deposit has to come back out. Money that could only leave
+    /// the vault by paying a winner would be stranded in a hackathon that will
+    /// never have one.
+    #[test]
+    fn calling_it_off_during_funding_returns_the_whole_pool() {
+        use prize_vault::{PrizeVault, PrizeVaultClient};
+        use soroban_sdk::token::StellarAssetClient;
+
+        let fixture = Fixture::locked_with_asset();
+        let asset = fixture.client.constitution().prize_asset;
+
+        let vault_id = fixture.env.register(PrizeVault, ());
+        let vault = PrizeVaultClient::new(&fixture.env, &vault_id);
+        vault.create(&fixture.client.address, &asset);
+        fixture.client.bind_vault(&vault.address);
+
+        let sponsor = Address::generate(&fixture.env);
+        StellarAssetClient::new(&fixture.env, &asset).mint(&sponsor, &10_000);
+        vault.deposit(&sponsor, &10_000);
+
+        let organizer = fixture.organizer.clone();
+
+        assert_eq!(fixture.client.phase(), Phase::Funding);
+        assert_eq!(fixture.client.cancel(&reason(&fixture)), 10_000);
+        assert_eq!(fixture.client.phase(), Phase::Cancelled);
+        assert_eq!(token(&fixture).balance(&organizer), 10_000);
+        assert_eq!(vault.balance(), 0);
+    }
+
+    /// From the moment people can enter, the organizer is no longer the only
+    /// party with something at stake, and the signature that stops the event
+    /// stops being theirs alone to give.
+    #[test]
+    fn once_teams_can_enter_the_organizer_cannot_stop_it_alone() {
+        let fixture = Fixture::funded_and_open();
+        let organizer = fixture.organizer.clone();
+
+        assert_eq!(
+            fixture.client.try_cancel(&reason(&fixture)).err(),
+            Some(Ok(Error::WrongPhase))
+        );
+        assert_eq!(fixture.client.phase(), Phase::Open);
+        assert_eq!(token(&fixture).balance(&organizer), 0);
+    }
+
+    /// The whole point of the threshold. The organizer is the party the pool
+    /// goes back to, so they cannot also be the only signature on stopping.
+    #[test]
+    fn a_cancellation_waits_for_the_signatures_the_rules_announced() {
+        let fixture = Fixture::funded_and_open();
+        let organizer = fixture.organizer.clone();
+
+        fixture.client.open_cancellation(&reason(&fixture));
+
+        assert_eq!(
+            fixture.client.try_resolve_cancellation().err(),
+            Some(Ok(Error::JudgeApprovalThresholdNotMet))
+        );
+
+        let first = judge(&fixture, 0);
+        fixture.client.approve_cancellation(&first);
+
+        assert_eq!(
+            fixture.client.try_resolve_cancellation().err(),
+            Some(Ok(Error::JudgeApprovalThresholdNotMet)),
+            "one signature short is still short"
+        );
+
+        let second = judge(&fixture, 1);
+        fixture.client.approve_cancellation(&second);
+
+        assert_eq!(fixture.client.resolve_cancellation(), 10_000);
+        assert_eq!(fixture.client.phase(), Phase::Cancelled);
+        assert_eq!(token(&fixture).balance(&organizer), 10_000);
+        assert_eq!(fixture.client.cancellation().approvals, SIGNATURES_NEEDED);
+    }
+
+    /// Opening is not stopping. Deadlines keep passing and teams keep working
+    /// while the judges make up their minds, because a hackathon that froze the
+    /// moment somebody proposed cancelling it would hand the organizer the
+    /// power they were just refused.
+    #[test]
+    fn an_open_move_leaves_the_hackathon_running() {
+        let fixture = Fixture::funded_and_open();
+        let opens_at = fixture.client.state().schedule.registration_opens_at;
+        fixture.env.ledger().set_timestamp(opens_at + 3_600);
+
+        fixture.client.open_cancellation(&reason(&fixture));
+
+        assert_eq!(fixture.client.phase(), Phase::Open);
+
+        let applicant = Address::generate(&fixture.env);
+        fixture.client.apply(&applicant);
+
+        assert!(fixture.client.registration(&applicant).decided_at == 0);
+    }
+
+    #[test]
+    fn a_judge_cannot_sign_the_same_move_twice() {
+        let fixture = Fixture::funded_and_open();
+        fixture.client.open_cancellation(&reason(&fixture));
+
+        let judge = judge(&fixture, 0);
+        fixture.client.approve_cancellation(&judge);
+
+        assert_eq!(
+            fixture.client.try_approve_cancellation(&judge).err(),
+            Some(Ok(Error::AlreadySigned))
+        );
+        assert_eq!(fixture.client.cancellation().approvals, 1);
+    }
+
+    #[test]
+    fn somebody_who_is_not_on_the_bench_cannot_sign() {
+        let fixture = Fixture::funded_and_open();
+        fixture.client.open_cancellation(&reason(&fixture));
+
+        let stranger = Address::generate(&fixture.env);
+
+        assert_eq!(
+            fixture.client.try_approve_cancellation(&stranger).err(),
+            Some(Ok(Error::NotJudge))
+        );
+    }
+
+    /// A second move would reset the signature count, which is the cheapest way
+    /// to keep asking until the answer changes.
+    #[test]
+    fn a_move_cannot_be_opened_twice() {
+        let fixture = Fixture::funded_and_open();
+        fixture.client.open_cancellation(&reason(&fixture));
+
+        assert_eq!(
+            fixture
+                .client
+                .try_open_cancellation(&reason(&fixture))
+                .err(),
+            Some(Ok(Error::CancellationAlreadyOpen))
+        );
+    }
+
+    #[test]
+    fn nothing_can_be_resolved_that_was_never_opened() {
+        let fixture = Fixture::funded_and_open();
+
+        assert_eq!(
+            fixture.client.try_resolve_cancellation().err(),
+            Some(Ok(Error::CancellationNotOpen))
+        );
+    }
+
+    /// A hackathon that has come to rest stays there. Reopening a cancelled
+    /// event to cancel it again would mean the vault could be emptied twice.
+    #[test]
+    fn a_stopped_hackathon_cannot_be_stopped_again() {
+        let fixture = Fixture::funded_and_open();
+        fixture.client.open_cancellation(&reason(&fixture));
+
+        for index in 0..SIGNATURES_NEEDED {
+            let judge = judge(&fixture, index);
+            fixture.client.approve_cancellation(&judge);
+        }
+        fixture.client.resolve_cancellation();
+
+        assert_eq!(
+            fixture.client.try_resolve_cancellation().err(),
+            Some(Ok(Error::WrongPhase))
+        );
+        assert_eq!(
+            fixture
+                .client
+                .try_open_cancellation(&reason(&fixture))
+                .err(),
+            Some(Ok(Error::WrongPhase))
+        );
+    }
+}

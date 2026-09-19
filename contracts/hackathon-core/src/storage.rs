@@ -6,7 +6,7 @@ use crate::organizers::OrganizingTeam;
 use crate::results::{NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionTally, ScoreTally};
-use crate::state::{ExtensionUsage, HackathonState};
+use crate::state::{CancellationCase, ExtensionUsage, HackathonState};
 use crate::submission::{DisqualificationCase, Submission};
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
@@ -65,6 +65,10 @@ pub enum DataKey {
     Membership(Address),
     /// One team's entry, keyed by team because a team enters once.
     Submission(u32),
+    /// A move to end the hackathon early.
+    Cancellation,
+    /// One judge's signature on that move.
+    CancellationApproval(Address),
     /// A case for removing one team's entry after screening has closed.
     Disqualification(u32),
     /// One judge's signature on that case.
@@ -314,6 +318,34 @@ pub fn load_submission(env: &Env, team: u32) -> Result<Submission, Error> {
 
 pub fn has_submission(env: &Env, team: u32) -> bool {
     env.storage().persistent().has(&DataKey::Submission(team))
+}
+
+pub fn save_cancellation(env: &Env, case: &CancellationCase) {
+    env.storage().instance().set(&DataKey::Cancellation, case);
+    touch(env);
+}
+
+pub fn load_cancellation(env: &Env) -> Result<CancellationCase, Error> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Cancellation)
+        .ok_or(Error::CancellationNotOpen)
+}
+
+pub fn has_cancellation(env: &Env) -> bool {
+    env.storage().instance().has(&DataKey::Cancellation)
+}
+
+pub fn has_cancellation_approval(env: &Env, judge: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::CancellationApproval(judge.clone()))
+}
+
+pub fn save_cancellation_approval(env: &Env, judge: &Address) {
+    let key = DataKey::CancellationApproval(judge.clone());
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
 }
 
 pub fn save_disqualification(env: &Env, case: &DisqualificationCase) {

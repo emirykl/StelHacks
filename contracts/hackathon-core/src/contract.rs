@@ -10,7 +10,7 @@ use crate::phase::Phase;
 use crate::results::{self, Candidate, NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard};
-use crate::state::{ExtensionUsage, HackathonState};
+use crate::state::{CancellationCase, ExtensionUsage, HackathonState};
 use crate::storage;
 use crate::submission::{DisqualificationCase, Submission};
 use crate::vault::VaultClient;
@@ -683,6 +683,172 @@ impl HackathonCore {
     /// The case against one team's entry, if one was opened.
     pub fn disqualification(env: Env, team_id: u32) -> Result<DisqualificationCase, Error> {
         storage::load_disqualification(&env, team_id)
+    }
+
+    /// Calls the whole hackathon off before anybody has entered it.
+    ///
+    /// The organizer signs alone here, and only here. Until submissions open
+    /// there is nobody whose weekend is at stake: no team has formed, no code
+    /// has been written, and the only thing at risk is money the organizer put
+    /// in themselves. Asking a bench of judges to sign off on stopping an event
+    /// nobody joined would be ceremony rather than protection.
+    ///
+    /// The moment submissions open, this door closes and
+    /// `open_cancellation` is the only way out.
+    pub fn cancel(env: Env, reason: BytesN<32>) -> Result<i128, Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Draft && state.phase != Phase::Funding {
+            return Err(Error::WrongPhase);
+        }
+
+        let returned = Self::return_the_pool(&env)?;
+
+        storage::save_state(&env, &state.cancel()?);
+        events::hackathon_cancelled(&env, &reason, 0, returned);
+
+        Ok(returned)
+    }
+
+    /// Opens a move to stop a hackathon people are already building in.
+    ///
+    /// From the moment submissions open, stopping the event costs teams work
+    /// they have already done, and the organizer is the party whose deposit
+    /// comes back. Those two facts together are why the threshold announced
+    /// before the lock applies from here on: the person who benefits from
+    /// stopping cannot be the only person who decides to.
+    ///
+    /// Opening changes nothing on its own. The hackathon keeps running, and
+    /// deadlines keep passing, until the signatures are in and somebody calls
+    /// `resolve_cancellation`.
+    pub fn open_cancellation(env: Env, reason: BytesN<32>) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        Self::require_cancellation_phase(&env)?;
+
+        if storage::has_cancellation(&env) {
+            return Err(Error::CancellationAlreadyOpen);
+        }
+
+        storage::save_cancellation(
+            &env,
+            &CancellationCase {
+                opened_at: env.ledger().timestamp(),
+                reason: reason.clone(),
+                approvals: 0,
+            },
+        );
+
+        events::cancellation_opened(&env, &reason);
+
+        Ok(())
+    }
+
+    /// Adds a judge's signature to that move.
+    ///
+    /// Any judge on the bench may sign, not only those assigned to one track.
+    /// Stopping the event reaches every track at once, so narrowing the vote to
+    /// a single track's judges would let the organizer pick the smallest room
+    /// they had to convince.
+    pub fn approve_cancellation(env: Env, judge: Address) -> Result<(), Error> {
+        judge.require_auth();
+
+        if !storage::load_constitution(&env)?.is_judge(&judge) {
+            return Err(Error::NotJudge);
+        }
+
+        let mut case = storage::load_cancellation(&env)?;
+        if storage::has_cancellation_approval(&env, &judge) {
+            return Err(Error::AlreadySigned);
+        }
+
+        storage::save_cancellation_approval(&env, &judge);
+        case.approvals += 1;
+        storage::save_cancellation(&env, &case);
+
+        events::cancellation_approved(&env, &judge, case.approvals);
+
+        Ok(())
+    }
+
+    /// Stops the hackathon and sends the pool back along the declared route.
+    ///
+    /// Unlike the no award path, falling short of the threshold is not an
+    /// outcome here, it is simply not yet. A cancellation that failed would
+    /// leave the event running, which it already is, so the call refuses and
+    /// the hackathon carries on until either the signatures arrive or nobody
+    /// mentions it again.
+    ///
+    /// Nobody has to sign this. The signatures are already counted on chain and
+    /// the route was declared before the lock, so there is nothing left to
+    /// decide.
+    pub fn resolve_cancellation(env: Env) -> Result<i128, Error> {
+        let state = Self::require_cancellation_phase(&env)?;
+
+        let case = storage::load_cancellation(&env)?;
+        let threshold = storage::load_constitution(&env)?
+            .discretion
+            .cancellation_threshold;
+
+        if case.approvals < threshold {
+            return Err(Error::JudgeApprovalThresholdNotMet);
+        }
+
+        let returned = Self::return_the_pool(&env)?;
+
+        storage::save_state(&env, &state.cancel()?);
+        events::hackathon_cancelled(&env, &case.reason, case.approvals, returned);
+
+        Ok(returned)
+    }
+
+    /// The move to end the hackathon early, if one was opened.
+    pub fn cancellation(env: Env) -> Result<CancellationCase, Error> {
+        storage::load_cancellation(&env)
+    }
+
+    /// The stretch of the event where cancellation needs the judges.
+    ///
+    /// It opens when submissions do, because that is the moment teams start
+    /// spending time they cannot get back, and closes when the ranking does,
+    /// because from there on there are winners with a claim and calling the
+    /// event off would take money from the people who won it.
+    fn require_cancellation_phase(env: &Env) -> Result<HackathonState, Error> {
+        let state = storage::load_state(env)?;
+
+        match state.phase {
+            Phase::Open | Phase::Screening | Phase::Judging | Phase::Reveal => Ok(state),
+            _ => Err(Error::WrongPhase),
+        }
+    }
+
+    /// Empties the vault back to the organizer, and reports what was in it.
+    ///
+    /// The declared route is not matched on, because validation already refused
+    /// every route but the organizer for a cancellation: a cancelled hackathon
+    /// has no remaining tracks to spread the pool across, and paying sponsors
+    /// back in proportion needs a deposit ledger the vault does not keep.
+    ///
+    /// A hackathon cancelled while still in draft may have no vault at all, and
+    /// one cancelled during funding may have a vault holding nothing. Both
+    /// return zero rather than failing, because neither is a problem.
+    fn return_the_pool(env: &Env) -> Result<i128, Error> {
+        if !storage::has_vault(env) {
+            return Ok(0);
+        }
+
+        let vault = VaultClient::new(env, &storage::load_vault(env)?);
+        let balance = vault.balance();
+
+        if balance > 0 {
+            let organizer = storage::load_organizing_team(env)?.organizer;
+            vault.pay(&organizer, &balance);
+        }
+
+        Ok(balance)
     }
 
     /// The stretch of the event where a removal can still be opened or settled.
