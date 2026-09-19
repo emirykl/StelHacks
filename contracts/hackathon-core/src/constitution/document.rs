@@ -222,124 +222,14 @@ impl Constitution {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::constitution::discretion::SettlementMode;
-    use crate::constitution::scoring::Criterion;
+    use crate::fixtures::{sample_constitution, HOUR};
     use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{symbol_short, vec, Env};
-
-    const HOUR: u64 = 60 * 60;
-    const DAY: u64 = 24 * HOUR;
-
-    fn criteria(env: &Env) -> Vec<Criterion> {
-        vec![
-            env,
-            Criterion {
-                id: symbol_short!("technical"),
-                weight_bps: 6_000,
-            },
-            Criterion {
-                id: symbol_short!("novelty"),
-                weight_bps: 4_000,
-            },
-        ]
-    }
-
-    fn constitution(env: &Env) -> Constitution {
-        let payments = symbol_short!("payments");
-        let defi = symbol_short!("defi");
-
-        let judges = vec![
-            env,
-            JudgeAssignment {
-                judge: Address::generate(env),
-                tracks: vec![env, payments.clone(), defi.clone()],
-            },
-            JudgeAssignment {
-                judge: Address::generate(env),
-                tracks: vec![env, payments.clone(), defi.clone()],
-            },
-            JudgeAssignment {
-                judge: Address::generate(env),
-                tracks: vec![env, payments.clone(), defi.clone()],
-            },
-        ];
-
-        Constitution {
-            version: CONSTITUTION_VERSION,
-            metadata_hash: BytesN::from_array(env, &[7u8; 32]),
-            prize_asset: Address::generate(env),
-            tracks: vec![
-                env,
-                Track {
-                    id: payments.clone(),
-                    criteria: criteria(env),
-                    no_award_allowed: false,
-                },
-                Track {
-                    id: defi.clone(),
-                    criteria: criteria(env),
-                    no_award_allowed: true,
-                },
-            ],
-            judges,
-            judge_quorum: 3,
-            judging_mode: JudgingMode::Easy,
-            vote: VotePolicy {
-                judge_bps: 8_000,
-                community_bps: 2_000,
-            },
-            visibility: ProjectVisibility::Public,
-            submission_requirements: SubmissionRequirements::code_and_video(),
-            prize_tiers: vec![
-                env,
-                PrizeTier {
-                    track: payments.clone(),
-                    rank: 1,
-                    amount: 5_000,
-                },
-                PrizeTier {
-                    track: payments,
-                    rank: 2,
-                    amount: 3_000,
-                },
-                PrizeTier {
-                    track: defi,
-                    rank: 1,
-                    amount: 2_000,
-                },
-            ],
-            tie_break: vec![env, TieBreakRule::JudgeScore, TieBreakRule::SubmissionOrder],
-            discretion: DiscretionPolicy {
-                disqualification_threshold: 2,
-                appeal_window: 48 * HOUR,
-                settlement: SettlementMode::SafetyWindow(24 * HOUR),
-                prize_claim_period: 90 * DAY,
-                unclaimed_refund: RefundRoute::Organizer,
-                no_award_refund: RefundRoute::Organizer,
-                cancellation_threshold: 2,
-                cancellation_refund: RefundRoute::Depositors,
-            },
-            schedule: Schedule {
-                registration_opens_at: 1_000 * DAY,
-                registration_closes_at: 1_007 * DAY,
-                submission_opens_at: 1_000 * DAY,
-                submission_closes_at: 1_009 * DAY,
-                screening_closes_at: 1_010 * DAY,
-                judging_closes_at: 1_012 * DAY,
-                community_vote_opens_at: 1_010 * DAY + 2 * HOUR,
-                community_vote_closes_at: 1_011 * DAY,
-            },
-            extensions: ExtensionPolicy {
-                max_extensions_per_deadline: 2,
-                max_total_seconds_per_deadline: 2 * DAY,
-            },
-        }
-    }
+    use soroban_sdk::{symbol_short, vec, Address, Env};
 
     #[test]
     fn a_complete_constitution_is_accepted() {
         let env = Env::default();
-        let constitution = constitution(&env);
+        let constitution = sample_constitution(&env);
 
         assert_eq!(constitution.validate(), Ok(()));
         assert_eq!(constitution.judge_count(), 3);
@@ -350,7 +240,7 @@ mod test {
     #[test]
     fn a_hackathon_without_a_track_has_nothing_to_judge() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.tracks = vec![&env];
 
         assert_eq!(constitution.validate(), Err(Error::TracksMissing));
@@ -359,7 +249,7 @@ mod test {
     #[test]
     fn a_repeated_track_identifier_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         let duplicate = constitution.tracks.get(0).unwrap();
         constitution.tracks.set(1, duplicate);
 
@@ -369,7 +259,7 @@ mod test {
     #[test]
     fn a_hackathon_without_judges_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.judges = vec![&env];
 
         assert_eq!(constitution.validate(), Err(Error::JudgesMissing));
@@ -378,7 +268,7 @@ mod test {
     #[test]
     fn a_judge_with_no_track_has_no_reason_to_be_authorized() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         let mut assignment = constitution.judges.get(0).unwrap();
         assignment.tracks = vec![&env];
         constitution.judges.set(0, assignment);
@@ -389,7 +279,7 @@ mod test {
     #[test]
     fn a_judge_assigned_to_a_track_that_does_not_exist_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         let mut assignment = constitution.judges.get(0).unwrap();
         assignment.tracks = vec![&env, symbol_short!("ghost")];
         constitution.judges.set(0, assignment);
@@ -400,7 +290,7 @@ mod test {
     #[test]
     fn the_same_judge_cannot_be_listed_twice() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         let first = constitution.judges.get(0).unwrap();
         constitution.judges.set(1, first);
 
@@ -410,7 +300,7 @@ mod test {
     #[test]
     fn a_quorum_larger_than_the_judge_bench_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.judge_quorum = 4;
 
         assert_eq!(constitution.validate(), Err(Error::JudgeQuorumInvalid));
@@ -419,7 +309,7 @@ mod test {
     #[test]
     fn a_quorum_a_single_track_cannot_reach_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
 
         // Leave the second track with a single judge while the quorum asks for
         // three, which would strand every project in that track.
@@ -437,7 +327,7 @@ mod test {
     #[test]
     fn a_prize_for_a_track_that_does_not_exist_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.prize_tiers.set(
             0,
             PrizeTier {
@@ -453,7 +343,7 @@ mod test {
     #[test]
     fn a_restricted_gallery_cannot_run_a_community_vote() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.visibility = ProjectVisibility::Restricted;
 
         assert_eq!(
@@ -468,7 +358,7 @@ mod test {
     #[test]
     fn a_restricted_gallery_is_fine_without_a_community_vote() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.visibility = ProjectVisibility::Restricted;
         constitution.vote = VotePolicy::judges_only();
 
@@ -478,7 +368,7 @@ mod test {
     #[test]
     fn spreading_an_unawarded_prize_needs_somewhere_to_spread_it() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.discretion.no_award_refund = RefundRoute::RemainingTracks;
 
         assert_eq!(constitution.validate(), Ok(()));
@@ -510,7 +400,7 @@ mod test {
     #[test]
     fn a_community_tie_break_without_a_community_vote_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.vote = VotePolicy::judges_only();
         constitution.tie_break = vec![
             &env,
@@ -524,7 +414,7 @@ mod test {
     #[test]
     fn judge_lookups_answer_by_address_and_track() {
         let env = Env::default();
-        let constitution = constitution(&env);
+        let constitution = sample_constitution(&env);
         let judge = constitution.judges.get(0).unwrap().judge;
         let stranger = Address::generate(&env);
 
@@ -539,7 +429,7 @@ mod test {
     #[test]
     fn a_schedule_whose_vote_window_escapes_judging_is_rejected() {
         let env = Env::default();
-        let mut constitution = constitution(&env);
+        let mut constitution = sample_constitution(&env);
         constitution.schedule.community_vote_closes_at =
             constitution.schedule.judging_closes_at + HOUR;
 

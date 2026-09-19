@@ -1,0 +1,164 @@
+{
+  "generators": {
+    "address": 1,
+    "nonce": 0,
+    "mux_id": 0
+  },
+  "auth": [
+    [],
+    []
+  ],
+  "ledger": {
+    "protocol_version": 26,
+    "sequence_number": 0,
+    "timestamp": 0,
+    "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "base_reserve": 0,
+    "min_persistent_entry_ttl": 4096,
+    "min_temp_entry_ttl": 16,
+    "max_entry_ttl": 6312000,
+    "ledger_entries": [
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "key": "ledger_key_contract_instance",
+              "durability": "persistent",
+              "val": {
+                "contract_instance": {
+                  "executable": {
+                    "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  "storage": [
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "State"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "phase"
+                            },
+                            "val": {
+                              "u32": 1
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "schedule"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "community_vote_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87523200"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "community_vote_opens_at"
+                                  },
+                                  "val": {
+                                    "u64": "87357600"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "judging_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87609600"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "registration_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87004800"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "registration_opens_at"
+                                  },
+                                  "val": {
+                                    "u64": "86400000"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "screening_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87350400"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "submission_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87177600"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "submission_opens_at"
+                                  },
+                                  "val": {
+                                    "u64": "86400000"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "settlement_paused"
+                            },
+                            "val": {
+                              "bool": false
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 2073600
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_code": {
+              "ext": "v0",
+              "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "code": ""
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 2073600
+      }
+    ]
+  },
+  "events": []
+}

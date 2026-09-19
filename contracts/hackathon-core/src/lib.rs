@@ -8,8 +8,12 @@
 
 mod constitution;
 mod errors;
+#[cfg(test)]
+mod fixtures;
 mod hashing;
 mod phase;
+mod state;
+mod storage;
 mod submission;
 mod team;
 
@@ -23,6 +27,8 @@ pub use constitution::{
 pub use errors::Error;
 pub use hashing::{hash_constitution, hash_submission_metadata};
 pub use phase::Phase;
+pub use state::{ExtensionUsage, HackathonState};
+pub use storage::DataKey;
 pub use submission::{SubmissionMetadata, SubmissionRequirements};
 pub use team::OrganizingTeam;
 

@@ -48,116 +48,17 @@ fn digest(env: &Env, domain: &[u8], body: Bytes) -> BytesN<32> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::constitution::Criterion;
     use crate::constitution::{
-        Constitution, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode, PrizeTier,
-        ProjectVisibility, RefundRoute, Schedule, SettlementMode, TieBreakRule, Track, VotePolicy,
-        CONSTITUTION_VERSION,
+        JudgingMode, ProjectVisibility, TieBreakRule, VotePolicy, CONSTITUTION_VERSION,
     };
-    use crate::submission::SubmissionRequirements;
+    use crate::fixtures::{sample_constitution, sample_metadata, HOUR};
     use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{symbol_short, vec, Address, String, Symbol, Vec};
-
-    const HOUR: u64 = 60 * 60;
-    const DAY: u64 = 24 * HOUR;
-
-    fn criteria(env: &Env) -> Vec<Criterion> {
-        vec![
-            env,
-            Criterion {
-                id: symbol_short!("technical"),
-                weight_bps: 6_000,
-            },
-            Criterion {
-                id: symbol_short!("novelty"),
-                weight_bps: 4_000,
-            },
-        ]
-    }
-
-    fn constitution(env: &Env) -> Constitution {
-        let payments = symbol_short!("payments");
-
-        Constitution {
-            version: CONSTITUTION_VERSION,
-            metadata_hash: BytesN::from_array(env, &[7u8; 32]),
-            prize_asset: Address::generate(env),
-            tracks: vec![
-                env,
-                Track {
-                    id: payments.clone(),
-                    criteria: criteria(env),
-                    no_award_allowed: false,
-                },
-            ],
-            judges: vec![
-                env,
-                JudgeAssignment {
-                    judge: Address::generate(env),
-                    tracks: vec![env, payments.clone()],
-                },
-            ],
-            judge_quorum: 1,
-            judging_mode: JudgingMode::Easy,
-            vote: VotePolicy {
-                judge_bps: 8_000,
-                community_bps: 2_000,
-            },
-            visibility: ProjectVisibility::Public,
-            submission_requirements: SubmissionRequirements::code_and_video(),
-            prize_tiers: vec![
-                env,
-                PrizeTier {
-                    track: payments,
-                    rank: 1,
-                    amount: 5_000,
-                },
-            ],
-            tie_break: vec![env, TieBreakRule::SubmissionOrder],
-            discretion: DiscretionPolicy {
-                disqualification_threshold: 1,
-                appeal_window: 48 * HOUR,
-                settlement: SettlementMode::SafetyWindow(24 * HOUR),
-                prize_claim_period: 90 * DAY,
-                unclaimed_refund: RefundRoute::Organizer,
-                no_award_refund: RefundRoute::Organizer,
-                cancellation_threshold: 1,
-                cancellation_refund: RefundRoute::Depositors,
-            },
-            schedule: Schedule {
-                registration_opens_at: 1_000 * DAY,
-                registration_closes_at: 1_007 * DAY,
-                submission_opens_at: 1_000 * DAY,
-                submission_closes_at: 1_009 * DAY,
-                screening_closes_at: 1_010 * DAY,
-                judging_closes_at: 1_012 * DAY,
-                community_vote_opens_at: 1_010 * DAY + 2 * HOUR,
-                community_vote_closes_at: 1_011 * DAY,
-            },
-            extensions: ExtensionPolicy {
-                max_extensions_per_deadline: 2,
-                max_total_seconds_per_deadline: 2 * DAY,
-            },
-        }
-    }
-
-    fn metadata(env: &Env, track: Symbol) -> SubmissionMetadata {
-        SubmissionMetadata {
-            name: String::from_str(env, "Lumen Split"),
-            summary: String::from_str(env, "Shared expenses settled in USDC"),
-            description: String::from_str(env, "A longer write up of the project."),
-            logo_uri: String::from_str(env, "https://cdn.example.com/lumen-split.png"),
-            repository_url: String::from_str(env, "https://github.com/example/lumen-split"),
-            demo_video_url: String::from_str(env, "https://youtu.be/example"),
-            live_url: String::from_str(env, "https://lumen-split.example.com"),
-            track,
-        }
-    }
+    use soroban_sdk::{symbol_short, vec, Address, String};
 
     #[test]
     fn the_same_constitution_always_hashes_the_same() {
         let env = Env::default();
-        let constitution = constitution(&env);
+        let constitution = sample_constitution(&env);
 
         let first = hash_constitution(&env, &constitution);
         let second = hash_constitution(&env, &constitution.clone());
@@ -168,7 +69,7 @@ mod test {
     #[test]
     fn the_same_submission_always_hashes_the_same() {
         let env = Env::default();
-        let metadata = metadata(&env, symbol_short!("payments"));
+        let metadata = sample_metadata(&env, symbol_short!("payments"));
 
         assert_eq!(
             hash_submission_metadata(&env, &metadata),
@@ -179,8 +80,8 @@ mod test {
     #[test]
     fn a_constitution_and_a_submission_never_share_a_digest() {
         let env = Env::default();
-        let constitution = constitution(&env);
-        let metadata = metadata(&env, symbol_short!("payments"));
+        let constitution = sample_constitution(&env);
+        let metadata = sample_metadata(&env, symbol_short!("payments"));
 
         assert_ne!(
             hash_constitution(&env, &constitution).to_array(),
@@ -195,7 +96,7 @@ mod test {
     #[test]
     fn every_field_of_the_constitution_moves_the_digest() {
         let env = Env::default();
-        let base = constitution(&env);
+        let base = sample_constitution(&env);
         let original = hash_constitution(&env, &base);
 
         let mut changed = base.clone();
@@ -253,11 +154,7 @@ mod test {
         assert_ne!(hash_constitution(&env, &changed), original, "prize_tiers");
 
         let mut changed = base.clone();
-        changed.tie_break = vec![
-            &env,
-            TieBreakRule::JudgeScore,
-            TieBreakRule::SubmissionOrder,
-        ];
+        changed.tie_break = vec![&env, TieBreakRule::SubmissionOrder];
         assert_ne!(hash_constitution(&env, &changed), original, "tie_break");
 
         let mut changed = base.clone();
@@ -278,7 +175,7 @@ mod test {
     #[test]
     fn every_field_of_a_submission_moves_the_digest() {
         let env = Env::default();
-        let base = metadata(&env, symbol_short!("payments"));
+        let base = sample_metadata(&env, symbol_short!("payments"));
         let original = hash_submission_metadata(&env, &base);
 
         let mut changed = base.clone();
@@ -344,7 +241,7 @@ mod test {
     #[test]
     fn moving_a_value_between_fields_changes_the_digest() {
         let env = Env::default();
-        let mut first = metadata(&env, symbol_short!("payments"));
+        let mut first = sample_metadata(&env, symbol_short!("payments"));
         first.summary = String::from_str(&env, "ab");
         first.description = String::from_str(&env, "c");
 

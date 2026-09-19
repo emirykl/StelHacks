@@ -1,0 +1,724 @@
+{
+  "generators": {
+    "address": 5,
+    "nonce": 0,
+    "mux_id": 0
+  },
+  "auth": [
+    [],
+    []
+  ],
+  "ledger": {
+    "protocol_version": 26,
+    "sequence_number": 0,
+    "timestamp": 0,
+    "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "base_reserve": 0,
+    "min_persistent_entry_ttl": 4096,
+    "min_temp_entry_ttl": 16,
+    "max_entry_ttl": 6312000,
+    "ledger_entries": [
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "key": "ledger_key_contract_instance",
+              "durability": "persistent",
+              "val": {
+                "contract_instance": {
+                  "executable": {
+                    "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  "storage": [
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Constitution"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "discretion"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "appeal_window"
+                                  },
+                                  "val": {
+                                    "u64": "172800"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "cancellation_refund"
+                                  },
+                                  "val": {
+                                    "u32": 1
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "cancellation_threshold"
+                                  },
+                                  "val": {
+                                    "u32": 2
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "disqualification_threshold"
+                                  },
+                                  "val": {
+                                    "u32": 2
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "no_award_refund"
+                                  },
+                                  "val": {
+                                    "u32": 0
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "prize_claim_period"
+                                  },
+                                  "val": {
+                                    "u64": "7776000"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "settlement"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "SafetyWindow"
+                                      },
+                                      {
+                                        "u64": "86400"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "unclaimed_refund"
+                                  },
+                                  "val": {
+                                    "u32": 0
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "extensions"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "max_extensions_per_deadline"
+                                  },
+                                  "val": {
+                                    "u32": 2
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "max_total_seconds_per_deadline"
+                                  },
+                                  "val": {
+                                    "u64": "172800"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "judge_quorum"
+                            },
+                            "val": {
+                              "u32": 3
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "judges"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "judge"
+                                      },
+                                      "val": {
+                                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "tracks"
+                                      },
+                                      "val": {
+                                        "vec": [
+                                          {
+                                            "symbol": "payments"
+                                          },
+                                          {
+                                            "symbol": "defi"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "judge"
+                                      },
+                                      "val": {
+                                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "tracks"
+                                      },
+                                      "val": {
+                                        "vec": [
+                                          {
+                                            "symbol": "payments"
+                                          },
+                                          {
+                                            "symbol": "defi"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "judge"
+                                      },
+                                      "val": {
+                                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "tracks"
+                                      },
+                                      "val": {
+                                        "vec": [
+                                          {
+                                            "symbol": "payments"
+                                          },
+                                          {
+                                            "symbol": "defi"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "judging_mode"
+                            },
+                            "val": {
+                              "u32": 0
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "metadata_hash"
+                            },
+                            "val": {
+                              "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "prize_asset"
+                            },
+                            "val": {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "prize_tiers"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "amount"
+                                      },
+                                      "val": {
+                                        "i128": "5000"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "rank"
+                                      },
+                                      "val": {
+                                        "u32": 1
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "track"
+                                      },
+                                      "val": {
+                                        "symbol": "payments"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "amount"
+                                      },
+                                      "val": {
+                                        "i128": "3000"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "rank"
+                                      },
+                                      "val": {
+                                        "u32": 2
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "track"
+                                      },
+                                      "val": {
+                                        "symbol": "payments"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "amount"
+                                      },
+                                      "val": {
+                                        "i128": "2000"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "rank"
+                                      },
+                                      "val": {
+                                        "u32": 1
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "track"
+                                      },
+                                      "val": {
+                                        "symbol": "defi"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "schedule"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "community_vote_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87523200"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "community_vote_opens_at"
+                                  },
+                                  "val": {
+                                    "u64": "87357600"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "judging_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87609600"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "registration_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87004800"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "registration_opens_at"
+                                  },
+                                  "val": {
+                                    "u64": "86400000"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "screening_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87350400"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "submission_closes_at"
+                                  },
+                                  "val": {
+                                    "u64": "87177600"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "submission_opens_at"
+                                  },
+                                  "val": {
+                                    "u64": "86400000"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "submission_requirements"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "demo_video_required"
+                                  },
+                                  "val": {
+                                    "bool": true
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "live_url_required"
+                                  },
+                                  "val": {
+                                    "bool": false
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "repository_required"
+                                  },
+                                  "val": {
+                                    "bool": true
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "tie_break"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "vec": [
+                                    {
+                                      "symbol": "JudgeScore"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "vec": [
+                                    {
+                                      "symbol": "SubmissionOrder"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "tracks"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "criteria"
+                                      },
+                                      "val": {
+                                        "vec": [
+                                          {
+                                            "map": [
+                                              {
+                                                "key": {
+                                                  "symbol": "id"
+                                                },
+                                                "val": {
+                                                  "symbol": "technical"
+                                                }
+                                              },
+                                              {
+                                                "key": {
+                                                  "symbol": "weight_bps"
+                                                },
+                                                "val": {
+                                                  "u32": 6000
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "map": [
+                                              {
+                                                "key": {
+                                                  "symbol": "id"
+                                                },
+                                                "val": {
+                                                  "symbol": "novelty"
+                                                }
+                                              },
+                                              {
+                                                "key": {
+                                                  "symbol": "weight_bps"
+                                                },
+                                                "val": {
+                                                  "u32": 4000
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "id"
+                                      },
+                                      "val": {
+                                        "symbol": "payments"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "no_award_allowed"
+                                      },
+                                      "val": {
+                                        "bool": false
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "map": [
+                                    {
+                                      "key": {
+                                        "symbol": "criteria"
+                                      },
+                                      "val": {
+                                        "vec": [
+                                          {
+                                            "map": [
+                                              {
+                                                "key": {
+                                                  "symbol": "id"
+                                                },
+                                                "val": {
+                                                  "symbol": "technical"
+                                                }
+                                              },
+                                              {
+                                                "key": {
+                                                  "symbol": "weight_bps"
+                                                },
+                                                "val": {
+                                                  "u32": 6000
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "map": [
+                                              {
+                                                "key": {
+                                                  "symbol": "id"
+                                                },
+                                                "val": {
+                                                  "symbol": "novelty"
+                                                }
+                                              },
+                                              {
+                                                "key": {
+                                                  "symbol": "weight_bps"
+                                                },
+                                                "val": {
+                                                  "u32": 4000
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "id"
+                                      },
+                                      "val": {
+                                        "symbol": "defi"
+                                      }
+                                    },
+                                    {
+                                      "key": {
+                                        "symbol": "no_award_allowed"
+                                      },
+                                      "val": {
+                                        "bool": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "version"
+                            },
+                            "val": {
+                              "u32": 1
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "visibility"
+                            },
+                            "val": {
+                              "u32": 0
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "vote"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "community_bps"
+                                  },
+                                  "val": {
+                                    "u32": 2000
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "judge_bps"
+                                  },
+                                  "val": {
+                                    "u32": 8000
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "ConstitutionHash"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "bytes": "f2b667d8a388addd4cbec0a46a60871ee299fb34d50a10a9d416035c5ab0a7bd"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 2073600
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_code": {
+              "ext": "v0",
+              "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "code": ""
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 2073600
+      }
+    ]
+  },
+  "events": []
+}
