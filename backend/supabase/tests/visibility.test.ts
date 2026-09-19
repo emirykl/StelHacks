@@ -44,33 +44,54 @@ async function publish(visibility: number | null, participant?: string): Promise
   const title = `project-${contract.slice(1, 9)}`;
   const admin = backend();
 
-  await admin.from("hackathons").insert({
-    contract_id: contract,
-    slug: `event-${contract.slice(1, 9).toLowerCase()}`,
-    name: "A hackathon",
-  });
+  await seed(
+    admin.from("hackathons").insert({
+      contract_id: contract,
+      slug: `event-${contract.slice(1, 9).toLowerCase()}`,
+      name: "A hackathon",
+    }),
+  );
 
   if (visibility !== null) {
-    await admin.from("hackathon_state").insert({
-      contract_id: contract,
-      organizer: someAddress(),
-      constitution_hash: "\\x00",
-      phase: 2,
-      visibility,
-      observed_at_ledger: 1,
-    });
+    await seed(
+      admin.from("hackathon_state").insert({
+        contract_id: contract,
+        organizer: someAddress(),
+        constitution_hash: "\\x00",
+        phase: 2,
+        visibility,
+        observed_at_ledger: 1,
+      }),
+    );
   }
 
-  await admin.from("teams").insert({ contract_id: contract, team_id: 1, name: "A team" });
-  await admin.from("projects").insert({ contract_id: contract, team_id: 1, title });
+  await seed(admin.from("teams").insert({ contract_id: contract, team_id: 1, name: "A team" }));
+  await seed(admin.from("projects").insert({ contract_id: contract, team_id: 1, title }));
 
   if (participant !== undefined) {
-    await admin
-      .from("participants")
-      .insert({ contract_id: contract, address: participant, approved_at_ledger: 1 });
+    await seed(
+      admin
+        .from("participants")
+        .insert({ contract_id: contract, address: participant, approved_at_ledger: 1 }),
+    );
   }
 
   return { contract, team: 1, title };
+}
+
+/**
+ * Fails the run when a fixture does not land.
+ *
+ * Without this a setup that quietly did nothing reads as a policy correctly
+ * hiding a row, and the suite reports a passing refusal it never actually
+ * tested. That is the worst way for a security test to be wrong.
+ */
+async function seed(insert: PromiseLike<{ error: { message: string } | null }>): Promise<void> {
+  const { error } = await insert;
+
+  if (error !== null) {
+    throw new Error(`could not set the fixture up: ${error.message}`);
+  }
 }
 
 async function unpublish(event: Event): Promise<void> {
