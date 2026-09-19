@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { phaseName } from "../../lib/phase";
+import { dollars, worthOf } from "../../lib/money";
 import type { HackathonSummary } from "../../lib/chain";
 
 /**
@@ -22,16 +23,18 @@ import type { HackathonSummary } from "../../lib/chain";
  * even and as nothing at all when they are not.
  */
 
-export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
+export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
+  const worth = await worthOf(hackathon.asset, hackathon.prize);
   const running = hackathon.phase !== null && hackathon.phase >= 2 && hackathon.phase <= 7;
   const finished = hackathon.phase !== null && hackathon.phase >= 8;
+  const funding = hackathon.phase === 1;
 
   return (
     <Link
       href={`/hackathons/${hackathon.slug}`}
       className="group flex flex-col overflow-hidden border border-rule bg-paper transition-colors duration-150 ease-settle hover:border-ink-faint"
     >
-      <Picture hackathon={hackathon} running={running} finished={finished} />
+      <Picture hackathon={hackathon} running={running} funding={funding} finished={finished} />
 
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5">
         <div className="min-w-0">
@@ -76,7 +79,7 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
             </p>
           )}
 
-          <div className="mt-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 border-t border-rule pt-4">
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-rule pt-4">
             <p className="tabular text-[1.25rem] text-ink">
               {/* Absent rather than zero when the contract could not be reached.
                   A prize shown as nothing is a claim; a prize shown as unknown
@@ -85,7 +88,14 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
                 <span className="label text-ink-faint">prize not readable</span>
               ) : (
                 <>
-                  {units(hackathon.prize)} <span className="label text-ink-faint">XLM</span>
+                  {units(hackathon.prize)}{" "}
+                  <span className="label text-ink-faint">{worth.code}</span>
+                  {/* The dollar figure is a convenience, so it is set quieter
+                      than the amount it estimates and is simply absent when no
+                      honest one could be had. */}
+                  {worth.dollars !== null && (
+                    <span className="label ml-2 text-ink-faint">{dollars(worth.dollars)}</span>
+                  )}
                 </>
               )}
             </p>
@@ -111,10 +121,12 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
 function Picture({
   hackathon,
   running,
+  funding,
   finished,
 }: {
   hackathon: HackathonSummary;
   running: boolean;
+  funding: boolean;
   finished: boolean;
 }) {
   /* Two and a half to one, which is the shape a banner is drawn in. Fixing the
@@ -135,16 +147,24 @@ function Picture({
       {/* Over the picture, because whether somebody can still enter is the
           first thing they look for and it should not move when a banner
           appears. */}
+      {/*
+        Three colours for three answers to one question: can I still get in.
+        Green yes, yellow not yet, red no. They are the traffic light everybody
+        already reads, and the dot repeats it as a shape for anybody who cannot
+        separate the colours.
+      */}
       <span
         className={`label absolute left-3 top-3 flex items-center gap-2 px-2.5 py-1.5 ${
           running
-            ? "bg-signal text-signal-ink"
-            : finished
-              ? "bg-night text-night-ink"
-              : "bg-paper text-ink ring-1 ring-inset ring-rule"
+            ? "bg-verified text-paper"
+            : funding
+              ? "bg-signal text-signal-ink"
+              : finished
+                ? "bg-broken text-paper"
+                : "bg-paper text-ink ring-1 ring-inset ring-rule"
         }`}
       >
-        {running && <span aria-hidden className="size-1.5 rounded-full bg-signal-ink" />}
+        {running && <span aria-hidden className="size-1.5 rounded-full bg-paper" />}
         {phaseName(hackathon.phase)}
       </span>
     </div>

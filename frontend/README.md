@@ -124,6 +124,26 @@ The right fix is for the indexer to record applications, which would also lift
 the seven day event window this inherits. Until then an organizer who leaves a
 queue for a week sees a short list rather than a complete one.
 
+## Why the listing is paged
+
+Every card asks the contract for its prize and its deadline, because our tables
+do not carry either: the indexer records the digest and the phase, and the
+amount and the schedule live in the constitution behind them. That is one round
+trip per card, so the page's cost grows with the list. Thirty three took two and
+a half seconds, and two hundred would take a node's patience as well as a
+reader's.
+
+So the page shows twelve and the filters narrow before the chain is asked
+anything. That is the fix available today; the one that removes the problem is
+for the indexer to record both numbers.
+
+The dollar figure beside a prize is a convenience and is treated as one. It
+comes from outside, it can be stale, and when no honest one can be had the card
+shows the token amount alone rather than a number nobody can stand behind. USDC
+is quoted at a dollar rather than looked up, because asking a price feed what a
+dollar is worth adds a dependency and a way to be wrong about the one asset that
+cannot be.
+
 ## Not built yet
 
 ## Identity, and the two layers of it

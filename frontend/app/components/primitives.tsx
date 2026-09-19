@@ -183,17 +183,26 @@ export function Rule({ className }: { className?: string }) {
 export function Measure({
   children,
   wide = false,
+  widest = false,
   className,
 }: {
   children: ReactNode;
   wide?: boolean;
+  /**
+   * Wider still, for grids.
+   *
+   * The reading measure exists because a long line costs the return sweep. A
+   * row of cards is not a line: nothing is read across it, so the argument for
+   * holding it narrow does not apply and the extra width buys another card.
+   */
+  widest?: boolean;
   className?: string;
 }) {
   return (
     <div
       className={join(
         "mx-auto w-full px-6",
-        wide ? "max-w-[76rem]" : "max-w-[46rem]",
+        widest ? "max-w-[96rem]" : wide ? "max-w-[76rem]" : "max-w-[46rem]",
         className,
       )}
     >

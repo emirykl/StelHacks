@@ -40,6 +40,8 @@ export interface HackathonSummary {
   prize: bigint | null;
   /** When submissions shut, seconds since the epoch. From the frozen rules. */
   closesAt: number | null;
+  /** The token the prize is paid in, from the frozen rules. */
+  asset: string | null;
   logo_url: string | null;
   banner_url: string | null;
   /** Null when the organizer has not said, which is not the same as remote. */
@@ -68,7 +70,32 @@ export interface HackathonDetail extends HackathonSummary {
  * so the join happens in code. Two round trips rather than one, in exchange for
  * a schema that does not lie about which side is the authority.
  */
-export async function listHackathons(): Promise<HackathonSummary[]> {
+/** What a reader has narrowed the list down to. */
+export interface Filter {
+  /** "open", "upcoming", "finished", or nothing for all of them. */
+  stage?: string | undefined;
+  tag?: string | undefined;
+  /** Matched against the name and the tagline. */
+  q?: string | undefined;
+  /** How many to read the chain for. */
+  limit?: number | undefined;
+}
+
+/**
+ * How many cards a page shows, and therefore how many contracts it asks about.
+ *
+ * The prize and the deadline are read from the chain one call per hackathon,
+ * because our tables do not carry them. That is one round trip per card, so the
+ * page's cost grows with the list: thirty three took two and a half seconds and
+ * two hundred would take a node's patience as well as a reader's.
+ *
+ * Bounding it here is the fix that is available today. The one that removes the
+ * problem is for the indexer to record both numbers, and until it does this
+ * page is paged rather than slow.
+ */
+export const PAGE = 12;
+
+export async function listHackathons(filter: Filter = {}): Promise<HackathonSummary[]> {
   if (db === null) {
     return [];
   }
@@ -103,9 +130,18 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
 
   const byContract = new Map((chain.data ?? []).map((row) => [String(row.contract_id), row]));
 
-  const summaries = (written.data ?? []).map((row) =>
+  const all = (written.data ?? []).map((row) =>
     merge(row, byContract.get(String(row.contract_id)) ?? {}),
   );
+
+  /*
+    Narrowed and ordered before the chain is asked anything, so a filtered page
+    pays for the cards it shows rather than for every hackathon that exists.
+  */
+  const summaries = all
+    .filter((hackathon) => matches(hackathon, filter))
+    .sort((a, b) => standing(a) - standing(b))
+    .slice(0, filter.limit ?? PAGE);
 
   /*
     The prize is read from the contract rather than from our tables, because we
@@ -121,13 +157,104 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
     summaries.map((summary) => rulesOf(summary.contract_id).catch(() => null)),
   );
 
-  return summaries
-    .map((summary, index) => ({
-      ...summary,
-      prize: rules[index]?.prize ?? null,
-      closesAt: rules[index]?.closesAt ?? null,
-    }))
-    .sort((a, b) => standing(a) - standing(b));
+  return summaries.map((summary, index) => ({
+    ...summary,
+    prize: rules[index]?.prize ?? null,
+    closesAt: rules[index]?.closesAt ?? null,
+    asset: rules[index]?.asset ?? null,
+  }));
+}
+
+/** Whether one hackathon survives what the reader asked for. */
+function matches(hackathon: HackathonSummary, filter: Filter): boolean {
+  if (filter.stage !== undefined && filter.stage.length > 0) {
+    const where = standing(hackathon);
+    const wanted = { open: 0, upcoming: 1, finished: 2 }[filter.stage];
+
+    if (wanted !== undefined && where !== wanted) {
+      return false;
+    }
+  }
+
+  if (filter.tag !== undefined && filter.tag.length > 0 && !hackathon.tags.includes(filter.tag)) {
+    return false;
+  }
+
+  if (filter.q !== undefined && filter.q.trim().length > 0) {
+    /* Name and tagline, which is what somebody types a word from. Searching the
+       description as well would match a hackathon on a word buried in a
+       paragraph nobody read. */
+    const looking = filter.q.trim().toLowerCase();
+    const inside = `${hackathon.name} ${hackathon.tagline ?? ""}`.toLowerCase();
+
+    if (!inside.includes(looking)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/** Every tag in use, for building the filter from what actually exists. */
+export async function tagsInUse(): Promise<string[]> {
+  if (db === null) {
+    return [];
+  }
+
+  const { data } = await db.from("hackathons").select("tags");
+
+  const seen = new Set<string>();
+
+  for (const row of data ?? []) {
+    for (const tag of (row.tags as string[] | null) ?? []) {
+      seen.add(tag);
+    }
+  }
+
+  return [...seen].sort();
+}
+
+/**
+ * How many match, without asking the chain about any of them.
+ *
+ * The first version of this counted by listing, which read a contract per row
+ * and so cost exactly what the paging was introduced to avoid. Nothing in a
+ * count needs a prize or a deadline.
+ */
+export async function countHackathons(filter: Filter = {}): Promise<number> {
+  if (db === null) {
+    return 0;
+  }
+
+  const [written, chain] = await Promise.all([
+    db.from("hackathons").select("contract_id, name, tagline, tags"),
+    db.from("hackathon_state").select("contract_id, phase"),
+  ]);
+
+  const phases = new Map(
+    (chain.data ?? []).map((row) => [String(row.contract_id), Number(row.phase)]),
+  );
+
+  return (written.data ?? []).filter((row) =>
+    matches(
+      {
+        contract_id: String(row.contract_id),
+        slug: "",
+        name: String(row.name),
+        tagline: (row.tagline as string | null) ?? null,
+        phase: phases.get(String(row.contract_id)) ?? null,
+        visibility: null,
+        prize: null,
+        closesAt: null,
+        asset: null,
+        logo_url: null,
+        banner_url: null,
+        location: null,
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+      },
+      filter,
+    ),
+  ).length;
 }
 
 /**
@@ -159,7 +286,7 @@ function standing(hackathon: HackathonSummary): number {
  */
 async function rulesOf(
   contractId: string,
-): Promise<{ prize: bigint; closesAt: number } | null> {
+): Promise<{ prize: bigint; closesAt: number; asset: string | null } | null> {
   const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
   const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 
@@ -191,6 +318,7 @@ async function rulesOf(
 
   const constitution = scValToNative(simulated.result.retval) as {
     prize_tiers?: unknown;
+    prize_asset?: unknown;
     schedule?: { submission_closes_at?: unknown };
   };
 
@@ -202,6 +330,7 @@ async function rulesOf(
       BigInt(0),
     ),
     closesAt: Number(constitution.schedule?.submission_closes_at ?? 0),
+    asset: typeof constitution.prize_asset === "string" ? constitution.prize_asset : null,
   };
 }
 
@@ -250,6 +379,7 @@ function merge(
     visibility: chain["visibility"] === undefined ? null : Number(chain["visibility"]),
     prize: null,
     closesAt: null,
+    asset: null,
     logo_url: (written["logo_url"] as string | null) ?? null,
     banner_url: (written["banner_url"] as string | null) ?? null,
     location: (written["location"] as string | null) ?? null,
