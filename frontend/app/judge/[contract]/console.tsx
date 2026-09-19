@@ -49,7 +49,7 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
 
   const load = useCallback(async () => {
     const [found, tracks, at] = await Promise.all([
-      entriesOf(contractId),
+      entriesOf(contractId, false),
       rubricOf(contractId),
       phaseOf(contractId),
     ]);

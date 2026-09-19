@@ -25,7 +25,17 @@ export interface Entry {
   invalid: boolean;
 }
 
-export async function entriesOf(contractId: string): Promise<Entry[]> {
+export async function entriesOf(
+  contractId: string,
+  /**
+   * Whether the team roster is wanted.
+   *
+   * It is another round trip per team and only two surfaces show it. A judge
+   * scores a project, not a list of people, and was paying for a call whose
+   * answer was thrown away.
+   */
+  withRoster = true,
+): Promise<Entry[]> {
   if (rpcUrl === undefined || passphrase === undefined) {
     return [];
   }
@@ -90,7 +100,7 @@ export async function entriesOf(contractId: string): Promise<Entry[]> {
         };
 
         const [roster, disqualified] = await Promise.all([
-          ask("team_by_id", id).catch(() => null),
+          withRoster ? ask("team_by_id", id).catch(() => null) : null,
           /* Not an error state. The contract refuses this when no case was ever
              opened, which is the ordinary condition of an entry nobody has
              questioned. */
