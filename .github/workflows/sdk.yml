@@ -1,0 +1,60 @@
+name: SDK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Type check and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The SDK is checked against the wasm the contracts actually produce
+      # rather than against the bindings committed beside it. That is the whole
+      # point of the spec suite: the interface a contract publishes is only
+      # visible from outside Rust, and the Rust toolchain will happily emit one
+      # that no strict XDR reader can parse. Building here is what gives those
+      # tests something real to read.
+      - name: Resolve the pinned toolchain
+        run: rustup show
+        working-directory: contracts
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Build the contracts
+        run: cargo build --release --target wasm32v1-none
+        working-directory: contracts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: sdk
+
+      - name: Build the bindings
+        run: npm run build --workspaces --if-present
+        working-directory: sdk
+
+      - name: Type check
+        run: npm run check
+        working-directory: sdk
+
+      # Covers three things at once: the digests match the contract's, the
+      # published interface parses strictly, and the committed bindings are the
+      # ones the built wasm describes.
+      - name: Test
+        run: npm test
+        working-directory: sdk

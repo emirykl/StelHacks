@@ -281,7 +281,7 @@ before the lock. That is the intended asymmetry.
 
 ## 20. The error enum fits the fifty case cap, and validation errors pay for it
 
-**Decided.** `Error` went from 104 cases to 39. Every constitution validation
+**Decided.** `Error` went from 104 cases to 48, two under the cap. Every constitution validation
 failure now returns `ConstitutionInvalid`, and the SDK is what tells an
 organizer which field. Errors that depend on chain state kept their own codes.
 The four submission requirement errors left the contract entirely, along with
