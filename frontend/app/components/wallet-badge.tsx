@@ -101,7 +101,7 @@ export function WalletBadge({ signedIn }: { signedIn: boolean }) {
                 setOpen(false);
                 void disconnect();
               }}
-              className="label h-8 bg-ink px-3 text-paper transition-colors duration-150 ease-settle hover:bg-ink/85"
+              className="label h-8 bg-broken px-3 text-paper transition-colors duration-150 ease-settle hover:bg-broken/85"
             >
               Disconnect
             </button>
