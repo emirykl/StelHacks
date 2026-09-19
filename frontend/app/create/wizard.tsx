@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Button } from "../components/primitives";
@@ -32,6 +33,7 @@ const CREATE_WASM_HINT = "the hackathon contract you deployed";
 
 export function Wizard() {
   const { wallet, known } = useWallet();
+  const router = useRouter();
 
   const [contractId, setContractId] = useState("");
   const [asset, setAsset] = useState("");
@@ -90,10 +92,22 @@ export function Wizard() {
        the address that will later lock the rules and move the phase. */
     const args = await createArgs(wallet.address, draft);
 
-    setResult(
-      await send(contractId, "create", args.map((value) => ({ value })), wallet.address),
+    const outcome = await send(
+      contractId,
+      "create",
+      args.map((value) => ({ value })),
+      wallet.address,
     );
+
+    setResult(outcome);
     setBusy(false);
+
+    /* Straight on to the next thing rather than a page that says "done" and
+       leaves somebody wondering what happens now. Creating is the first of
+       four steps and the console is where the other three live. */
+    if (outcome.ok) {
+      router.push(`/manage/${contractId}`);
+    }
   }
 
   if (!known) {
@@ -529,9 +543,18 @@ function ordinal(rank: number): string {
   return ["1st", "2nd", "3rd"][rank - 1] ?? `${rank}th`;
 }
 
-/** The prize table as a person reads it, not as the ledger stores it. */
+/**
+ * The prize table as a person reads it, not as the ledger stores it.
+ *
+ * The fraction is kept when there is one, so a small amount never reads as
+ * zero. This is the figure somebody is committing money against.
+ */
 function format(amount: bigint): string {
-  const whole = amount / BigInt(10_000_000);
+  const scale = BigInt(10_000_000);
+  const whole = amount / scale;
+  const fraction = (amount % scale).toString().padStart(7, "0").replace(/0+$/, "");
 
-  return whole.toLocaleString("en-US");
+  return fraction.length === 0
+    ? whole.toLocaleString("en-US")
+    : `${whole.toLocaleString("en-US")}.${fraction}`;
 }

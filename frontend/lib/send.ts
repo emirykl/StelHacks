@@ -113,6 +113,89 @@ export async function send(
 }
 
 /**
+ * Put a new contract on the chain from a hash that is already up there.
+ *
+ * A hackathon is one instance of the core and one of the vault, deployed per
+ * event rather than shared, so the wasm is uploaded once and instantiated many
+ * times. The salt makes the address, and a random one means two organizers
+ * pressing the same button in the same second do not collide.
+ */
+export async function deploy(
+  wasmHash: string,
+  constructorArgs: Arg[],
+  from: string,
+): Promise<Sent & { contractId?: string }> {
+  if (rpcUrl === undefined || passphrase === undefined) {
+    return { ok: false, why: "this deployment is not pointed at a network", refused: false };
+  }
+
+  try {
+    const [{ Operation, TransactionBuilder, BASE_FEE, Address, hash }, rpc, { signTransaction }] =
+      await Promise.all([
+        import("@stellar/stellar-sdk/base"),
+        import("@stellar/stellar-sdk/rpc"),
+        import("./wallet"),
+      ]);
+
+    const server = new rpc.Server(rpcUrl);
+    const account = await server.getAccount(from);
+
+    const salt = crypto.getRandomValues(new Uint8Array(32));
+
+    const built = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: passphrase,
+    })
+      .addOperation(
+        Operation.createCustomContract({
+          address: Address.fromString(from),
+          wasmHash: Buffer.from(wasmHash, "hex"),
+          salt: Buffer.from(salt),
+          constructorArgs: constructorArgs.map((a) => a.value),
+        }),
+      )
+      .setTimeout(180)
+      .build();
+
+    const simulated = await server.simulateTransaction(built);
+
+    if (rpc.Api.isSimulationError(simulated)) {
+      return { ok: false, why: readable(simulated.error), refused: false };
+    }
+
+    const prepared = rpc.assembleTransaction(built, simulated).build();
+    const signed = await signTransaction(prepared.toXDR());
+    const sent = await server.sendTransaction(TransactionBuilder.fromXDR(signed, passphrase));
+
+    if (sent.status === "ERROR") {
+      return { ok: false, why: readable(JSON.stringify(sent.errorResult)), refused: false };
+    }
+
+    const settled = await server.pollTransaction(sent.hash, {
+      attempts: 30,
+      sleepStrategy: () => 1000,
+    });
+
+    if (settled.status !== "SUCCESS") {
+      return { ok: false, why: readable(String(settled.status)), refused: false };
+    }
+
+    /* The new address comes back in the result rather than being derivable
+       from anything the caller already had, so it is read out here rather than
+       left for the caller to hunt for. */
+    const created = settled.returnValue;
+    const contractId =
+      created === undefined ? undefined : Address.fromScVal(created as never).toString();
+
+    void hash;
+
+    return { ok: true, hash: sent.hash, ...(contractId === undefined ? {} : { contractId }) };
+  } catch (thrown) {
+    return refusal(thrown);
+  }
+}
+
+/**
  * The kit's own words for "the person said no".
  *
  * Declining in the wallet is not an error to apologise for, and a surface needs
@@ -190,6 +273,11 @@ export const arg = {
   async text(value: string): Promise<Arg> {
     const { nativeToScVal } = await import("@stellar/stellar-sdk/base");
     return { value: nativeToScVal(value, { type: "string" }) };
+  },
+
+  async i128(value: bigint): Promise<Arg> {
+    const { nativeToScVal } = await import("@stellar/stellar-sdk/base");
+    return { value: nativeToScVal(value, { type: "i128" }) };
   },
 
   async bytes32(value: Uint8Array): Promise<Arg> {

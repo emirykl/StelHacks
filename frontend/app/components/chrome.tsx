@@ -36,6 +36,7 @@ export async function Header() {
           {[
             ["Hackathons", "/hackathons"],
             ["How it works", "/how-it-works"],
+            ["Create", "/create"],
           ].map(([label, href]) => (
             <a
               key={href}
