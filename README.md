@@ -13,9 +13,21 @@ winners automatically. Every step leaves a permanent, public proof.
 | Path | Contents |
 |---|---|
 | `contracts/` | Soroban smart contracts (Rust workspace) |
-| `backend/` | Event indexer and read API |
+| `backend/` | Database schema, row level security, and the event indexer |
 | `frontend/` | Web application |
+| `sdk/` | TypeScript SDK, shared by the backend and the frontend |
+| `fixtures/` | Test vectors the contracts and the SDK are both measured against |
+| `docs/` | Decisions taken while building, and deployment records |
 | `StelHacks-PRD.md` | Product requirements document |
+
+The last two sit outside the three layers on purpose, because they belong to
+neither. The SDK is used by the indexer and by the browser, so filing it under
+one would hide it from the other. The fixtures are read by Rust tests and
+TypeScript tests at once, which is the whole point of them: they are what stops
+the two languages drifting apart.
+
+Each layer runs its own commands from its own directory, so nothing depends on
+which directory a command happens to be typed in.
 
 ## Requirements
 
@@ -23,15 +35,23 @@ winners automatically. Every step leaves a permanent, public proof.
 - [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli) 27 or newer
 - Node.js 24 or newer
 
-## Working on the contracts
+## Working on it
 
 ```bash
-cd contracts
-cargo test          # run the unit and integration tests
-stellar contract build   # build the wasm artifacts
+cd contracts               # Soroban
+cargo test
+stellar contract build
+
+cd sdk                     # TypeScript SDK
+npm test                   # needs the wasm above to have been built
+
+cd backend                 # database
+supabase db push
 ```
 
 ## Status
 
-Early development. Contracts are being built first; the SDK, indexer and web
-application follow on top of them.
+The contracts are finished and on testnet, with their addresses and build
+hashes in `docs/deployments.md`. The SDK can rebuild and verify a full result
+from chain data alone. The schema has started; the indexer and the web
+application follow.

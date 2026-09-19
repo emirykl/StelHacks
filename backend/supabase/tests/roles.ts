@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
 import { randomUUID } from "node:crypto";
 
-config({ path: new URL("../../.env.local", import.meta.url).pathname, quiet: true });
+config({ path: new URL("../../../.env.local", import.meta.url).pathname, quiet: true });
 
 /**
  * The three ways somebody reaches this database, set up the way they really

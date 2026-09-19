@@ -4,9 +4,29 @@ An end to end verifiable hackathon platform on Stellar and Soroban. The product
 requirements are in `StelHacks-PRD.md` (Turkish). Where the code and the PRD
 disagree, `docs/decisions.md` says which one governs and why.
 
+## Where things live
+
+Four layers, and each one owns its directory. Work belongs to the layer that
+uses it, not to whichever directory is convenient.
+
+| Path | Layer |
+|---|---|
+| `contracts/` | Soroban contracts, Rust |
+| `backend/` | `supabase/` schema and role tests, `indexer/` later |
+| `frontend/` | The web application, from M15 |
+| `sdk/` | TypeScript, shared by backend and frontend |
+| `fixtures/` | Test vectors read by Rust and TypeScript together |
+
+`sdk/` and `fixtures/` sit outside the three layers because they belong to
+neither. Everything else does: a Supabase migration goes under `backend/`, not
+at the root, even though the CLI would happily create it there.
+
+Each layer runs its commands from its own directory. `supabase` looks for
+`supabase/` beside the working directory, so it has to be run from `backend/`.
+
 ## Commands
 
-Everything runs from `contracts/`.
+Contract commands run from `contracts/`.
 
 ```bash
 cargo test                                # unit and contract tests
@@ -18,6 +38,23 @@ stellar contract build                    # wasm artifacts
 Run all three of format, lint and test before committing. CI runs them plus a
 reproducible build check that compiles the wasm twice from clean and compares
 the hashes.
+
+The SDK runs from `sdk/`, and its suite reads the built wasm, so
+`stellar contract build` has to have run first.
+
+```bash
+npm test                                  # digests, merkle, signing, events, ranking
+npm run check                             # types, including the examples
+npm run bindings                          # regenerate from the wasm
+```
+
+The database runs from `backend/`. There is no local stack: migrations go
+straight to the linked project and the role tests run against it over HTTP.
+
+```bash
+supabase db push                          # apply migrations to the linked project
+cd supabase/tests && npm test             # what each role can actually reach
+```
 
 ## The one environment gotcha
 
