@@ -12,18 +12,18 @@ import { Chain } from "./primitives";
  * checked is shown as unchecked rather than as a green tick, because a strip
  * that reassures by default is worse than no strip at all.
  *
- * It has been rewritten once, and the reason is worth keeping. The first
- * version was four terms and four long strings: "Rules digest", "Stage",
- * "Hackathon contract", "Prize vault", each over a hash. Every one of those
- * words is precise and none of them is English. Somebody arriving at their
- * first hackathon page could not tell whether the strip was reassuring them or
- * warning them, which is the only thing it exists to do.
+ * It has been rewritten twice, and both reasons are worth keeping. The first
+ * version was four terms over four hashes: "Rules digest", "Stage", "Hackathon
+ * contract", "Prize vault". Every one is precise and none is English, so a
+ * reader could not tell whether the strip was reassuring them or warning them,
+ * which is the only thing it exists to do. The second version fixed that by
+ * explaining each term at length, and became a wall of prose nobody finishes.
  *
- * So each fact now leads with the claim it is making, in a sentence, and the
- * value it is making that claim from comes second. The value has not moved and
- * has not been softened: it is still the exact digest, still shown in full,
- * still comparable character by character. It is simply no longer the first
- * thing a reader has to decode.
+ * What is left is the shape both were reaching for: each fact leads with the
+ * promise it makes, backs it in one clause, and then shows the value. The value
+ * has never moved and has never been softened. It is still the exact digest,
+ * still in full, still comparable character by character. Anybody who wants the
+ * long version can read `/how-it-works`, which is where it belongs.
  */
 
 export type Standing = "verified" | "broken" | "unchecked";
@@ -83,16 +83,12 @@ export function ProofStrip({ proofs }: { proofs: Proof[] }) {
             unexplained strings on a black band, and a reader who cannot tell
             what it is for reads it as decoration and never presses the button
             underneath. */}
-        <p className="max-w-[52rem] text-[0.9375rem] leading-relaxed text-night-ink-soft">
-          <span className="font-semibold text-night-ink">
-            This page is making four promises.
-          </span>{" "}
-          None of them rest on our database. Each one is kept by a program on the
-          Stellar network that we cannot edit, and the button below asks that
-          program directly, from your browser, whether we are telling the truth.
+        <p className="text-[0.9375rem] text-night-ink-soft">
+          <span className="font-semibold text-night-ink">Four promises</span>, none of
+          them ours to break. Check each one against the contract below.
         </p>
 
-        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-x-10">
+        <div className="mt-7 grid gap-7 sm:grid-cols-2 lg:grid-cols-4 lg:gap-x-10">
           {proofs.map((proof) => (
             <Fact key={proof.key} proof={proof} />
           ))}
@@ -107,11 +103,11 @@ function Fact({ proof }: { proof: Proof }) {
     <>
       <p className="text-[0.9375rem] font-semibold leading-snug text-night-ink">{proof.claim}</p>
 
-      <p className="mt-2 text-[0.8125rem] leading-relaxed text-night-ink-soft">{proof.because}</p>
+      <p className="mt-1.5 text-[0.8125rem] leading-snug text-night-ink-soft">{proof.because}</p>
 
-      <p className="tabular mt-3 text-[0.8125rem] break-all text-night-ink-soft">{proof.value}</p>
+      <p className="tabular mt-2.5 text-[0.8125rem] break-all text-night-ink-soft">{proof.value}</p>
 
-      <p className="mt-3 flex items-center gap-2 text-[0.8125rem] text-night-ink-soft">
+      <p className="mt-2.5 flex items-center gap-2 text-[0.8125rem] text-night-ink-soft">
         <Dot standing={proof.standing} />
         {standingText[proof.standing]}
       </p>

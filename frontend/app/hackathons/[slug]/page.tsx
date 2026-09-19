@@ -164,8 +164,7 @@ function proofsFor(hackathon: HackathonDetail): Proof[] {
     {
       key: "digest",
       claim: "The rules cannot change now",
-      because:
-        "They were frozen before anybody registered. This fingerprint would be different if a single word of them had moved since.",
+      because: "Frozen before anybody registered. This is their fingerprint.",
       value: hackathon.constitution_hash ?? "not locked yet",
       standing: "unchecked",
     },
@@ -175,16 +174,14 @@ function proofsFor(hackathon: HackathonDetail): Proof[] {
          as the claim and again as the value under it. The claim is what the
          phase machine guarantees; the value is where that machine has got to. */
       claim: "No stage can be skipped",
-      because:
-        "The stages run in a fixed order and the contract refuses anything out of turn. Nobody can judge before submissions close. This is where it has got to:",
+      because: "Fixed order, enforced by the contract. It has got to:",
       value: phaseName(hackathon.phase),
       standing: "unchecked",
     },
     {
       key: "contract",
       claim: "A program runs this, not us",
-      because:
-        "It holds the rules, records the entries and computes the ranking. Open it in an explorer and read it yourself.",
+      because: "It holds the rules and computes the ranking. Open it and read it.",
       value: shorten(hackathon.contract_id),
       standing: "unchecked",
       href: `https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`,
@@ -192,8 +189,7 @@ function proofsFor(hackathon: HackathonDetail): Proof[] {
     {
       key: "vault",
       claim: "The prize money is already deposited",
-      because:
-        "It was paid in before registration opened and the vault has no withdraw function, for the organizer or for us. It only pays winners.",
+      because: "Paid in up front. The vault has no withdraw function, for anyone.",
       value: hackathon.vault_id === null ? "not bound yet" : shorten(hackathon.vault_id),
       standing: "unchecked",
       ...(hackathon.vault_id === null

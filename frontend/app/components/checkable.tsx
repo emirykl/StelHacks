@@ -89,20 +89,20 @@ export function CheckableProofStrip({
  *
  * The idle sentence has to do the whole job of explaining the button, because
  * it is the only thing anybody reads before deciding whether to press it. It
- * said "Your browser asks the contract. Nothing goes through us." for a while,
- * which is accurate and answers a question nobody had yet. What somebody
- * actually wants to know is what pressing this changes: it goes and looks, and
- * then those four lines above stop being our word for it.
+ * has been both too short and too long. "Your browser asks the contract" is
+ * accurate and answers a question nobody had yet; the paragraph that replaced
+ * it said everything and was read by nobody. One sentence, saying what changes
+ * when you press it, is the size this is worth.
  */
 function said(stage: Stage): string {
   switch (stage.at) {
     case "idle":
-      return "This does not send anything to us. Your browser connects straight to the Stellar network, reads the four values out of the contract, and compares them with what this page just told you. If we had changed a rule or moved a deadline, the line above would turn red and show you what the contract actually says.";
+      return "Your browser reads all four straight from the contract and compares them with what this page said. If we had moved a deadline, the line above would turn red.";
     case "asking":
-      return "Connecting to the network and reading the contract.";
+      return "Reading the contract.";
     case "unreachable":
-      return `Nothing was checked, so nothing above has changed: ${stage.why}. That is a network problem rather than a sign anything is wrong with this hackathon.`;
+      return `Nothing was checked: ${stage.why}. A network problem, not a sign anything is wrong here.`;
     case "answered":
-      return "Checked just now, by your own browser, against the contract. The result is on each line above.";
+      return "Checked just now, by your browser, against the contract.";
   }
 }
