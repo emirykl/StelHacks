@@ -398,6 +398,59 @@ ability to rebuild. Both are append only for that reason.
 
 ---
 
+## 23. Everybody brings a wallet, and there is no passkey path
+
+**The PRD said** identity is Google and signing is Stellar, with two ways to
+arrive at an address: connect an existing wallet through Stellar Wallets Kit,
+or, for somebody who has none, get a passkey smart wallet created for them in
+under thirty seconds (FR-02).
+
+**Decided.** Only the first way. Connect a wallet, or go and open one. There is
+no passkey path and no wallet created on anybody's behalf.
+
+**Why.** A passkey wallet on Soroban is not a key, it is a deployment. Every
+user needs their own account contract with a `__check_auth` that verifies a
+secp256r1 signature, and because that user has no XLM, every action they take
+needs a relayer to sponsor the fee. That is a per user contract, an always on
+service this project does not otherwise have, and an unaudited dependency
+sitting directly in the path of prize money: `stellar/passkey-kit` is
+maintained by the Foundation and still says in its own README that the smart
+wallet contract, the SDKs and the relayer proxy have had no third party audit.
+
+Against that, the thing it buys is narrower than it looks. Judges never
+transact: `reveal_score` takes a merkle proof rather than a judge's
+authorization, so a scorecard is signed off chain and revealed by anybody.
+Community ballots work the same way. Winners never transact either, because
+`settle_prize` is not gated on the recipient. The only calls that need a
+signature from an ordinary participant are `apply`, `create_team` and
+`submit_project`. Building a wallet system for three calls is the wrong shape.
+
+**What this costs, and it is not nothing.** Section 2.1 is the strongest
+argument in the PRD: Stellar spends prize money on events that leave no trace,
+"ne yeni cüzdan, ne transaction". Passkey onboarding was the direct answer to
+the first half of that. Without it a hackathon here still produces transactions
+and a permanent record, but it does not produce new wallets, and a student who
+has to install an extension before applying is a student who sometimes does not
+apply. That is a real loss and it is being accepted knowingly rather than
+overlooked.
+
+**What was weighed and put aside.** Soroban separates the address that
+authorizes a call from the account that pays for it, which suggested a third
+route: any keypair signs the authorization entry, we submit and pay. It would
+have removed the fee problem without any of the passkey machinery. It was not
+pursued because it solves the cost of having a wallet, not the absence of one,
+and the decision above is that having one is the participant's part of the
+deal. It is worth revisiting if fees ever turn out to be what stops people.
+
+**So the wallet layer is Stellar Wallets Kit, and only that.** The kit is not a
+wallet; it is the one connect surface behind which Freighter, xBull, Albedo,
+Lobstr, Hana and hardware wallets all sit. Binding to a profile goes through
+`wallet_challenges` and `wallet_links`, which already exist: a challenge is
+issued to one person for one address, signed, and verified server side. No
+client ever writes a link.
+
+---
+
 ## Still open
 
 - Team structure: maximum size, who sets the in team prize shares, whether one
@@ -405,5 +458,4 @@ ability to rebuild. Both are append only for that reason.
 - The remaining constitution pieces: disqualification threshold, appeal window,
   settlement safety window, prize claim period, no award refund route,
   cancellation policy.
-- Passkey wallet provider: own implementation or an existing Stellar kit.
 - Metadata hosting: object storage or IPFS compatible storage.
