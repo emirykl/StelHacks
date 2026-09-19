@@ -1,39 +1,51 @@
 import { notFound } from "next/navigation";
 
-import { Eyebrow, Measure } from "../../components/primitives";
-import {
-  SpecButton,
-  SpecHeading,
-  SpecLabel,
-  SpecRow,
-  SpecRows,
-  SpecValue,
-} from "../../components/spec";
 import { CheckableProofStrip } from "../../components/checkable";
-import { Join } from "./join";
+import { Details } from "./details";
 import { Entries } from "./entries";
+import { Hackers } from "./hackers";
+import { Join } from "./join";
+import { Masthead } from "./masthead";
+import { Measure } from "../../components/primitives";
 import { ResultsBoard } from "./results";
-import { type Proof } from "../../components/proof-strip";
+import { Tabs } from "./tabs";
+import { tabFrom } from "./tab";
+import { VISIBILITY } from "../../../lib/rules";
+import { countHackers } from "../../../lib/hackers";
 import { findHackathon, type HackathonDetail } from "../../../lib/chain";
 import { phaseName } from "../../../lib/phase";
+import { type Proof } from "../../components/proof-strip";
 
 /**
  * One hackathon, as somebody with no account sees it.
  *
- * The proof strip comes first and everything else is below it. That order is
- * the argument the product makes: what the chain holds is the page, and the
- * name and the description are what somebody wrote around it.
+ * The page is built in three bands and the order is the argument the product
+ * makes. The proof strip is first: what the chain holds is the page, and
+ * everything else is written around it. Then the masthead, which is the three
+ * facts somebody actually decides on. Then the tabs, which are four different
+ * questions about the same event rather than four different pages.
+ *
+ * Only the tab changes when a tab is chosen. The banner, the prize and the
+ * deadline stay where they are, because those are what the whole page is about
+ * and a reader comparing the builds against the deadline should not have to
+ * scroll back for one of them.
  */
 
 export const revalidate = 0;
 
-export default async function Hackathon({ params }: PageProps<"/hackathons/[slug]">) {
-  const { slug } = await params;
+export default async function Hackathon({
+  params,
+  searchParams,
+}: PageProps<"/hackathons/[slug]">) {
+  const [{ slug }, asked] = await Promise.all([params, searchParams]);
   const hackathon = await findHackathon(slug);
 
   if (hackathon === null) {
     notFound();
   }
+
+  const at = tabFrom(asked["tab"]);
+  const hackers = await countHackers(hackathon.contract_id);
 
   return (
     <main className="flex-1">
@@ -47,91 +59,94 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
         proofs={proofsFor(hackathon)}
       />
 
-      <section className="border-b border-rule">
-        <Measure wide className="py-16">
-          <Eyebrow>{phaseName(hackathon.phase)}</Eyebrow>
+      <Masthead hackathon={hackathon} />
 
-          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3.25rem)]">{hackathon.name}</h1>
+      <Tabs at={at} counts={{ hackers }} />
 
-          {hackathon.tagline !== null && (
-            <p className="mt-5 max-w-[38rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-              {hackathon.tagline}
+      {at === "details" && <Details hackathon={hackathon} />}
+
+      {at === "builds" && <Builds hackathon={hackathon} />}
+
+      {at === "hackers" && <Hackers contractId={hackathon.contract_id} />}
+
+      {at === "take-part" && <TakePart hackathon={hackathon} />}
+    </main>
+  );
+}
+
+/**
+ * What was entered, and who is allowed to be reading it.
+ *
+ * The notice above the list is not a disclaimer. Whether a build is readable
+ * was decided before the lock and the database enforces the same three levels,
+ * so an empty list under "the organizer only" is the rule working rather than a
+ * hackathon nobody entered. Saying which of the two this is costs one line and
+ * is the difference between a page that is quiet and a page that looks broken.
+ */
+function Builds({ hackathon }: { hackathon: HackathonDetail }) {
+  const visibility = hackathon.rules?.visibility ?? null;
+
+  return (
+    <>
+      <Measure wide className="pt-14">
+        <div className="border border-rule bg-paper-sunk p-5">
+          <p className="label text-ink-faint">Who can read these</p>
+
+          <p className="mt-2 max-w-[46rem] text-[0.9375rem] leading-relaxed text-ink">
+            {visibility === null
+              ? "The contract could not be reached, so this page cannot say who may read the builds."
+              : (explained[visibility] ?? explained[2])}
+          </p>
+
+          {visibility !== null && (
+            <p className="label mt-3 text-ink-faint">
+              frozen as {VISIBILITY[visibility] ?? "unknown"} before registration opened
             </p>
           )}
-        </Measure>
-      </section>
-
-      {hackathon.description !== null && (
-        <Measure wide className="py-14">
-          {/* Held to a reading measure but aligned with the rest of the page.
-              Centring it would make the one long passage on the page look like
-              it belonged to a different layout. */}
-          <p className="max-w-[42rem] whitespace-pre-line text-[1.0625rem] leading-relaxed text-ink-soft">
-            {hackathon.description}
-          </p>
-        </Measure>
-      )}
-
-      <Join contractId={hackathon.contract_id} />
+        </div>
+      </Measure>
 
       <Entries contractId={hackathon.contract_id} />
 
       <ResultsBoard contractId={hackathon.contract_id} />
+    </>
+  );
+}
 
-      {/* Below here the chain is speaking, and the page changes voice to say
-          so: condensed capitals, monospaced labels, square corners, hairline
-          rows. A reader can tell which half of the page they are in without
-          reading a word. */}
-      <section className="hatch border-t border-rule">
-        <Measure wide className="py-16">
-          <SpecLabel index="01">On chain</SpecLabel>
+/* The three levels the contract holds, said the way somebody entering would ask
+   the question. Their order is the contract's, so the index is the answer. */
+const explained = [
+  "Anybody can read every build in this event, signed in or not. The organizer chose that before the rules were locked and cannot narrow it now.",
+  "Only people the organizer approved into this event can read the builds. If you are not on that list you will see nothing here, which is the rule working rather than an empty hackathon.",
+  "Nobody but the organizer reads a build before the result is published. What is below is what the chain records about a submission, which is a digest and a link rather than the work itself.",
+];
 
-          <SpecHeading className="mt-3">Where all of this lives</SpecHeading>
+/**
+ * Entering, which needs a wallet and therefore cannot be a link.
+ *
+ * The three steps live in `Join` and are read from the contract rather than
+ * from our database, so what is offered here is what the contract would
+ * actually accept from this address right now.
+ */
+function TakePart({ hackathon }: { hackathon: HackathonDetail }) {
+  return (
+    <>
+      <Join contractId={hackathon.contract_id} />
 
-          <div className="mt-10">
-            <SpecRows>
-              <SpecRow index="01" label="Rules digest" mark>
-                <SpecValue>{hackathon.constitution_hash ?? "not locked yet"}</SpecValue>
-              </SpecRow>
-
-              <SpecRow index="02" label="Hackathon contract" mark>
-                <div className="flex flex-wrap items-center gap-4">
-                  <SpecValue>{hackathon.contract_id}</SpecValue>
-                  <SpecButton
-                    href={`https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`}
-                  >
-                    Explorer
-                  </SpecButton>
-                </div>
-              </SpecRow>
-
-              <SpecRow index="03" label="Prize vault" mark={hackathon.vault_id !== null}>
-                {hackathon.vault_id === null ? (
-                  <span className="label text-ink-faint">not bound yet</span>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-4">
-                    <SpecValue>{hackathon.vault_id}</SpecValue>
-                    <SpecButton
-                      href={`https://stellar.expert/explorer/testnet/contract/${hackathon.vault_id}`}
-                    >
-                      Explorer
-                    </SpecButton>
-                  </div>
-                )}
-              </SpecRow>
-
-              <SpecRow index="04" label="Organizer">
-                <SpecValue>{hackathon.organizer ?? "not published yet"}</SpecValue>
-              </SpecRow>
-
-              <SpecRow index="05" label="Prize asset">
-                <SpecValue>{hackathon.prize_asset ?? "not published yet"}</SpecValue>
-              </SpecRow>
-            </SpecRows>
-          </div>
+      {/* `Join` renders nothing outside the one phase in which any of it is
+          allowed, so this says where things stand rather than leaving the tab
+          blank. A tab that is empty and a tab that is closed look the same and
+          are not. */}
+      {hackathon.phase !== 2 && (
+        <Measure wide className="py-14">
+          <p className="max-w-[36rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+            {hackathon.phase === null
+              ? "This event has not been published to the chain yet, so there is nothing to join."
+              : `Registration is not open. This hackathon is at ${phaseName(hackathon.phase)}, and the contract accepts an application only while it is open.`}
+          </p>
         </Measure>
-      </section>
-    </main>
+      )}
+    </>
   );
 }
 
