@@ -60,11 +60,21 @@ const mono = JetBrains_Mono({
    dark and framing a white document in black. */
 export const viewport = { colorScheme: "light" as const };
 
+/*
+  One title, on every page.
+
+  There was a template here and each page filled it in, so the tab read
+  "Account · StelHacks" in one place and "Judging · StelHacks" in another. With
+  several tabs open that is several different names for the same site and none
+  of them is the one somebody is looking for. The product is what the tab is
+  for; which room of it they are standing in is on the page in front of them.
+
+  Kept by not setting a title anywhere else. A page that exports one overrides
+  this, so the rule lives in the absence of those exports rather than in
+  anything this object can enforce.
+*/
 export const metadata: Metadata = {
-  title: {
-    default: "StelHacks",
-    template: "%s · StelHacks",
-  },
+  title: "StelHacks",
   description:
     "The prize is in a contract before registration opens, the rules are frozen, and you can check the result yourself.",
 };

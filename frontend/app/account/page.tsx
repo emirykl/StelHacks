@@ -18,8 +18,6 @@ import { authConfigured, currentUser, serverClient } from "../../lib/supabase/se
  * the button anyway would show an address and then have nowhere to put it.
  */
 
-export const metadata = { title: "Account" };
-
 /** Read fresh. A page that shows a stale session is showing somebody else's. */
 export const dynamic = "force-dynamic";
 

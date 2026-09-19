@@ -10,8 +10,6 @@ import { JudgeConsole } from "./console";
  * the wrong thing to make anybody wait for.
  */
 
-export const metadata = { title: "Judging" };
-
 export const dynamic = "force-dynamic";
 
 export default async function Judge({ params }: PageProps<"/judge/[contract]">) {

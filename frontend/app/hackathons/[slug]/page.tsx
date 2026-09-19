@@ -27,13 +27,6 @@ import { phaseName } from "../../../lib/phase";
 
 export const revalidate = 0;
 
-export async function generateMetadata({ params }: PageProps<"/hackathons/[slug]">) {
-  const { slug } = await params;
-  const hackathon = await findHackathon(slug);
-
-  return { title: hackathon?.name ?? "Hackathon" };
-}
-
 export default async function Hackathon({ params }: PageProps<"/hackathons/[slug]">) {
   const { slug } = await params;
   const hackathon = await findHackathon(slug);

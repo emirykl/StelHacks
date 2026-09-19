@@ -12,8 +12,6 @@ import { currentUser } from "../../lib/supabase/server";
  * without both would let somebody fill in twenty fields and then find out.
  */
 
-export const metadata = { title: "Create a hackathon" };
-
 export const dynamic = "force-dynamic";
 
 export default async function Create() {

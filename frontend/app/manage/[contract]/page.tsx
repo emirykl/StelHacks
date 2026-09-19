@@ -10,8 +10,6 @@ import { Console } from "./console";
  * thing to make somebody wait for.
  */
 
-export const metadata = { title: "Manage" };
-
 export const dynamic = "force-dynamic";
 
 export default async function Manage({ params }: PageProps<"/manage/[contract]">) {

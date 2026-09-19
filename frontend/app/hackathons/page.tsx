@@ -20,8 +20,6 @@ import {
  * stage the event is at and whether the prize is real.
  */
 
-export const metadata = { title: "Hackathons" };
-
 /** Read fresh. A phase that changed an hour ago and still reads as open is a lie. */
 export const revalidate = 0;
 

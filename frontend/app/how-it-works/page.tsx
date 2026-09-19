@@ -16,7 +16,6 @@ import { PHASES } from "../../lib/phase";
  */
 
 export const metadata = {
-  title: "How it works",
   description:
     "The ten stages a hackathon moves through, what each role does at each one, and what anybody can check without an account.",
 };
