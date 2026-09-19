@@ -444,7 +444,19 @@ deal. It is worth revisiting if fees ever turn out to be what stops people.
 
 **So the wallet layer is Stellar Wallets Kit, and only that.** The kit is not a
 wallet; it is the one connect surface behind which Freighter, xBull, Albedo,
-Lobstr, Hana and hardware wallets all sit. Binding to a profile goes through
+Lobstr, Hana and hardware wallets all sit.
+
+Four modules are named one by one rather than taken through the kit's
+`allowAllModules` helper. That helper pulls WalletConnect, Reown, Ledger,
+Trezor and the Coinbase SDK into the browser, which is a great deal of code and
+several open advisories for wallets nobody has asked for. Named individually
+and loaded on demand, the whole wallet layer measures about three hundred
+kilobytes and a visitor who never presses connect never fetches any of it.
+
+The kit draws its own modal, in Preact, and it does not look like the rest of
+this product. That is the price of not writing four wallet adapters ourselves,
+and it is accepted for now; the kit takes a theme, so it can be brought closer
+later without changing anything above it. Binding to a profile goes through
 `wallet_challenges` and `wallet_links`, which already exist: a challenge is
 issued to one person for one address, signed, and verified server side. No
 client ever writes a link.

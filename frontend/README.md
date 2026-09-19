@@ -109,6 +109,12 @@ type checked, it built, and it was wrong in a way only a screenshot could show.
 
 ## Not built yet
 
+`/account` connects a wallet and stops there. Connecting tells the page an
+address and proves nothing; the proof is a signature over a server issued
+challenge, and `wallet_challenges` and `wallet_links` are already in the schema
+waiting for it. That step needs a session, so it waits on Google sign in, which
+needs OAuth credentials.
+
 The surfaces that ask somebody to do something. The home page, the listing, the
 hackathon page and `/how-it-works` are the read only half and are here; the
 organizer wizard, judge console and participant flow are the half that writes,
