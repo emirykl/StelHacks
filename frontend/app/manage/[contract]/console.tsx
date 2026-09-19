@@ -9,6 +9,7 @@ import { arg, deploy, send, type Sent } from "../../../lib/send";
 import { prizeAssetOf, runningOf, type Running } from "../../../lib/running";
 import { PHASES, phaseName } from "../../../lib/phase";
 import { Applications } from "./applications";
+import { Screening } from "./screening";
 
 /**
  * Getting a hackathon from written to open, one legal call at a time.
@@ -139,6 +140,17 @@ export function Console({ contractId }: { contractId: string }) {
         <Applications
           contractId={contractId}
           reviewer={mine ? (wallet?.address ?? null) : null}
+        />
+      )}
+
+      {/* Screening runs from the moment projects can arrive rather than only
+          in the screening phase, because the entries are worth seeing while
+          they come in and the contract decides for itself when striking one
+          out is still allowed. */}
+      {state.phase >= 2 && state.phase <= 3 && (
+        <Screening
+          contractId={contractId}
+          organizer={mine ? (wallet?.address ?? null) : null}
         />
       )}
 
