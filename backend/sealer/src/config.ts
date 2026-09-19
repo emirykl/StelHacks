@@ -27,4 +27,14 @@ export const settings = {
    */
   sealerSecret: required("SEALER_SECRET_KEY"),
   port: Number(process.env["SEALER_PORT"] ?? 8787),
+  /**
+   * The one page allowed to reach this service from a browser.
+   *
+   * A judge scores in a browser, so the service has to answer a cross origin
+   * request or the card never leaves the page. Named rather than opened to
+   * everything: `/seal` takes no signature and publishes a root, and while
+   * anybody with a terminal can already call it, there is no reason to let an
+   * unrelated site do it through a visitor's browser as well.
+   */
+  allowedOrigin: process.env["SEALER_ALLOWED_ORIGIN"] ?? "http://localhost:3000",
 } as const;

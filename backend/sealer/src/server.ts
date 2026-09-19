@@ -227,10 +227,29 @@ async function proof(contract: string, kind: "scorecards" | "ballots", leaf: str
 const routes = createServer((request, response) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
 
+  /*
+    The judge's browser asks permission before it will send a card at all, and
+    a service that answers that question with "not a route" fails as a network
+    error the page cannot explain. So every reply carries the headers and the
+    preflight is answered on its own.
+  */
+  const cors: Record<string, string> = {
+    "access-control-allow-origin": settings.allowedOrigin,
+    "access-control-allow-headers": "content-type",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+  };
+
   const answer = (status: number, body: unknown): void => {
-    response.writeHead(status, { "content-type": "application/json" });
+    response.writeHead(status, { "content-type": "application/json", ...cors });
     response.end(JSON.stringify(body));
   };
+
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, cors);
+    response.end();
+
+    return;
+  }
 
   const settle = (result: unknown): void => {
     const failure = result as Failure;
