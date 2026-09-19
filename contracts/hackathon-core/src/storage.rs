@@ -71,6 +71,15 @@ pub enum DataKey {
     /// How many scorecards a project has had revealed, and their sum, so the
     /// average never needs the whole list loaded.
     ScoreTally(u32),
+    /// The digest sealing every community ballot until the reveal.
+    BallotRoot,
+    /// Whether one wallet's ballot has been counted.
+    BallotCounted(Address),
+    /// How many ballots one project has been given.
+    VoteCount(u32),
+    /// The largest vote count any project holds, which is the denominator the
+    /// community score is measured against.
+    TopVoteCount,
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -344,6 +353,59 @@ pub fn load_score_tally(env: &Env, team: u32) -> ScoreTally {
         .persistent()
         .get(&DataKey::ScoreTally(team))
         .unwrap_or(ScoreTally { count: 0, total: 0 })
+}
+
+pub fn save_ballot_root(env: &Env, root: &BytesN<32>) {
+    env.storage().instance().set(&DataKey::BallotRoot, root);
+    touch(env);
+}
+
+pub fn load_ballot_root(env: &Env) -> Result<BytesN<32>, Error> {
+    env.storage()
+        .instance()
+        .get(&DataKey::BallotRoot)
+        .ok_or(Error::BallotRootMissing)
+}
+
+pub fn has_ballot_root(env: &Env) -> bool {
+    env.storage().instance().has(&DataKey::BallotRoot)
+}
+
+pub fn has_ballot_counted(env: &Env, voter: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::BallotCounted(voter.clone()))
+}
+
+/// Counts one ballot, marking the voter so they cannot be counted again.
+pub fn count_ballot(env: &Env, voter: &Address, team: u32) {
+    let voted = DataKey::BallotCounted(voter.clone());
+    env.storage().persistent().set(&voted, &true);
+    touch_entry(env, &voted);
+
+    let tally = vote_count(env, team) + 1;
+    let counter = DataKey::VoteCount(team);
+    env.storage().persistent().set(&counter, &tally);
+    touch_entry(env, &counter);
+
+    if tally > top_vote_count(env) {
+        env.storage().instance().set(&DataKey::TopVoteCount, &tally);
+        touch(env);
+    }
+}
+
+pub fn vote_count(env: &Env, team: u32) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::VoteCount(team))
+        .unwrap_or(0u32)
+}
+
+pub fn top_vote_count(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TopVoteCount)
+        .unwrap_or(0u32)
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

@@ -7,6 +7,7 @@
 //! authorization is demanded, and that storage survives between calls. The
 //! product's promises live at that level, so this is where they are checked.
 
+mod community;
 mod funding;
 mod judging;
 mod registration;

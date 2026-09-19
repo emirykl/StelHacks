@@ -208,6 +208,38 @@ pub struct ScoreRevealed {
     pub weighted: u32,
 }
 
+/// Every community ballot is now sealed behind one digest.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BallotRootPublished {
+    pub root: BytesN<32>,
+}
+
+/// One ballot was opened and counted.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BallotCounted {
+    #[topic]
+    pub voter: Address,
+    pub team: u32,
+    /// The project's running total, so a reader can follow the count without
+    /// replaying every ballot.
+    pub votes: u32,
+}
+
+pub fn ballot_root_published(env: &Env, root: &BytesN<32>) {
+    BallotRootPublished { root: root.clone() }.publish(env);
+}
+
+pub fn ballot_counted(env: &Env, voter: &Address, team: u32, votes: u32) {
+    BallotCounted {
+        voter: voter.clone(),
+        team,
+        votes,
+    }
+    .publish(env);
+}
+
 pub fn score_root_published(env: &Env, root: &BytesN<32>) {
     ScoreRootPublished { root: root.clone() }.publish(env);
 }

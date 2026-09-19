@@ -567,6 +567,124 @@ impl HackathonCore {
         Ok(weighted)
     }
 
+    /// Seals every community ballot behind one digest.
+    ///
+    /// The same address that seals the scorecards seals the ballots, and for
+    /// the same reason: the crowd votes in a single action off chain, and
+    /// asking two hundred people to come back and reveal would lose most of
+    /// them. What the sealer cannot do is drop a ballot without the voter who
+    /// cast it being able to prove the omission.
+    pub fn publish_ballot_root(env: Env, root: BytesN<32>) -> Result<(), Error> {
+        let constitution = storage::load_constitution(&env)?;
+        if !constitution.community_vote_enabled() {
+            return Err(Error::CommunityVoteDisabled);
+        }
+
+        let sealer = constitution
+            .judging_mode
+            .sealer()
+            .ok_or(Error::WrongJudgingMode)?;
+        sealer.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Judging {
+            return Err(Error::WrongPhase);
+        }
+        if env.ledger().timestamp() < state.schedule.community_vote_closes_at {
+            return Err(Error::DeadlineNotReached);
+        }
+        if storage::has_ballot_root(&env) {
+            return Err(Error::BallotRootAlreadyPublished);
+        }
+
+        storage::save_ballot_root(&env, &root);
+        events::ballot_root_published(&env, &root);
+
+        Ok(())
+    }
+
+    /// Opens one sealed ballot and counts it.
+    ///
+    /// Three gates stand between a sealed ballot and the tally, and each one
+    /// exists because of a specific way a vote can be bought. The voter has to
+    /// have been approved before registration closed, so an organizer cannot
+    /// admit an electorate once they know what it would decide. They cannot
+    /// have been counted before, so one wallet is one vote. And they cannot be
+    /// on the team they chose, so nobody votes for themselves.
+    ///
+    /// Like the scorecard reveal, this needs no signature: the proof is what
+    /// authorizes it.
+    pub fn reveal_ballot(
+        env: Env,
+        voter: Address,
+        team_id: u32,
+        proof: Vec<BytesN<32>>,
+    ) -> Result<u32, Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Reveal {
+            return Err(Error::WrongPhase);
+        }
+
+        let root = storage::load_ballot_root(&env)?;
+        let leaf = hashing::ballot_leaf(&env, &voter, team_id);
+
+        if !merkle::verify(&env, &root, &leaf, &proof) {
+            return Err(Error::ProofDoesNotMatchRoot);
+        }
+
+        if storage::has_ballot_counted(&env, &voter) {
+            return Err(Error::BallotAlreadyCounted);
+        }
+
+        if !storage::load_registration(&env, &voter)?
+            .may_vote(state.schedule.registration_closes_at)
+        {
+            return Err(Error::VoterNotEligible);
+        }
+
+        let team = storage::load_team(&env, team_id)?;
+        if team.has_member(&voter) {
+            return Err(Error::SelfVoteRejected);
+        }
+
+        // A project that was ruled out during screening is not in the running,
+        // so a ballot for it counts toward nothing.
+        if !storage::load_submission(&env, team_id)?.is_valid() {
+            return Err(Error::SubmissionNotEligible);
+        }
+
+        storage::count_ballot(&env, &voter, team_id);
+        let votes = storage::vote_count(&env, team_id);
+
+        events::ballot_counted(&env, &voter, team_id, votes);
+
+        Ok(votes)
+    }
+
+    /// The digest sealing the ballots.
+    pub fn ballot_root(env: Env) -> Result<BytesN<32>, Error> {
+        storage::load_ballot_root(&env)
+    }
+
+    /// How many ballots a project has been given.
+    pub fn vote_count(env: Env, team_id: u32) -> u32 {
+        storage::vote_count(&env, team_id)
+    }
+
+    /// The largest vote count any project holds.
+    ///
+    /// This is the denominator the community score is measured against, so the
+    /// project the crowd liked most scores a hundred and the rest are placed
+    /// relative to it.
+    pub fn top_vote_count(env: Env) -> u32 {
+        storage::top_vote_count(&env)
+    }
+
+    /// Whether this wallet's ballot has already been counted.
+    pub fn has_voted(env: Env, voter: Address) -> bool {
+        storage::has_ballot_counted(&env, &voter)
+    }
+
     /// The digest sealing the scorecards.
     pub fn score_root(env: Env) -> Result<BytesN<32>, Error> {
         storage::load_score_root(&env)

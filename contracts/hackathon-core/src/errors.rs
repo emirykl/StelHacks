@@ -101,6 +101,9 @@ pub enum Error {
     VoteAlreadyCast = 101,
     SelfVoteRejected = 102,
     CommunityVoteDisabled = 103,
+    BallotRootAlreadyPublished = 104,
+    BallotRootMissing = 105,
+    BallotAlreadyCounted = 106,
 
     // Screening, disqualification and appeal
     AlreadyInvalidated = 120,
