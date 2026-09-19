@@ -62,6 +62,10 @@ pub enum Error {
     SubmissionNotFound = 64,
     SubmissionAlreadyExists = 65,
     SubmissionNotEligible = 66,
+    ProjectNameMissing = 67,
+    RepositoryLinkRequired = 68,
+    DemoVideoLinkRequired = 69,
+    LiveUrlRequired = 70,
 
     // Judging
     ScorecardAlreadyRecorded = 80,

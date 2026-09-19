@@ -8,6 +8,7 @@ use crate::constitution::scoring::{total_prize_amount, validate_prize_tiers, Pri
 use crate::constitution::visibility::ProjectVisibility;
 use crate::constitution::voting::VotePolicy;
 use crate::errors::Error;
+use crate::submission::SubmissionRequirements;
 
 /// The format version of the constitution, so a reader can tell which shape it
 /// is looking at once this structure has changed a few times.
@@ -55,6 +56,8 @@ pub struct Constitution {
     pub vote: VotePolicy,
     /// Who may read the submitted projects while the event runs.
     pub visibility: ProjectVisibility,
+    /// Which links a team has to supply with their project.
+    pub submission_requirements: SubmissionRequirements,
     /// Payable positions per track.
     pub prize_tiers: Vec<PrizeTier>,
     /// The chain that separates two projects on the same score.
@@ -286,6 +289,7 @@ mod test {
                 community_bps: 2_000,
             },
             visibility: ProjectVisibility::Public,
+            submission_requirements: SubmissionRequirements::code_and_video(),
             prize_tiers: vec![
                 env,
                 PrizeTier {

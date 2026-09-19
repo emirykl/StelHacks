@@ -9,6 +9,7 @@
 mod constitution;
 mod errors;
 mod phase;
+mod submission;
 mod team;
 
 pub use constitution::{
@@ -20,6 +21,7 @@ pub use constitution::{
 };
 pub use errors::Error;
 pub use phase::Phase;
+pub use submission::{SubmissionMetadata, SubmissionRequirements};
 pub use team::OrganizingTeam;
 
 use soroban_sdk::contract;
