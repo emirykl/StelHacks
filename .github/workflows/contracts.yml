@@ -1,0 +1,73 @@
+name: Contracts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: contracts
+
+jobs:
+  check:
+    name: Format, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the compiler, the components and the wasm
+      # target, so this both reports and installs what the repository asks for.
+      - name: Resolve the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --all
+
+  reproducible-build:
+    name: Reproducible wasm build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      # A contract holding prize money has to be rebuildable byte for byte from
+      # a tagged commit, otherwise nobody can check that the deployed wasm is
+      # the code in this repository. Building twice from clean is the cheapest
+      # way to catch the day that stops being true.
+      - name: Build
+        run: cargo build --release --target wasm32v1-none
+
+      - name: Record the artifact hashes
+        run: sha256sum target/wasm32v1-none/release/*.wasm | tee first-build.txt
+
+      - name: Rebuild from clean
+        run: |
+          cargo clean
+          cargo build --release --target wasm32v1-none
+
+      - name: Compare against the first build
+        run: sha256sum --check first-build.txt

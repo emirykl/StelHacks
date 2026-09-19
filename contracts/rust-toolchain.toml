@@ -1,0 +1,8 @@
+[toolchain]
+# Pinned rather than tracking stable, because a contract that holds prize money
+# has to be rebuildable byte for byte from a tagged commit years later. Raising
+# this version is a deliberate change with its own commit.
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32v1-none"]
+profile = "minimal"
