@@ -33,13 +33,25 @@ comment on column public.hackathons.tags is
 
 -- Bounded, because these reach a card and a card has a size. A tagline already
 -- has a limit for the same reason and these follow it.
+--
+-- The tag rule is a count and nothing more. A check constraint may not contain
+-- a subquery, and looking at every element of an array needs one, so the length
+-- of an individual tag is left to the form that writes it. That is the weaker
+-- guarantee and it is the one that is certainly enforceable here; an
+-- overlong tag wraps on a card, which is untidy rather than wrong.
+--
+-- Dropped first so this file can be run twice. Postgres has no
+-- `add constraint if not exists`, and a migration that fails the second time it
+-- is pasted into an editor is a migration nobody can safely rerun.
+alter table public.hackathons
+  drop constraint if exists hackathons_location_length,
+  drop constraint if exists hackathons_banner_url_length,
+  drop constraint if exists hackathons_tags_bounded;
+
 alter table public.hackathons
   add constraint hackathons_location_length check (char_length(location) <= 80),
   add constraint hackathons_banner_url_length check (char_length(banner_url) <= 2048),
-  add constraint hackathons_tags_bounded check (
-    cardinality(tags) <= 8
-    and not exists (select 1 from unnest(tags) as tag where char_length(tag) > 40)
-  );
+  add constraint hackathons_tags_bounded check (cardinality(tags) <= 8);
 
 -- No new grants. `hackathons` is already readable by everyone and writable only
 -- by the service role, and these columns are part of the same row: a column
