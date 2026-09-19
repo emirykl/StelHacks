@@ -12,8 +12,13 @@ import { currentUser } from "../../lib/supabase/server";
 export async function Header() {
   const user = await currentUser();
 
+  /* The bottom corners are rounded, which turns the hairline underneath into a
+     line that curls up as it reaches either edge rather than running off the
+     side of the screen. It is what makes the header read as a piece of
+     furniture sitting on the page instead of a band painted across it, and the
+     curl is small enough to be felt rather than noticed. */
   return (
-    <header className="sticky top-0 z-10 border-b border-rule bg-paper/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-10 rounded-b-[1.25rem] border-b border-rule bg-paper/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center justify-between px-6">
         <a href="/" className="flex items-center gap-2.5">
           {/* The mark ships on its own black tile rather than transparent. The
