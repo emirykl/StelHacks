@@ -15,6 +15,7 @@ import { chromium } from "playwright";
 const pages = [
   ["home", "/"],
   ["hackathons", "/hackathons"],
+  ["how-it-works", "/how-it-works"],
   ["hackathon", "/hackathons/first-light"],
 ];
 

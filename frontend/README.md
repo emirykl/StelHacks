@@ -109,9 +109,18 @@ type checked, it built, and it was wrong in a way only a screenshot could show.
 
 ## Not built yet
 
-The surfaces themselves. The home page and the hackathon page are here as the
-reference for the system; the organizer wizard, judge console, participant flow
-and transparency page follow. The check currently covers the four claims on the
-strip; the ranking, the scorecard proofs and the payments are the next things a
-reader should be able to confirm the same way. Google sign in needs OAuth
-credentials, which are tracked in the roadmap's deferred table.
+The surfaces that ask somebody to do something. The home page, the listing, the
+hackathon page and `/how-it-works` are the read only half and are here; the
+organizer wizard, judge console and participant flow are the half that writes,
+and every one of them needs a wallet to sign with. Which wallet is still an open
+decision in `docs/decisions.md`, so they wait on it rather than being built
+against a guess.
+
+`/how-it-works` is the canonical description of the lifecycle, taken from
+`phase.rs` rather than written alongside it. When those three surfaces are
+built, they implement what that page already says.
+
+The check currently covers the four claims on the strip; the ranking, the
+scorecard proofs and the payments are the next things a reader should be able to
+confirm the same way. Google sign in needs OAuth credentials, which are tracked
+in the roadmap's deferred table.

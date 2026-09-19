@@ -32,7 +32,6 @@ export function Header() {
           {[
             ["Hackathons", "/hackathons"],
             ["How it works", "/how-it-works"],
-            ["Builders", "/builders"],
           ].map(([label, href]) => (
             <a
               key={href}
