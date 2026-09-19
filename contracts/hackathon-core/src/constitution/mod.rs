@@ -5,6 +5,7 @@
 //! to prove the running competition is still the one it read.
 
 mod discretion;
+mod document;
 mod judging;
 mod ranking;
 mod schedule;
@@ -13,6 +14,7 @@ mod visibility;
 mod voting;
 
 pub use discretion::{DiscretionPolicy, RefundRoute, SettlementMode, MAX_SETTLEMENT_SAFETY_WINDOW};
+pub use document::{Constitution, JudgeAssignment, CONSTITUTION_VERSION};
 pub use judging::JudgingMode;
 pub use ranking::{validate_tie_break, TieBreakRule};
 pub use schedule::{Deadline, ExtensionPolicy, Schedule};

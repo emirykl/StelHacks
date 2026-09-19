@@ -37,6 +37,10 @@ pub enum Error {
     ClaimPeriodInvalid = 33,
     RefundRouteInvalid = 34,
     CancellationThresholdInvalid = 35,
+    TracksMissing = 36,
+    JudgesMissing = 37,
+    VisibilityConflictsWithVote = 38,
+    NoAwardRefundNeedsAnotherTrack = 39,
 
     // Lifecycle
     WrongPhase = 40,
