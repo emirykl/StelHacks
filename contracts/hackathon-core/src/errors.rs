@@ -31,6 +31,12 @@ pub enum Error {
     VoteSplitInvalid = 27,
     PrizeTiersInvalid = 28,
     TieBreakInvalid = 29,
+    DisqualificationThresholdInvalid = 30,
+    AppealWindowInvalid = 31,
+    SettlementWindowInvalid = 32,
+    ClaimPeriodInvalid = 33,
+    RefundRouteInvalid = 34,
+    CancellationThresholdInvalid = 35,
 
     // Lifecycle
     WrongPhase = 40,
