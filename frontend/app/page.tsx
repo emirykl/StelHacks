@@ -19,7 +19,7 @@ export default function Home() {
 }
 
 /**
- * The editorial hero: serif display, generous air, halftone behind.
+ * The editorial hero: display type, generous air, halftone behind.
  *
  * The texture sits at an opacity where you would not name it if asked. That is
  * the intended dose; at the point it becomes a pattern it has stopped being

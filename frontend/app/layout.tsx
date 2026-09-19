@@ -1,21 +1,28 @@
 import type { Metadata } from "next";
-import { Archivo, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { Archivo, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 
 import { Footer, Header } from "./components/chrome";
 import { WalletProvider } from "./components/wallet-context";
 import "./globals.css";
 
 /**
- * The one editorial borrowing that appears on every page.
+ * The display face, which is every heading on every page.
  *
  * The interface face is the system stack and is set in CSS, because on Apple
  * hardware that resolves to SF Pro and shipping a lookalike would be a worse
  * version of a font the reader already has. Only the display face is loaded.
+ *
+ * A high contrast serif sat here first and it read as a newspaper: correct for
+ * an essay, wrong for a place people come to build something over a weekend.
+ * Bricolage is a display grotesque with the cuts left slightly uneven, so a
+ * headline has a voice without having a collar. Both non weight axes are
+ * loaded: `opsz` so a large heading tightens the way a display cut should,
+ * `wdth` so a long name can be pulled in rather than wrapped.
  */
-const editorial = Instrument_Serif({
-  variable: "--font-editorial",
+const display = Bricolage_Grotesque({
+  variable: "--font-display-loaded",
   subsets: ["latin"],
-  weight: "400",
+  axes: ["opsz", "wdth"],
   display: "swap",
 });
 
@@ -66,7 +73,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${editorial.variable} ${technical.variable} ${mono.variable} h-full`}
+      className={`${display.variable} ${technical.variable} ${mono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-paper text-ink">
         {/* Wraps everything, because the header and the account page both ask

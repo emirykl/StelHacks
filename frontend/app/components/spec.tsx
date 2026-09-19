@@ -6,8 +6,8 @@ import type { ReactNode } from "react";
  * Everything in this file is for a surface where the chain is speaking: a
  * digest, a phase, a ranking, a payment. It reads as a specification because
  * that is what it is, and it is deliberately a different register from the
- * serif and the prose around it. A reader should be able to tell which half of
- * a page they are in without reading a word.
+ * display face and the prose around it. A reader should be able to tell which
+ * half of a page they are in without reading a word.
  *
  * Square corners throughout. A radius is a softening and nothing about a digest
  * is soft.

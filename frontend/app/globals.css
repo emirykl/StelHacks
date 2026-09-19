@@ -12,18 +12,18 @@
   restraint, the motion you notice only when it is missing. Ninety percent of
   any screen is this and it is what makes an interface feel calm.
 
-  EDITORIAL supplies the human voice. The high contrast serif, the halftone,
-  the generous measure. A hackathon's name, a headline, a paragraph somebody
-  wrote: anywhere a person is speaking.
+  EDITORIAL supplies the human voice. The display grotesque, the halftone, the
+  generous measure. A hackathon's name, a headline, a paragraph somebody wrote:
+  anywhere a person is speaking.
 
   TECHNICAL BRUTALISM supplies the chain's voice. Condensed capitals,
   monospaced labels, bracketed indices, hairline spec rows, square corners,
   tabular figures. A digest, an address, a phase, a ranking, a payment:
   anywhere the chain is speaking.
 
-  So the typeface is the argument. Serif means a person said this. Mono and
-  condensed caps mean the chain did, and you can go and check. An interface
-  that mixed them would be making a claim it could not support.
+  So the typeface is the argument. The display face means a person said this.
+  Mono and condensed caps mean the chain did, and you can go and check. An
+  interface that mixed them would be making a claim it could not support.
 
   The rule: one voice per surface, and never two loud at once.
 */
@@ -34,19 +34,20 @@
      Pro. Shipping a lookalike would be a worse version of a font the reader
      already has installed.
 
-     The display face is the one editorial borrowing that appears on every
-     page. Instrument Serif is high contrast and narrow, which is what makes a
-     large headline read as considered rather than merely big. */
+     The display face carries every heading. Bricolage Grotesque is a display
+     grotesque whose cuts are deliberately a little uneven, which is what keeps
+     a large headline from reading as an announcement from an institution. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: var(--font-editorial), Georgia, "Times New Roman", serif;
+  --font-display: var(--font-display-loaded), "Helvetica Neue", Arial,
+    sans-serif;
   --font-technical: var(--font-technical), "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-mono-loaded), ui-monospace, "SF Mono", monospace;
 
   /* Surfaces ---------------------------------------------------------------
      Warm rather than pure. A hackathon page is read for a long time, and pure
      white at full brightness is where that starts to hurt; the paper tint is
-     also what lets the editorial serif sit on it without looking clinical. */
+     also what lets the display face sit on it without looking clinical. */
   --color-paper: oklch(99.2% 0.003 95);
   --color-paper-sunk: oklch(97.4% 0.004 95);
   --color-ink: oklch(19% 0.008 60);
@@ -111,9 +112,9 @@
 
   Following the system into dark mode was the earlier arrangement and it is
   gone. This product is read like a document rather than used like an
-  application: the editorial layout, the serif, the halftone and the hairlines
-  are all built for a light ground, and the inverted sections only read as a
-  change of register because everything around them does not.
+  application: the editorial layout, the display type, the halftone and the
+  hairlines are all built for a light ground, and the inverted sections only
+  read as a change of register because everything around them does not.
 
   Dark surfaces are still here and still used, but as a choice a section makes
   rather than a mode the whole site enters. The proof strip inverts, the chain
@@ -144,14 +145,22 @@
   }
 
   /* Every display heading, in one place, so a page never has to remember to
-     ask for the serif. */
+     ask for the display face.
+
+     Semibold rather than regular. The serif that used to sit here got its
+     presence from stroke contrast and needed no weight; a grotesque gets it
+     from mass, and set at 400 a headline reads as body copy that happened to
+     be enlarged. The optical size axis is pushed near the top of its range for
+     the same reason: it is what tightens the spacing and sharpens the joints
+     into something drawn for a headline rather than for a paragraph. */
   h1,
   h2,
   .display {
     font-family: var(--font-display);
-    font-weight: 400;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
+    font-weight: 600;
+    font-variation-settings: "opsz" 40;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
   }
 
   /* A digest, an address, an amount. Tabular figures so a column of them lines

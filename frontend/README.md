@@ -29,7 +29,7 @@ is the system stack, which on Apple hardware resolves to SF Pro; shipping a
 lookalike would be a worse version of a font the reader already has.
 
 **The editorial tradition behind stellar.org supplies the accent.** Named
-precisely: Swiss typographic layout with a high contrast serif for display type,
+precisely: Swiss typographic layout with a display grotesque for headings,
 a halftone dot field for texture, and risograph spot illustration. Used at three
 points and no more.
 
