@@ -186,6 +186,26 @@ export async function watch(onChange: (address: string | undefined) => void): Pr
 }
 
 /**
+ * Hand a built transaction to the wallet and get the signed bytes back.
+ *
+ * The kit talks to the extension; nothing here sees a key. What comes back is
+ * an envelope with a signature on it, ready to submit.
+ */
+export async function signTransaction(xdr: string): Promise<string> {
+  const instance = await kit();
+
+  try {
+    const { signedTxXdr } = await instance.signTransaction(xdr, {
+      networkPassphrase: network,
+    });
+
+    return signedTxXdr;
+  } catch (thrown) {
+    throw new Error(explain(thrown));
+  }
+}
+
+/**
  * Sign the server's challenge.
  *
  * The wallet signs a plain message rather than a transaction, because nothing

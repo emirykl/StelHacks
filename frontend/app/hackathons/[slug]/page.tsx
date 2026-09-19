@@ -10,6 +10,7 @@ import {
   SpecValue,
 } from "../../components/spec";
 import { CheckableProofStrip } from "../../components/checkable";
+import { Join } from "./join";
 import { type Proof } from "../../components/proof-strip";
 import { findHackathon, type HackathonDetail } from "../../../lib/chain";
 import { phaseName } from "../../../lib/phase";
@@ -75,6 +76,8 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
           </p>
         </Measure>
       )}
+
+      <Join contractId={hackathon.contract_id} phase={hackathon.phase} />
 
       {/* Below here the chain is speaking, and the page changes voice to say
           so: condensed capitals, monospaced labels, square corners, hairline
