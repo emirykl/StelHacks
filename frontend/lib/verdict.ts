@@ -1,5 +1,5 @@
 import { phaseName } from "./phase";
-import type { Proof } from "../app/components/proof-strip";
+import type { Claim, Proof } from "../app/components/proof-strip";
 
 /**
  * Deciding what a check found, with no network in sight.
@@ -102,21 +102,21 @@ export function bound(
  * outage into an accusation.
  */
 export function settle(proofs: Proof[], findings: Findings): Proof[] {
-  const checks: Record<string, Check | undefined> = {
-    "Rules digest": findings.digest,
-    Stage: findings.phase,
-    "Prize vault": findings.vault,
+  const checks: Partial<Record<Claim, Check>> = {
+    digest: findings.digest,
+    phase: findings.phase,
+    vault: findings.vault,
   };
 
   return proofs.map((proof) => {
     /* The address needs no separate call. If the contract answered at all, a
        contract exists at this address and it is the one the page named; that
        is the entire claim the row makes. */
-    if (proof.label === "Hackathon contract") {
+    if (proof.key === "contract") {
       return { ...proof, standing: findings.reached ? ("verified" as const) : proof.standing };
     }
 
-    const result = checks[proof.label];
+    const result = checks[proof.key];
 
     if (result === undefined || "failed" in result) {
       return proof;
@@ -124,7 +124,7 @@ export function settle(proofs: Proof[], findings: Findings): Proof[] {
 
     return result.matches
       ? { ...proof, standing: "verified" as const }
-      : { ...proof, standing: "broken" as const, found: legible(proof.label, result.found) };
+      : { ...proof, standing: "broken" as const, found: legible(proof.key, result.found) };
   });
 }
 
@@ -135,8 +135,8 @@ export function settle(proofs: Proof[], findings: Findings): Proof[] {
  * under a row that reads "Judging" would leave a reader comparing two things
  * that are not written in the same language.
  */
-function legible(label: string, found: string): string {
-  return label === "Stage" ? phaseName(Number(found)) : found;
+function legible(key: Claim, found: string): string {
+  return key === "phase" ? phaseName(Number(found)) : found;
 }
 
 /**

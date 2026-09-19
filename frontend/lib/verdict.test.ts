@@ -101,15 +101,18 @@ describe("the vault, where a refusal is an answer", () => {
 });
 
 describe("folding the findings back into the strip", () => {
+  /* The wording is deliberately not the wording the page uses. These rows are
+     found by their key, and a test that reused the real copy would pass even
+     if the matching went back to comparing sentences. */
   const proofs: Proof[] = [
-    { label: "Rules digest", value: "abc", standing: "unchecked" },
-    { label: "Stage", value: "Funding", standing: "unchecked" },
-    { label: "Hackathon contract", value: "CCQ7…HNB", standing: "unchecked" },
-    { label: "Prize vault", value: "not bound yet", standing: "unchecked" },
+    { key: "digest", claim: "d", because: "", value: "abc", standing: "unchecked" },
+    { key: "phase", claim: "p", because: "", value: "Funding", standing: "unchecked" },
+    { key: "contract", claim: "c", because: "", value: "CCQ7…HNB", standing: "unchecked" },
+    { key: "vault", claim: "v", because: "", value: "not bound yet", standing: "unchecked" },
   ];
 
   const standings = (findings: Findings) =>
-    Object.fromEntries(settle(proofs, findings).map((p) => [p.label, p.standing]));
+    Object.fromEntries(settle(proofs, findings).map((p) => [p.key, p.standing]));
 
   it("marks what was confirmed and leaves the rest alone", () => {
     expect(
@@ -119,10 +122,10 @@ describe("folding the findings back into the strip", () => {
         vault: { found: "not bound yet", matches: true },
       }),
     ).toEqual({
-      "Rules digest": "verified",
-      Stage: "unchecked",
-      "Hackathon contract": "verified",
-      "Prize vault": "verified",
+      digest: "verified",
+      phase: "unchecked",
+      contract: "verified",
+      vault: "verified",
     });
   });
 
@@ -131,16 +134,16 @@ describe("folding the findings back into the strip", () => {
    * contract that exists at the address the page named.
    */
   it("takes any answer at all as proof the contract is where the page said", () => {
-    expect(standings({ reached: true })["Hackathon contract"]).toBe("verified");
+    expect(standings({ reached: true })["contract"]).toBe("verified");
   });
 
   /** Nothing came back, so nothing was learned, including about the address. */
   it("confirms nothing when the contract never answered", () => {
     expect(standings({ reached: false, digest: { failed: "connection refused" } })).toEqual({
-      "Rules digest": "unchecked",
-      Stage: "unchecked",
-      "Hackathon contract": "unchecked",
-      "Prize vault": "unchecked",
+      digest: "unchecked",
+      phase: "unchecked",
+      contract: "unchecked",
+      vault: "unchecked",
     });
   });
 

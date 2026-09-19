@@ -151,7 +151,7 @@ function TakePart({ hackathon }: { hackathon: HackathonDetail }) {
 }
 
 /**
- * The four claims the strip carries.
+ * The four promises the strip makes, in the words a person would use.
  *
  * Every one of them leaves here reading `unchecked`, and that is not a
  * placeholder. The page is server rendered and nothing on this side has
@@ -162,27 +162,38 @@ function TakePart({ hackathon }: { hackathon: HackathonDetail }) {
 function proofsFor(hackathon: HackathonDetail): Proof[] {
   return [
     {
-      label: "Rules digest",
-      hint: "A fingerprint of the frozen rules. Change one word of them and this changes.",
+      key: "digest",
+      claim: "The rules cannot change now",
+      because:
+        "They were frozen before anybody registered. This fingerprint would be different if a single word of them had moved since.",
       value: hackathon.constitution_hash ?? "not locked yet",
       standing: "unchecked",
     },
     {
-      label: "Stage",
-      hint: "Where the event has got to. The contract refuses anything out of order.",
+      key: "phase",
+      /* Not "the event is at Open", which would say the same word twice: once
+         as the claim and again as the value under it. The claim is what the
+         phase machine guarantees; the value is where that machine has got to. */
+      claim: "No stage can be skipped",
+      because:
+        "The stages run in a fixed order and the contract refuses anything out of turn. Nobody can judge before submissions close. This is where it has got to:",
       value: phaseName(hackathon.phase),
       standing: "unchecked",
     },
     {
-      label: "Hackathon contract",
-      hint: "The program running this event. It holds the rules and computes the result.",
+      key: "contract",
+      claim: "A program runs this, not us",
+      because:
+        "It holds the rules, records the entries and computes the ranking. Open it in an explorer and read it yourself.",
       value: shorten(hackathon.contract_id),
       standing: "unchecked",
       href: `https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`,
     },
     {
-      label: "Prize vault",
-      hint: "Where the money sits. Nobody can withdraw from it, including us.",
+      key: "vault",
+      claim: "The prize money is already deposited",
+      because:
+        "It was paid in before registration opened and the vault has no withdraw function, for the organizer or for us. It only pays winners.",
       value: hackathon.vault_id === null ? "not bound yet" : shorten(hackathon.vault_id),
       standing: "unchecked",
       ...(hackathon.vault_id === null
@@ -194,5 +205,5 @@ function proofsFor(hackathon: HackathonDetail): Proof[] {
 
 /** Enough of an address to recognise, with the middle left out. */
 function shorten(address: string): string {
-  return `${address.slice(0, 8)}…${address.slice(-6)}`;
+  return `${address.slice(0, 8)}\u2026${address.slice(-6)}`;
 }
