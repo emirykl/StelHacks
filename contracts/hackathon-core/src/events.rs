@@ -227,6 +227,34 @@ pub struct BallotCounted {
     pub votes: u32,
 }
 
+/// One track's ranking is settled.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrackRanked {
+    #[topic]
+    pub track: Symbol,
+    /// How many projects made it into the ranking, which is not the same as how
+    /// many entered: screened out and short of quorum are both left out.
+    pub ranked: u32,
+}
+
+/// The result is closed and the money can move.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResultsFinalized {}
+
+pub fn track_ranked(env: &Env, track: &Symbol, ranked: u32) {
+    TrackRanked {
+        track: track.clone(),
+        ranked,
+    }
+    .publish(env);
+}
+
+pub fn results_finalized(env: &Env) {
+    ResultsFinalized {}.publish(env);
+}
+
 pub fn ballot_root_published(env: &Env, root: &BytesN<32>) {
     BallotRootPublished { root: root.clone() }.publish(env);
 }

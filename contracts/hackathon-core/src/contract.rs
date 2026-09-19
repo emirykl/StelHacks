@@ -1,14 +1,15 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec};
 
-use crate::constitution::{Constitution, TeamPolicy};
+use crate::constitution::{Constitution, TeamPolicy, TieBreakRule};
 use crate::errors::Error;
 use crate::events;
 use crate::hashing::{self, hash_constitution};
 use crate::merkle;
 use crate::organizers::OrganizingTeam;
 use crate::phase::Phase;
+use crate::results::{self, Candidate, Placement};
 use crate::roster::{Registration, Team};
-use crate::scorecard::{CriterionTally, ScoreTally, Scorecard};
+use crate::scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard};
 use crate::state::HackathonState;
 use crate::storage;
 use crate::submission::Submission;
@@ -667,6 +668,154 @@ impl HackathonCore {
         events::ballot_counted(&env, &voter, team_id, votes);
 
         Ok(votes)
+    }
+
+    /// Computes the ranking and closes the result.
+    ///
+    /// Nothing is accepted from the caller. The contract reads the revealed
+    /// scorecards, the counted ballots and the locked formula, and works the
+    /// order out itself, which is the difference between a result anybody can
+    /// reproduce and a result somebody announced.
+    ///
+    /// Every project that was ruled out in screening, or that never reached the
+    /// judge quorum, is left out of the ranking rather than placed last. Those
+    /// are different situations from a project that was judged and came last,
+    /// and the page shows which one applies.
+    pub fn finalize_results(env: Env) -> Result<(), Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Reveal {
+            return Err(Error::WrongPhase);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+
+        for track in constitution.tracks.iter() {
+            let ranking = Self::rank_track(&env, &constitution, &track.id)?;
+            storage::save_ranking(&env, &track.id, &ranking);
+            events::track_ranked(&env, &track.id, ranking.len());
+        }
+
+        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
+        events::results_finalized(&env);
+
+        Ok(())
+    }
+
+    /// One track's finished ranking, in order.
+    pub fn ranking(env: Env, track: Symbol) -> Result<Vec<Placement>, Error> {
+        storage::load_ranking(&env, &track)
+    }
+
+    /// Whether a project gathered the scorecards its track's quorum asks for.
+    pub fn meets_quorum(env: Env, team_id: u32) -> Result<bool, Error> {
+        let constitution = storage::load_constitution(&env)?;
+        if !constitution.vote.judge_score_counts() {
+            return Ok(true);
+        }
+
+        Ok(storage::load_score_tally(&env, team_id).count >= constitution.judge_quorum)
+    }
+
+    /// Builds one track's ranking from what was revealed.
+    fn rank_track(
+        env: &Env,
+        constitution: &Constitution,
+        track: &Symbol,
+    ) -> Result<Vec<Placement>, Error> {
+        let top_votes = storage::top_vote_count(env);
+        let quorum_binds = constitution.vote.judge_score_counts();
+
+        let mut ordered: Vec<Candidate> = Vec::new(env);
+
+        for team_id in 1..=storage::team_count(env) {
+            let submission = match storage::load_submission(env, team_id) {
+                Ok(submission) => submission,
+                Err(_) => continue,
+            };
+
+            if &submission.track != track || !submission.is_valid() {
+                continue;
+            }
+
+            let tally = storage::load_score_tally(env, team_id);
+            if quorum_binds && tally.count < constitution.judge_quorum {
+                continue;
+            }
+
+            let community = results::community_score(storage::vote_count(env, team_id), top_votes);
+            let judge_average = tally.average();
+
+            let candidate = Candidate {
+                team: team_id,
+                final_score: results::final_score(&constitution.vote, judge_average, community),
+                judge_average: judge_average.unwrap_or(0),
+                community,
+                submitted_at: submission.submitted_at,
+                criterion_averages: Self::tie_break_averages(env, constitution, team_id),
+            };
+
+            // Insertion sort. Team counts are in the tens, and a sort a reader
+            // can follow line by line is worth more here than one that would be
+            // faster on data this contract will never see.
+            let mut at = ordered.len();
+            while at > 0 {
+                let above = ordered.get(at - 1).unwrap();
+                if results::compare(&candidate, &above, &constitution.tie_break).0
+                    != core::cmp::Ordering::Greater
+                {
+                    break;
+                }
+                at -= 1;
+            }
+            ordered.insert(at, candidate);
+        }
+
+        let mut ranking: Vec<Placement> = Vec::new(env);
+        for index in 0..ordered.len() {
+            let candidate = ordered.get(index).unwrap();
+
+            let decided_by = if index == 0 {
+                results::DecidedBy::Score
+            } else {
+                let above = ordered.get(index - 1).unwrap();
+                results::compare(&above, &candidate, &constitution.tie_break).1
+            };
+
+            ranking.push_back(Placement {
+                team: candidate.team,
+                rank: index + 1,
+                final_score: candidate.final_score,
+                judge_average: candidate.judge_average,
+                community: candidate.community,
+                decided_by,
+            });
+        }
+
+        Ok(ranking)
+    }
+
+    /// Means for exactly the criteria the tie break chain names.
+    ///
+    /// Gathering only those keeps the candidate small and makes the comparison
+    /// a pure function of what the constitution actually asked for.
+    fn tie_break_averages(
+        env: &Env,
+        constitution: &Constitution,
+        team_id: u32,
+    ) -> Vec<CriterionScore> {
+        let mut averages = Vec::new(env);
+
+        for rule in constitution.tie_break.iter() {
+            if let TieBreakRule::Criterion(id) = rule {
+                let tally = storage::load_criterion_tally(env, team_id, &id);
+                averages.push_back(CriterionScore {
+                    criterion: id,
+                    score: tally.average().unwrap_or(0),
+                });
+            }
+        }
+
+        averages
     }
 
     /// The digest sealing the ballots.

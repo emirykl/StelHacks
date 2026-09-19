@@ -3,6 +3,7 @@ use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol, Vec};
 use crate::constitution::Constitution;
 use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
+use crate::results::Placement;
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionTally, ScoreTally};
 use crate::state::HackathonState;
@@ -82,6 +83,8 @@ pub enum DataKey {
     TopVoteCount,
     /// One criterion's revealed scores for one project.
     CriterionTally(u32, Symbol),
+    /// One track's finished ranking, in order.
+    Ranking(Symbol),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -429,6 +432,24 @@ pub fn top_vote_count(env: &Env) -> u32 {
         .instance()
         .get(&DataKey::TopVoteCount)
         .unwrap_or(0u32)
+}
+
+pub fn save_ranking(env: &Env, track: &Symbol, ranking: &Vec<Placement>) {
+    let key = DataKey::Ranking(track.clone());
+    env.storage().persistent().set(&key, ranking);
+    touch_entry(env, &key);
+}
+
+pub fn load_ranking(env: &Env, track: &Symbol) -> Result<Vec<Placement>, Error> {
+    let key = DataKey::Ranking(track.clone());
+    let ranking = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::ResultsNotFinalized)?;
+    touch_entry(env, &key);
+
+    Ok(ranking)
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

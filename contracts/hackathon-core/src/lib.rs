@@ -38,7 +38,7 @@ pub use errors::Error;
 pub use hashing::{ballot_leaf, hash_constitution, hash_submission_metadata, scorecard_leaf};
 pub use organizers::OrganizingTeam;
 pub use phase::Phase;
-pub use results::{community_score, final_score, DecidedBy};
+pub use results::{community_score, compare, final_score, Candidate, DecidedBy, Placement};
 pub use roster::{ApplicationStatus, Registration, Team};
 pub use scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard, MAX_WEIGHTED_SCORE};
 pub use state::{ExtensionUsage, HackathonState};
