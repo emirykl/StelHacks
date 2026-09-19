@@ -43,6 +43,12 @@ impl SubmissionRequirements {
 /// serializes these fields in this order arrives at the same digest the
 /// contract would, which is what lets anyone check that the project being
 /// judged is the project that was submitted.
+///
+/// Checking these fields against [`SubmissionRequirements`] is the SDK's job,
+/// not this contract's. The metadata never reaches the chain, only its digest
+/// does, so a contract side check would be validating something it cannot see.
+/// The SDK runs it before computing the hash, where it can also say which field
+/// is missing rather than only that one is.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionMetadata {
@@ -62,33 +68,6 @@ pub struct SubmissionMetadata {
     pub live_url: String,
     /// The track this project competes in.
     pub track: Symbol,
-}
-
-impl SubmissionMetadata {
-    /// Rejects a submission that does not carry what the organizer asked for.
-    ///
-    /// Only presence is checked. Whether a repository link actually resolves,
-    /// or points at an empty repository, is a judgement the screening round
-    /// makes with a reason attached, not something a contract can decide.
-    pub fn validate(&self, requirements: &SubmissionRequirements) -> Result<(), Error> {
-        if self.name.is_empty() {
-            return Err(Error::ProjectNameMissing);
-        }
-
-        if requirements.repository_required && self.repository_url.is_empty() {
-            return Err(Error::RepositoryLinkRequired);
-        }
-
-        if requirements.demo_video_required && self.demo_video_url.is_empty() {
-            return Err(Error::DemoVideoLinkRequired);
-        }
-
-        if requirements.live_url_required && self.live_url.is_empty() {
-            return Err(Error::LiveUrlRequired);
-        }
-
-        Ok(())
-    }
 }
 
 /// Whether a submission still counts.
@@ -253,7 +232,7 @@ impl Submission {
     /// to a decision nobody made.
     fn rule_out(&self, status: SubmissionStatus, reason: BytesN<32>) -> Result<Submission, Error> {
         if !self.is_valid() {
-            return Err(Error::AlreadyInvalidated);
+            return Err(Error::SubmissionNotEligible);
         }
 
         Ok(Submission {
@@ -277,108 +256,6 @@ impl Submission {
 mod test {
     use super::*;
     use soroban_sdk::{symbol_short, Env};
-
-    fn metadata(env: &Env) -> SubmissionMetadata {
-        SubmissionMetadata {
-            name: String::from_str(env, "Lumen Split"),
-            summary: String::from_str(env, "Shared expenses settled in USDC"),
-            description: String::from_str(env, "A longer write up of the project."),
-            logo_uri: String::from_str(env, "https://cdn.example.com/lumen-split.png"),
-            repository_url: String::from_str(env, "https://github.com/example/lumen-split"),
-            demo_video_url: String::from_str(env, "https://youtu.be/example"),
-            live_url: String::from_str(env, "https://lumen-split.example.com"),
-            track: symbol_short!("payments"),
-        }
-    }
-
-    #[test]
-    fn a_complete_submission_is_accepted() {
-        let env = Env::default();
-        let requirements = SubmissionRequirements {
-            repository_required: true,
-            demo_video_required: true,
-            live_url_required: true,
-        };
-
-        assert_eq!(metadata(&env).validate(&requirements), Ok(()));
-    }
-
-    #[test]
-    fn a_project_without_a_name_is_rejected() {
-        let env = Env::default();
-        let mut metadata = metadata(&env);
-        metadata.name = String::from_str(&env, "");
-
-        assert_eq!(
-            metadata.validate(&SubmissionRequirements::code_and_video()),
-            Err(Error::ProjectNameMissing)
-        );
-    }
-
-    #[test]
-    fn a_missing_repository_is_rejected_only_when_it_was_asked_for() {
-        let env = Env::default();
-        let mut metadata = metadata(&env);
-        metadata.repository_url = String::from_str(&env, "");
-
-        let mut requirements = SubmissionRequirements::code_and_video();
-        assert_eq!(
-            metadata.validate(&requirements),
-            Err(Error::RepositoryLinkRequired)
-        );
-
-        requirements.repository_required = false;
-        assert_eq!(metadata.validate(&requirements), Ok(()));
-    }
-
-    #[test]
-    fn a_missing_demo_video_is_rejected_only_when_it_was_asked_for() {
-        let env = Env::default();
-        let mut metadata = metadata(&env);
-        metadata.demo_video_url = String::from_str(&env, "");
-
-        let mut requirements = SubmissionRequirements::code_and_video();
-        assert_eq!(
-            metadata.validate(&requirements),
-            Err(Error::DemoVideoLinkRequired)
-        );
-
-        requirements.demo_video_required = false;
-        assert_eq!(metadata.validate(&requirements), Ok(()));
-    }
-
-    #[test]
-    fn a_missing_live_url_is_rejected_only_when_it_was_asked_for() {
-        let env = Env::default();
-        let mut metadata = metadata(&env);
-        metadata.live_url = String::from_str(&env, "");
-
-        let mut requirements = SubmissionRequirements::code_and_video();
-        assert_eq!(metadata.validate(&requirements), Ok(()));
-
-        requirements.live_url_required = true;
-        assert_eq!(
-            metadata.validate(&requirements),
-            Err(Error::LiveUrlRequired)
-        );
-    }
-
-    #[test]
-    fn a_design_event_can_ask_for_nothing_but_a_name() {
-        let env = Env::default();
-        let requirements = SubmissionRequirements {
-            repository_required: false,
-            demo_video_required: false,
-            live_url_required: false,
-        };
-
-        let mut metadata = metadata(&env);
-        metadata.repository_url = String::from_str(&env, "");
-        metadata.demo_video_url = String::from_str(&env, "");
-        metadata.live_url = String::from_str(&env, "");
-
-        assert_eq!(metadata.validate(&requirements), Ok(()));
-    }
 
     #[test]
     fn the_common_setup_asks_for_code_and_a_video() {
@@ -496,13 +373,13 @@ mod test {
         let screened = submission.invalidate(reason.clone()).unwrap();
         assert_eq!(
             screened.disqualify(reason.clone()).err(),
-            Some(Error::AlreadyInvalidated)
+            Some(Error::SubmissionNotEligible)
         );
 
         let disqualified = submission.disqualify(reason.clone()).unwrap();
         assert_eq!(
             disqualified.invalidate(reason).err(),
-            Some(Error::AlreadyInvalidated)
+            Some(Error::SubmissionNotEligible)
         );
     }
 
@@ -523,7 +400,7 @@ mod test {
 
         assert_eq!(
             ruled_out.invalidate(reason).err(),
-            Some(Error::AlreadyInvalidated)
+            Some(Error::SubmissionNotEligible)
         );
     }
 }

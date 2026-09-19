@@ -74,7 +74,7 @@ impl SettlementMode {
             SettlementMode::Immediate => Ok(()),
             SettlementMode::SafetyWindow(seconds) => {
                 if seconds == 0 || seconds > MAX_SETTLEMENT_SAFETY_WINDOW {
-                    Err(Error::SettlementWindowInvalid)
+                    Err(Error::ConstitutionInvalid)
                 } else {
                     Ok(())
                 }
@@ -124,19 +124,19 @@ impl DiscretionPolicy {
     /// than not having it.
     pub fn validate(&self, judge_count: u32) -> Result<(), Error> {
         if self.disqualification_threshold == 0 || self.disqualification_threshold > judge_count {
-            return Err(Error::DisqualificationThresholdInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         if self.cancellation_threshold == 0 || self.cancellation_threshold > judge_count {
-            return Err(Error::CancellationThresholdInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         if self.appeal_window == 0 {
-            return Err(Error::AppealWindowInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         if self.prize_claim_period == 0 {
-            return Err(Error::ClaimPeriodInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         self.settlement.validate()?;
@@ -146,7 +146,7 @@ impl DiscretionPolicy {
         // checked. The other two have nowhere to spread money to.
         if !self.unclaimed_refund.valid_for_return() || !self.cancellation_refund.valid_for_return()
         {
-            return Err(Error::RefundRouteInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         Ok(())
@@ -183,10 +183,7 @@ mod test {
         let mut policy = policy();
         policy.disqualification_threshold = 6;
 
-        assert_eq!(
-            policy.validate(5),
-            Err(Error::DisqualificationThresholdInvalid)
-        );
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -194,10 +191,7 @@ mod test {
         let mut policy = policy();
         policy.disqualification_threshold = 0;
 
-        assert_eq!(
-            policy.validate(5),
-            Err(Error::DisqualificationThresholdInvalid)
-        );
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -205,10 +199,10 @@ mod test {
         let mut policy = policy();
         policy.cancellation_threshold = 9;
 
-        assert_eq!(policy.validate(5), Err(Error::CancellationThresholdInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
 
         policy.cancellation_threshold = 0;
-        assert_eq!(policy.validate(5), Err(Error::CancellationThresholdInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -216,7 +210,7 @@ mod test {
         let mut policy = policy();
         policy.appeal_window = 0;
 
-        assert_eq!(policy.validate(5), Err(Error::AppealWindowInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -224,7 +218,7 @@ mod test {
         let mut policy = policy();
         policy.prize_claim_period = 0;
 
-        assert_eq!(policy.validate(5), Err(Error::ClaimPeriodInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -241,7 +235,7 @@ mod test {
         let mut policy = policy();
         policy.settlement = SettlementMode::SafetyWindow(0);
 
-        assert_eq!(policy.validate(5), Err(Error::SettlementWindowInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -252,7 +246,7 @@ mod test {
         assert_eq!(policy.validate(5), Ok(()));
 
         policy.settlement = SettlementMode::SafetyWindow(MAX_SETTLEMENT_SAFETY_WINDOW + 1);
-        assert_eq!(policy.validate(5), Err(Error::SettlementWindowInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -268,7 +262,7 @@ mod test {
         let mut policy = policy();
         policy.cancellation_refund = RefundRoute::RemainingTracks;
 
-        assert_eq!(policy.validate(5), Err(Error::RefundRouteInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -276,7 +270,7 @@ mod test {
         let mut policy = policy();
         policy.unclaimed_refund = RefundRoute::RemainingTracks;
 
-        assert_eq!(policy.validate(5), Err(Error::RefundRouteInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     /// Paying sponsors back in proportion is the route they would want, and it
@@ -287,7 +281,7 @@ mod test {
         let mut policy = policy();
         policy.cancellation_refund = RefundRoute::Depositors;
 
-        assert_eq!(policy.validate(5), Err(Error::RefundRouteInvalid));
+        assert_eq!(policy.validate(5), Err(Error::ConstitutionInvalid));
     }
 
     #[test]

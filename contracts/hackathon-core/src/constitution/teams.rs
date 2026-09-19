@@ -53,7 +53,7 @@ impl TeamPolicy {
     /// Rejects a size nobody could work with.
     pub fn validate(&self) -> Result<(), Error> {
         if self.max_size < MIN_TEAM_SIZE || self.max_size > MAX_TEAM_SIZE {
-            return Err(Error::TeamPolicyInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         Ok(())
@@ -94,7 +94,7 @@ mod test {
         };
 
         assert_eq!(at_cap.validate(), Ok(()));
-        assert_eq!(over_cap.validate(), Err(Error::TeamPolicyInvalid));
+        assert_eq!(over_cap.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -104,7 +104,7 @@ mod test {
             multi_team_allowed: false,
         };
 
-        assert_eq!(policy.validate(), Err(Error::TeamPolicyInvalid));
+        assert_eq!(policy.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]

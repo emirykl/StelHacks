@@ -414,7 +414,7 @@ fn a_position_the_prize_table_does_not_have_is_refused() {
             .client
             .try_settle_prize(&payments(), &9)
             .err(),
-        Some(Ok(Error::PrizeTiersInvalid))
+        Some(Ok(Error::NotFound))
     );
 }
 
@@ -662,7 +662,7 @@ mod no_award {
                 .client
                 .try_open_no_award(&defi(), &reason(&settled))
                 .err(),
-            Some(Ok(Error::NoAwardAlreadyOpen))
+            Some(Ok(Error::CaseAlreadyOpen))
         );
     }
 
@@ -782,7 +782,7 @@ mod no_award {
 
         assert_eq!(
             settled.fixture.client.try_resolve_no_award(&defi()).err(),
-            Some(Ok(Error::NoAwardAlreadyResolved))
+            Some(Ok(Error::CaseNotOpen))
         );
     }
 

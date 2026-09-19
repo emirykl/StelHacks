@@ -158,7 +158,7 @@ fn stepping_away_twice_is_refused() {
             .client
             .try_recuse(&judge, &judging.team)
             .err(),
-        Some(Ok(Error::AlreadyRecused))
+        Some(Ok(Error::JudgeRecused))
     );
     assert_eq!(judging.fixture.client.available_judges(&judging.team), 2);
 }

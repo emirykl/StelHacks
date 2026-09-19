@@ -60,10 +60,10 @@ impl VotePolicy {
         let total = self
             .judge_bps
             .checked_add(self.community_bps)
-            .ok_or(Error::VoteSplitInvalid)?;
+            .ok_or(Error::ConstitutionInvalid)?;
 
         if total != VOTE_SPLIT_TOTAL_BPS {
-            return Err(Error::VoteSplitInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         Ok(())
@@ -115,8 +115,8 @@ mod test {
             community_bps: 3_000,
         };
 
-        assert_eq!(short.validate(), Err(Error::VoteSplitInvalid));
-        assert_eq!(over.validate(), Err(Error::VoteSplitInvalid));
+        assert_eq!(short.validate(), Err(Error::ConstitutionInvalid));
+        assert_eq!(over.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -126,7 +126,7 @@ mod test {
             community_bps: 1,
         };
 
-        assert_eq!(policy.validate(), Err(Error::VoteSplitInvalid));
+        assert_eq!(policy.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]

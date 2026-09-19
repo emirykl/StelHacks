@@ -84,7 +84,7 @@ impl Registration {
     fn require_pending(&self) -> Result<(), Error> {
         match self.status {
             ApplicationStatus::Pending => Ok(()),
-            _ => Err(Error::ApplicationAlreadyDecided),
+            _ => Err(Error::ApplicationNotPending),
         }
     }
 }
@@ -131,11 +131,11 @@ impl Team {
     /// Adds someone to the team, within the size the organizer announced.
     pub fn add_member(&self, member: Address, policy: &TeamPolicy) -> Result<Team, Error> {
         if self.has_member(&member) {
-            return Err(Error::MemberAlreadyInTeam);
+            return Err(Error::TeamJoinRejected);
         }
 
         if !policy.accepts(self.size()) {
-            return Err(Error::TeamIsFull);
+            return Err(Error::TeamJoinRejected);
         }
 
         let mut members = self.members.clone();
@@ -199,11 +199,11 @@ mod test {
 
         assert_eq!(
             approved.approve(&env, 300).err(),
-            Some(Error::ApplicationAlreadyDecided)
+            Some(Error::ApplicationNotPending)
         );
         assert_eq!(
             approved.reject(300, reason(&env)).err(),
-            Some(Error::ApplicationAlreadyDecided)
+            Some(Error::ApplicationNotPending)
         );
     }
 
@@ -262,7 +262,7 @@ mod test {
         assert_eq!(team.size(), 3);
         assert_eq!(
             team.add_member(Address::generate(&env), &policy).err(),
-            Some(Error::TeamIsFull)
+            Some(Error::TeamJoinRejected)
         );
     }
 
@@ -274,7 +274,7 @@ mod test {
         assert_eq!(
             team.add_member(Address::generate(&env), &TeamPolicy::solo_only())
                 .err(),
-            Some(Error::TeamIsFull)
+            Some(Error::TeamJoinRejected)
         );
     }
 
@@ -290,7 +290,7 @@ mod test {
 
         assert_eq!(
             team.add_member(member, &policy).err(),
-            Some(Error::MemberAlreadyInTeam)
+            Some(Error::TeamJoinRejected)
         );
     }
 
@@ -302,7 +302,7 @@ mod test {
 
         assert_eq!(
             team.add_member(captain, &TeamPolicy::small_teams()).err(),
-            Some(Error::MemberAlreadyInTeam)
+            Some(Error::TeamJoinRejected)
         );
     }
 }

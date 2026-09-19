@@ -300,7 +300,7 @@ fn the_ballots_can_only_be_sealed_once() {
 
     assert_eq!(
         voting.fixture.client.try_publish_ballot_root(&root).err(),
-        Some(Ok(Error::BallotRootAlreadyPublished))
+        Some(Ok(Error::RootAlreadyPublished))
     );
 }
 

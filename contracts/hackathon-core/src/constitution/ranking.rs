@@ -34,7 +34,7 @@ pub fn validate_tie_break(
     community_vote_enabled: bool,
 ) -> Result<(), Error> {
     if rules.is_empty() {
-        return Err(Error::TieBreakInvalid);
+        return Err(Error::ConstitutionInvalid);
     }
 
     let last = rules.len() - 1;
@@ -43,12 +43,12 @@ pub fn validate_tie_break(
         let is_last = index as u32 == last;
 
         if matches!(rule, TieBreakRule::SubmissionOrder) != is_last {
-            return Err(Error::TieBreakInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         for other in rules.iter().skip(index + 1) {
             if other == rule {
-                return Err(Error::TieBreakInvalid);
+                return Err(Error::ConstitutionInvalid);
             }
         }
 
@@ -56,13 +56,13 @@ pub fn validate_tie_break(
             TieBreakRule::Criterion(id) => {
                 for track in tracks.iter() {
                     if track.weight_of(id).is_none() {
-                        return Err(Error::TieBreakInvalid);
+                        return Err(Error::ConstitutionInvalid);
                     }
                 }
             }
             TieBreakRule::CommunityScore => {
                 if !community_vote_enabled {
-                    return Err(Error::TieBreakInvalid);
+                    return Err(Error::ConstitutionInvalid);
                 }
             }
             TieBreakRule::JudgeScore | TieBreakRule::SubmissionOrder => {}
@@ -135,7 +135,7 @@ mod test {
 
         assert_eq!(
             validate_tie_break(&rules, &tracks(&env), false),
-            Err(Error::TieBreakInvalid)
+            Err(Error::ConstitutionInvalid)
         );
     }
 
@@ -150,7 +150,7 @@ mod test {
 
         assert_eq!(
             validate_tie_break(&rules, &tracks(&env), false),
-            Err(Error::TieBreakInvalid)
+            Err(Error::ConstitutionInvalid)
         );
     }
 
@@ -161,7 +161,7 @@ mod test {
 
         assert_eq!(
             validate_tie_break(&rules, &tracks(&env), false),
-            Err(Error::TieBreakInvalid)
+            Err(Error::ConstitutionInvalid)
         );
     }
 
@@ -177,7 +177,7 @@ mod test {
 
         assert_eq!(
             validate_tie_break(&rules, &tracks(&env), false),
-            Err(Error::TieBreakInvalid)
+            Err(Error::ConstitutionInvalid)
         );
     }
 
@@ -208,7 +208,7 @@ mod test {
 
         assert_eq!(
             validate_tie_break(&rules, &tracks, false),
-            Err(Error::TieBreakInvalid)
+            Err(Error::ConstitutionInvalid)
         );
     }
 
@@ -224,7 +224,7 @@ mod test {
         assert_eq!(validate_tie_break(&rules, &tracks(&env), true), Ok(()));
         assert_eq!(
             validate_tie_break(&rules, &tracks(&env), false),
-            Err(Error::TieBreakInvalid)
+            Err(Error::ConstitutionInvalid)
         );
     }
 }

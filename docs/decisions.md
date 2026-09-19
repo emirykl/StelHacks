@@ -279,6 +279,44 @@ which is why the pool can still be returned in full.
 award clause track by track, which they can only reach on tracks marked for it
 before the lock. That is the intended asymmetry.
 
+## 20. The error enum fits the fifty case cap, and validation errors pay for it
+
+**Decided.** `Error` went from 104 cases to 39. Every constitution validation
+failure now returns `ConstitutionInvalid`, and the SDK is what tells an
+organizer which field. Errors that depend on chain state kept their own codes.
+The four submission requirement errors left the contract entirely, along with
+`SubmissionMetadata::validate`, and now live in the SDK as
+`validateSubmission`.
+
+**Why.** The contract spec caps an error enum at fifty cases, in
+`Stellar-contract-spec.x` as `cases<50>`. Rust neither enforces it nor warns,
+so the contract compiled, deployed and ran perfectly well at 104 while
+publishing an interface that no strict XDR reader could parse. The official
+JavaScript SDK is one: `new Client(...)` threw before it could be used, which
+meant the contract was uncallable from a browser and unreadable by any wallet
+or explorer. It was found the first time the SDK tried to load the bindings,
+which is the first time anything outside Rust had looked at the interface.
+
+Given a budget of fifty, the question is what a code is for. A caller already
+knows which entry point they called and what they passed it, so the code only
+has to say what went wrong that they could not have known. Fifteen codes
+distinguishing "the weights do not add up" from "the appeal window is zero"
+were spending the budget to tell a client something it was already holding: the
+SDK validates the document field by field before it is ever signed. Whether a
+deadline has passed or a prize was already paid cannot be known from the
+request, so those kept their codes.
+
+`SubmissionMetadata::validate` had a further problem: nothing on chain called
+it. The metadata never reaches the contract, only its digest does, so the check
+was validating something the contract cannot see. In the SDK it runs where the
+metadata actually is and returns every missing field rather than only the
+first.
+
+**Consequence.** Every error code was renumbered, which the previous numbering
+comment was written to avoid. It was the last moment that was cheap: nothing
+was in production, and the only deployment was an uninitialized reference
+instance. From here a value is never reused for a different meaning.
+
 ---
 
 ## Still open

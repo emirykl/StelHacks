@@ -52,11 +52,11 @@ impl OrganizingTeam {
     /// hear about it.
     pub fn add_collaborator(&mut self, collaborator: Address) -> Result<(), Error> {
         if self.is_organizer(&collaborator) {
-            return Err(Error::OrganizerCannotBeCollaborator);
+            return Err(Error::CollaboratorInvalid);
         }
 
         if self.collaborators.contains(&collaborator) {
-            return Err(Error::CollaboratorAlreadyAdded);
+            return Err(Error::CollaboratorInvalid);
         }
 
         self.collaborators.push_back(collaborator);
@@ -72,7 +72,7 @@ impl OrganizingTeam {
                 self.collaborators.remove(index);
                 Ok(())
             }
-            None => Err(Error::CollaboratorNotFound),
+            None => Err(Error::CollaboratorInvalid),
         }
     }
 
@@ -81,7 +81,7 @@ impl OrganizingTeam {
         if self.is_organizer(who) {
             Ok(())
         } else {
-            Err(Error::NotOrganizer)
+            Err(Error::NotAuthorized)
         }
     }
 
@@ -90,7 +90,7 @@ impl OrganizingTeam {
         if self.can_review_applications(who) {
             Ok(())
         } else {
-            Err(Error::NotOnOrganizingTeam)
+            Err(Error::NotAuthorized)
         }
     }
 }
@@ -124,7 +124,7 @@ mod test {
         assert_eq!(team.add_collaborator(helper.clone()), Ok(()));
         assert!(team.can_review_applications(&helper));
         assert!(!team.is_organizer(&helper));
-        assert_eq!(team.require_organizer(&helper), Err(Error::NotOrganizer));
+        assert_eq!(team.require_organizer(&helper), Err(Error::NotAuthorized));
         assert_eq!(team.require_application_reviewer(&helper), Ok(()));
     }
 
@@ -134,10 +134,10 @@ mod test {
         let (team, _organizer) = team(&env);
         let stranger = Address::generate(&env);
 
-        assert_eq!(team.require_organizer(&stranger), Err(Error::NotOrganizer));
+        assert_eq!(team.require_organizer(&stranger), Err(Error::NotAuthorized));
         assert_eq!(
             team.require_application_reviewer(&stranger),
-            Err(Error::NotOnOrganizingTeam)
+            Err(Error::NotAuthorized)
         );
     }
 
@@ -150,7 +150,7 @@ mod test {
         assert_eq!(team.add_collaborator(helper.clone()), Ok(()));
         assert_eq!(
             team.add_collaborator(helper),
-            Err(Error::CollaboratorAlreadyAdded)
+            Err(Error::CollaboratorInvalid)
         );
         assert_eq!(team.collaborators.len(), 1);
     }
@@ -162,7 +162,7 @@ mod test {
 
         assert_eq!(
             team.add_collaborator(organizer),
-            Err(Error::OrganizerCannotBeCollaborator)
+            Err(Error::CollaboratorInvalid)
         );
     }
 
@@ -185,7 +185,7 @@ mod test {
 
         assert_eq!(
             team.remove_collaborator(&stranger),
-            Err(Error::CollaboratorNotFound)
+            Err(Error::CollaboratorInvalid)
         );
     }
 

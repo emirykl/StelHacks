@@ -44,7 +44,7 @@ fn rules_that_cannot_run_are_refused_at_creation() {
             .client
             .try_create(&fixture.organizer, &constitution)
             .err(),
-        Some(Ok(Error::JudgeQuorumInvalid))
+        Some(Ok(Error::ConstitutionInvalid))
     );
 }
 
@@ -72,7 +72,7 @@ fn a_reconfiguration_that_breaks_the_rules_is_refused() {
 
     assert_eq!(
         fixture.client.try_configure(&constitution).err(),
-        Some(Ok(Error::VoteSplitInvalid))
+        Some(Ok(Error::ConstitutionInvalid))
     );
 }
 
@@ -132,7 +132,7 @@ fn the_digest_is_missing_until_the_rules_are_locked() {
 
     assert_eq!(
         fixture.client.try_constitution_hash().err(),
-        Some(Ok(Error::RulesNotLocked))
+        Some(Ok(Error::NotFound))
     );
 }
 
@@ -169,7 +169,7 @@ fn the_same_collaborator_cannot_be_added_twice() {
 
     assert_eq!(
         fixture.client.try_add_collaborator(&helper).err(),
-        Some(Ok(Error::CollaboratorAlreadyAdded))
+        Some(Ok(Error::CollaboratorInvalid))
     );
 }
 
@@ -180,7 +180,7 @@ fn removing_someone_who_was_never_a_collaborator_is_refused() {
 
     assert_eq!(
         fixture.client.try_remove_collaborator(&stranger).err(),
-        Some(Ok(Error::CollaboratorNotFound))
+        Some(Ok(Error::CollaboratorInvalid))
     );
 }
 

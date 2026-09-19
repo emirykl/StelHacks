@@ -52,7 +52,7 @@ fn the_lifecycle_never_skips_a_stage() {
     fixture.env.ledger().set_timestamp(u64::MAX);
     assert_eq!(
         fixture.client.try_advance_phase().err(),
-        Some(Ok(Error::PhaseOrderInvalid))
+        Some(Ok(Error::WrongPhase))
     );
     assert_eq!(fixture.client.phase(), Phase::Reveal);
 }
@@ -67,7 +67,7 @@ fn a_stage_that_ends_on_an_action_is_never_ended_by_the_clock() {
 
         assert_eq!(
             fixture.client.try_advance_phase().err(),
-            Some(Ok(Error::PhaseOrderInvalid))
+            Some(Ok(Error::WrongPhase))
         );
     }
 }
@@ -229,7 +229,7 @@ fn a_stopped_hackathon_moves_no_further_in_any_direction() {
 
     assert_eq!(
         fixture.client.try_advance_phase().err(),
-        Some(Ok(Error::PhaseOrderInvalid))
+        Some(Ok(Error::WrongPhase))
     );
     assert_eq!(
         fixture.client.try_cancel(&reason).err(),

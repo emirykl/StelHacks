@@ -166,7 +166,7 @@ fn an_entry_has_to_name_a_track_that_exists() {
                 &String::from_str(&entered.fixture.env, "ipfs://cid"),
             )
             .err(),
-        Some(Ok(Error::TrackNotFound))
+        Some(Ok(Error::NotFound))
     );
 }
 
@@ -213,7 +213,7 @@ fn an_entry_cannot_be_ruled_out_twice() {
             .client
             .try_invalidate_submission(&entered.team, &reason)
             .err(),
-        Some(Ok(Error::AlreadyInvalidated))
+        Some(Ok(Error::SubmissionNotEligible))
     );
 }
 
@@ -240,6 +240,6 @@ fn a_team_that_entered_nothing_has_no_submission_to_read() {
 
     assert_eq!(
         entered.fixture.client.try_submission(&entered.team).err(),
-        Some(Ok(Error::SubmissionNotFound))
+        Some(Ok(Error::NotFound))
     );
 }

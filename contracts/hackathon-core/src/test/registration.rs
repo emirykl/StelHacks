@@ -55,7 +55,7 @@ fn nobody_can_apply_twice() {
 
     assert_eq!(
         fixture.client.try_apply(&who).err(),
-        Some(Ok(Error::ApplicationAlreadyExists))
+        Some(Ok(Error::ApplicationNotPending))
     );
 }
 
@@ -114,7 +114,7 @@ fn a_decision_cannot_be_revisited() {
             .client
             .try_reject_application(&organizer, &who, &reason(&fixture))
             .err(),
-        Some(Ok(Error::ApplicationAlreadyDecided))
+        Some(Ok(Error::ApplicationNotPending))
     );
 }
 
@@ -143,7 +143,7 @@ fn a_stranger_cannot_decide_who_takes_part() {
             .client
             .try_approve_application(&stranger, &who)
             .err(),
-        Some(Ok(Error::NotOnOrganizingTeam))
+        Some(Ok(Error::NotAuthorized))
     );
 }
 
@@ -209,7 +209,7 @@ fn a_team_grows_up_to_the_size_the_organizer_announced() {
     let extra = approved(&fixture);
     assert_eq!(
         fixture.client.try_add_member(&id, &extra).err(),
-        Some(Ok(Error::TeamIsFull))
+        Some(Ok(Error::TeamJoinRejected))
     );
 }
 
@@ -223,7 +223,7 @@ fn one_person_cannot_sit_on_two_teams_when_the_rules_forbid_it() {
 
     assert_eq!(
         fixture.client.try_create_team(&captain).err(),
-        Some(Ok(Error::AlreadyOnAnotherTeam))
+        Some(Ok(Error::TeamJoinRejected))
     );
 
     let other_captain = approved(&fixture);
@@ -231,7 +231,7 @@ fn one_person_cannot_sit_on_two_teams_when_the_rules_forbid_it() {
 
     assert_eq!(
         fixture.client.try_add_member(&other, &captain).err(),
-        Some(Ok(Error::AlreadyOnAnotherTeam))
+        Some(Ok(Error::TeamJoinRejected))
     );
 }
 
@@ -255,7 +255,7 @@ fn a_team_that_does_not_exist_cannot_be_joined() {
 
     assert_eq!(
         fixture.client.try_add_member(&99, &member).err(),
-        Some(Ok(Error::TeamNotFound))
+        Some(Ok(Error::NotFound))
     );
 }
 

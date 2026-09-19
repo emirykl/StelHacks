@@ -141,7 +141,7 @@ impl Constitution {
 
         for tier in self.prize_tiers.iter() {
             if self.track(&tier.track).is_none() {
-                return Err(Error::TrackNotFound);
+                return Err(Error::NotFound);
             }
         }
 
@@ -150,14 +150,14 @@ impl Constitution {
         // Asking participants to vote on projects they are not allowed to open
         // turns the ballot into a contest between team names.
         if self.community_vote_enabled() && !self.visibility.supports_community_vote() {
-            return Err(Error::VisibilityConflictsWithVote);
+            return Err(Error::ConstitutionInvalid);
         }
 
         // Spreading an unawarded prize across the remaining tracks needs a
         // remaining track to exist.
         if self.discretion.no_award_refund == RefundRoute::RemainingTracks && self.tracks.len() < 2
         {
-            return Err(Error::NoAwardRefundNeedsAnotherTrack);
+            return Err(Error::ConstitutionInvalid);
         }
 
         Ok(())
@@ -165,7 +165,7 @@ impl Constitution {
 
     fn validate_tracks(&self) -> Result<(), Error> {
         if self.tracks.is_empty() {
-            return Err(Error::TracksMissing);
+            return Err(Error::ConstitutionInvalid);
         }
 
         for (index, track) in self.tracks.iter().enumerate() {
@@ -173,7 +173,7 @@ impl Constitution {
 
             for other in self.tracks.iter().skip(index + 1) {
                 if other.id == track.id {
-                    return Err(Error::TrackAlreadyExists);
+                    return Err(Error::ConstitutionInvalid);
                 }
             }
         }
@@ -183,29 +183,29 @@ impl Constitution {
 
     fn validate_judges(&self) -> Result<(), Error> {
         if self.judges.is_empty() {
-            return Err(Error::JudgesMissing);
+            return Err(Error::ConstitutionInvalid);
         }
 
         for (index, assignment) in self.judges.iter().enumerate() {
             if assignment.tracks.is_empty() {
-                return Err(Error::JudgeNotAssigned);
+                return Err(Error::ConstitutionInvalid);
             }
 
             for track_id in assignment.tracks.iter() {
                 if self.track(&track_id).is_none() {
-                    return Err(Error::TrackNotFound);
+                    return Err(Error::NotFound);
                 }
             }
 
             for other in self.judges.iter().skip(index + 1) {
                 if other.judge == assignment.judge {
-                    return Err(Error::JudgeAlreadyAssigned);
+                    return Err(Error::ConstitutionInvalid);
                 }
             }
         }
 
         if self.judge_quorum == 0 || self.judge_quorum > self.judge_count() {
-            return Err(Error::JudgeQuorumInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         // A quorum the track can never reach would strand every project in it.
@@ -214,7 +214,7 @@ impl Constitution {
         if self.vote.judge_score_counts() {
             for track in self.tracks.iter() {
                 if self.judges_on_track(&track.id) < self.judge_quorum {
-                    return Err(Error::JudgeQuorumInvalid);
+                    return Err(Error::ConstitutionInvalid);
                 }
             }
         }
@@ -247,7 +247,7 @@ mod test {
         let mut constitution = sample_constitution(&env);
         constitution.tracks = vec![&env];
 
-        assert_eq!(constitution.validate(), Err(Error::TracksMissing));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod test {
         let duplicate = constitution.tracks.get(0).unwrap();
         constitution.tracks.set(1, duplicate);
 
-        assert_eq!(constitution.validate(), Err(Error::TrackAlreadyExists));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -266,7 +266,7 @@ mod test {
         let mut constitution = sample_constitution(&env);
         constitution.judges = vec![&env];
 
-        assert_eq!(constitution.validate(), Err(Error::JudgesMissing));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod test {
         assignment.tracks = vec![&env];
         constitution.judges.set(0, assignment);
 
-        assert_eq!(constitution.validate(), Err(Error::JudgeNotAssigned));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -288,7 +288,7 @@ mod test {
         assignment.tracks = vec![&env, symbol_short!("ghost")];
         constitution.judges.set(0, assignment);
 
-        assert_eq!(constitution.validate(), Err(Error::TrackNotFound));
+        assert_eq!(constitution.validate(), Err(Error::NotFound));
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod test {
         let first = constitution.judges.get(0).unwrap();
         constitution.judges.set(1, first);
 
-        assert_eq!(constitution.validate(), Err(Error::JudgeAlreadyAssigned));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -307,7 +307,7 @@ mod test {
         let mut constitution = sample_constitution(&env);
         constitution.judge_quorum = 4;
 
-        assert_eq!(constitution.validate(), Err(Error::JudgeQuorumInvalid));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -325,7 +325,7 @@ mod test {
         second.tracks = vec![&env, symbol_short!("payments")];
         constitution.judges.set(1, second);
 
-        assert_eq!(constitution.validate(), Err(Error::JudgeQuorumInvalid));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -341,7 +341,7 @@ mod test {
             },
         );
 
-        assert_eq!(constitution.validate(), Err(Error::TrackNotFound));
+        assert_eq!(constitution.validate(), Err(Error::NotFound));
     }
 
     #[test]
@@ -350,10 +350,7 @@ mod test {
         let mut constitution = sample_constitution(&env);
         constitution.visibility = ProjectVisibility::Restricted;
 
-        assert_eq!(
-            constitution.validate(),
-            Err(Error::VisibilityConflictsWithVote)
-        );
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
 
         constitution.visibility = ProjectVisibility::Participants;
         assert_eq!(constitution.validate(), Ok(()));
@@ -395,10 +392,7 @@ mod test {
             constitution.judges.set(index, assignment);
         }
 
-        assert_eq!(
-            constitution.validate(),
-            Err(Error::NoAwardRefundNeedsAnotherTrack)
-        );
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -412,7 +406,7 @@ mod test {
             TieBreakRule::SubmissionOrder,
         ];
 
-        assert_eq!(constitution.validate(), Err(Error::TieBreakInvalid));
+        assert_eq!(constitution.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]

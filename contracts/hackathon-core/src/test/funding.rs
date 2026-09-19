@@ -89,7 +89,7 @@ fn a_vault_serving_another_hackathon_is_refused() {
 
     assert_eq!(
         fixture.client.try_bind_vault(&vault.address).err(),
-        Some(Ok(Error::VaultServesAnotherHackathon))
+        Some(Ok(Error::VaultRejected))
     );
 }
 
@@ -111,7 +111,7 @@ fn a_vault_holding_the_wrong_asset_is_refused() {
 
     assert_eq!(
         fixture.client.try_bind_vault(&vault.address).err(),
-        Some(Ok(Error::VaultHoldsTheWrongAsset))
+        Some(Ok(Error::VaultRejected))
     );
 }
 

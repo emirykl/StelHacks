@@ -76,7 +76,7 @@ fn a_deadline_cannot_be_pulled_in() {
             .client
             .try_extend_deadline(&Deadline::Submission, &earlier, &reason(&fixture))
             .err(),
-        Some(Ok(Error::DeadlineCannotShorten))
+        Some(Ok(Error::ScheduleInvalid))
     );
 }
 
@@ -214,7 +214,7 @@ fn a_deadline_cannot_be_moved_while_the_rules_are_still_a_draft() {
             .client
             .try_extend_deadline(&Deadline::Submission, &moved_to, &reason(&fixture))
             .err(),
-        Some(Ok(Error::RulesNotLocked))
+        Some(Ok(Error::WrongPhase))
     );
 }
 
@@ -569,7 +569,7 @@ mod disqualification {
                 .client
                 .try_open_disqualification(&contested.team, &contested.reason())
                 .err(),
-            Some(Ok(Error::DisqualificationAlreadyOpen))
+            Some(Ok(Error::CaseAlreadyOpen))
         );
     }
 
@@ -589,7 +589,7 @@ mod disqualification {
                 .client
                 .try_resolve_disqualification(&contested.team)
                 .err(),
-            Some(Ok(Error::DisqualificationNotOpen))
+            Some(Ok(Error::CaseNotOpen))
         );
     }
 
@@ -641,7 +641,7 @@ mod disqualification {
                 .client
                 .try_invalidate_submission(&screening.team, &reason)
                 .err(),
-            Some(Ok(Error::DisqualificationAlreadyOpen))
+            Some(Ok(Error::CaseAlreadyOpen))
         );
     }
 
@@ -908,7 +908,7 @@ mod cancellation {
                 .client
                 .try_open_cancellation(&reason(&fixture))
                 .err(),
-            Some(Ok(Error::CancellationAlreadyOpen))
+            Some(Ok(Error::CaseAlreadyOpen))
         );
     }
 
@@ -918,7 +918,7 @@ mod cancellation {
 
         assert_eq!(
             fixture.client.try_resolve_cancellation().err(),
-            Some(Ok(Error::CancellationNotOpen))
+            Some(Ok(Error::CaseNotOpen))
         );
     }
 

@@ -43,28 +43,28 @@ impl Track {
     /// weight, no identifier may repeat, and the weights must add up exactly.
     pub fn validate(&self) -> Result<(), Error> {
         if self.criteria.is_empty() {
-            return Err(Error::CriteriaMissing);
+            return Err(Error::ConstitutionInvalid);
         }
 
         let mut total: u32 = 0;
         for (index, criterion) in self.criteria.iter().enumerate() {
             if criterion.weight_bps == 0 {
-                return Err(Error::CriteriaWeightsInvalid);
+                return Err(Error::ConstitutionInvalid);
             }
 
             total = total
                 .checked_add(criterion.weight_bps)
-                .ok_or(Error::CriteriaWeightsInvalid)?;
+                .ok_or(Error::ConstitutionInvalid)?;
 
             for other in self.criteria.iter().skip(index + 1) {
                 if other.id == criterion.id {
-                    return Err(Error::CriteriaWeightsInvalid);
+                    return Err(Error::ConstitutionInvalid);
                 }
             }
         }
 
         if total != WEIGHT_TOTAL_BPS {
-            return Err(Error::CriteriaWeightsInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         Ok(())
@@ -97,17 +97,17 @@ pub struct PrizeTier {
 /// repeated rank inside a track.
 pub fn validate_prize_tiers(tiers: &Vec<PrizeTier>) -> Result<(), Error> {
     if tiers.is_empty() {
-        return Err(Error::PrizeTiersInvalid);
+        return Err(Error::ConstitutionInvalid);
     }
 
     for (index, tier) in tiers.iter().enumerate() {
         if tier.rank == 0 || tier.amount <= 0 {
-            return Err(Error::PrizeTiersInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         for other in tiers.iter().skip(index + 1) {
             if other.track == tier.track && other.rank == tier.rank {
-                return Err(Error::PrizeTiersInvalid);
+                return Err(Error::ConstitutionInvalid);
             }
         }
     }
@@ -121,7 +121,7 @@ pub fn total_prize_amount(tiers: &Vec<PrizeTier>) -> Result<i128, Error> {
     for tier in tiers.iter() {
         total = total
             .checked_add(tier.amount)
-            .ok_or(Error::PrizeTiersInvalid)?;
+            .ok_or(Error::ConstitutionInvalid)?;
     }
 
     Ok(total)
@@ -170,7 +170,7 @@ mod test {
             criterion(symbol_short!("novelty"), 3_000),
         ]);
 
-        assert_eq!(track.validate(), Err(Error::CriteriaWeightsInvalid));
+        assert_eq!(track.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -182,7 +182,7 @@ mod test {
             criterion(symbol_short!("novelty"), 0),
         ]);
 
-        assert_eq!(track.validate(), Err(Error::CriteriaWeightsInvalid));
+        assert_eq!(track.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod test {
             criterion(symbol_short!("technical"), 5_000),
         ]);
 
-        assert_eq!(track.validate(), Err(Error::CriteriaWeightsInvalid));
+        assert_eq!(track.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -202,7 +202,7 @@ mod test {
         let env = Env::default();
         let track = track(vec![&env]);
 
-        assert_eq!(track.validate(), Err(Error::CriteriaMissing));
+        assert_eq!(track.validate(), Err(Error::ConstitutionInvalid));
     }
 
     #[test]
@@ -248,7 +248,10 @@ mod test {
             },
         ];
 
-        assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
+        assert_eq!(
+            validate_prize_tiers(&tiers),
+            Err(Error::ConstitutionInvalid)
+        );
     }
 
     #[test]
@@ -283,7 +286,10 @@ mod test {
             },
         ];
 
-        assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
+        assert_eq!(
+            validate_prize_tiers(&tiers),
+            Err(Error::ConstitutionInvalid)
+        );
     }
 
     #[test]
@@ -298,7 +304,10 @@ mod test {
             },
         ];
 
-        assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
+        assert_eq!(
+            validate_prize_tiers(&tiers),
+            Err(Error::ConstitutionInvalid)
+        );
     }
 
     #[test]
@@ -306,6 +315,9 @@ mod test {
         let env = Env::default();
         let tiers: Vec<PrizeTier> = vec![&env];
 
-        assert_eq!(validate_prize_tiers(&tiers), Err(Error::PrizeTiersInvalid));
+        assert_eq!(
+            validate_prize_tiers(&tiers),
+            Err(Error::ConstitutionInvalid)
+        );
     }
 }

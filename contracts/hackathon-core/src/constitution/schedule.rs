@@ -112,7 +112,7 @@ impl Schedule {
         }
 
         if moved_to <= current {
-            return Err(Error::DeadlineCannotShorten);
+            return Err(Error::ScheduleInvalid);
         }
 
         Ok(moved_to - current)
@@ -166,7 +166,7 @@ impl ExtensionPolicy {
         let has_budget = self.max_total_seconds_per_deadline > 0;
 
         if allows_extensions != has_budget {
-            return Err(Error::ExtensionPolicyInvalid);
+            return Err(Error::ConstitutionInvalid);
         }
 
         Ok(())
@@ -290,7 +290,7 @@ mod test {
 
         assert_eq!(
             schedule.check_extension(Deadline::Submission, moved_to, now),
-            Err(Error::DeadlineCannotShorten)
+            Err(Error::ScheduleInvalid)
         );
     }
 
@@ -360,6 +360,6 @@ mod test {
             max_total_seconds_per_deadline: 0,
         };
 
-        assert_eq!(policy.validate(), Err(Error::ExtensionPolicyInvalid));
+        assert_eq!(policy.validate(), Err(Error::ConstitutionInvalid));
     }
 }

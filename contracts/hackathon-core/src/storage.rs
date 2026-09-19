@@ -225,7 +225,7 @@ pub fn load_registration(env: &Env, applicant: &Address) -> Result<Registration,
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(Error::ApplicationNotFound)?;
+        .ok_or(Error::NotFound)?;
     touch_entry(env, &key);
 
     Ok(registration)
@@ -270,7 +270,7 @@ pub fn load_team(env: &Env, id: u32) -> Result<Team, Error> {
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(Error::TeamNotFound)?;
+        .ok_or(Error::NotFound)?;
     touch_entry(env, &key);
 
     Ok(team)
@@ -310,7 +310,7 @@ pub fn load_submission(env: &Env, team: u32) -> Result<Submission, Error> {
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(Error::SubmissionNotFound)?;
+        .ok_or(Error::NotFound)?;
     touch_entry(env, &key);
 
     Ok(submission)
@@ -329,7 +329,7 @@ pub fn load_cancellation(env: &Env) -> Result<CancellationCase, Error> {
     env.storage()
         .instance()
         .get(&DataKey::Cancellation)
-        .ok_or(Error::CancellationNotOpen)
+        .ok_or(Error::CaseNotOpen)
 }
 
 pub fn has_cancellation(env: &Env) -> bool {
@@ -360,7 +360,7 @@ pub fn load_disqualification(env: &Env, team: u32) -> Result<DisqualificationCas
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(Error::DisqualificationNotOpen)?;
+        .ok_or(Error::CaseNotOpen)?;
     touch_entry(env, &key);
 
     Ok(case)
@@ -417,7 +417,7 @@ pub fn load_score_root(env: &Env) -> Result<BytesN<32>, Error> {
     env.storage()
         .instance()
         .get(&DataKey::ScoreRoot)
-        .ok_or(Error::ScoreRootMissing)
+        .ok_or(Error::RootMissing)
 }
 
 pub fn has_score_root(env: &Env) -> bool {
@@ -450,7 +450,7 @@ pub fn load_score(env: &Env, team: u32, judge: &Address) -> Result<u32, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Score(team, judge.clone()))
-        .ok_or(Error::ScorecardNotFound)
+        .ok_or(Error::NotFound)
 }
 
 pub fn bump_criterion_tally(env: &Env, team: u32, criterion: &Symbol, score: u32) {
@@ -490,7 +490,7 @@ pub fn load_ballot_root(env: &Env) -> Result<BytesN<32>, Error> {
     env.storage()
         .instance()
         .get(&DataKey::BallotRoot)
-        .ok_or(Error::BallotRootMissing)
+        .ok_or(Error::RootMissing)
 }
 
 pub fn has_ballot_root(env: &Env) -> bool {
@@ -576,7 +576,7 @@ pub fn load_no_award(env: &Env, track: &Symbol) -> Result<NoAwardCase, Error> {
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(Error::NoAwardNotOpen)?;
+        .ok_or(Error::CaseNotOpen)?;
     touch_entry(env, &key);
 
     Ok(case)
@@ -604,7 +604,7 @@ pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {
     env.storage()
         .instance()
         .get(&DataKey::ConstitutionHash)
-        .ok_or(Error::RulesNotLocked)
+        .ok_or(Error::NotFound)
 }
 
 #[cfg(test)]
@@ -685,10 +685,7 @@ mod test {
 
         in_contract(&env, || {
             assert_eq!(load_constitution(&env).err(), Some(Error::NotInitialized));
-            assert_eq!(
-                load_constitution_hash(&env).err(),
-                Some(Error::RulesNotLocked)
-            );
+            assert_eq!(load_constitution_hash(&env).err(), Some(Error::NotFound));
         });
     }
 

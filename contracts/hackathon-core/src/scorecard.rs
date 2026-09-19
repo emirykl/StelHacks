@@ -103,11 +103,11 @@ impl Scorecard {
         for criterion in track.criteria.iter() {
             let given = self
                 .score_for(&criterion.id)
-                .ok_or(Error::ScorecardIncomplete)?;
+                .ok_or(Error::ScorecardInvalid)?;
 
             total = total
                 .checked_add(given * criterion.weight_bps)
-                .ok_or(Error::ScoreOutOfRange)?;
+                .ok_or(Error::ScorecardInvalid)?;
         }
 
         Ok(total)
@@ -129,21 +129,21 @@ impl Scorecard {
     /// from the one that will be used to count them.
     pub fn validate(&self, track: &Track) -> Result<(), Error> {
         if self.scores.len() != track.criteria.len() {
-            return Err(Error::ScorecardIncomplete);
+            return Err(Error::ScorecardInvalid);
         }
 
         for (index, entry) in self.scores.iter().enumerate() {
             if entry.score > MAX_CRITERION_SCORE {
-                return Err(Error::ScoreOutOfRange);
+                return Err(Error::ScorecardInvalid);
             }
 
             if track.weight_of(&entry.criterion).is_none() {
-                return Err(Error::CriteriaMissing);
+                return Err(Error::ConstitutionInvalid);
             }
 
             for other in self.scores.iter().skip(index + 1) {
                 if other.criterion == entry.criterion {
-                    return Err(Error::ScorecardIncomplete);
+                    return Err(Error::ScorecardInvalid);
                 }
             }
         }
@@ -244,7 +244,7 @@ mod test {
 
         assert_eq!(
             scorecard(&env, 101, 50).weighted_total(&track(&env)).err(),
-            Some(Error::ScoreOutOfRange)
+            Some(Error::ScorecardInvalid)
         );
     }
 
@@ -257,7 +257,7 @@ mod test {
 
         assert_eq!(
             card.weighted_total(&track(&env)).err(),
-            Some(Error::ScorecardIncomplete)
+            Some(Error::ScorecardInvalid)
         );
     }
 
@@ -275,7 +275,7 @@ mod test {
 
         assert_eq!(
             card.weighted_total(&track(&env)).err(),
-            Some(Error::ScorecardIncomplete)
+            Some(Error::ScorecardInvalid)
         );
     }
 
@@ -295,7 +295,7 @@ mod test {
 
         assert_eq!(
             card.weighted_total(&track(&env)).err(),
-            Some(Error::CriteriaMissing)
+            Some(Error::ConstitutionInvalid)
         );
     }
 

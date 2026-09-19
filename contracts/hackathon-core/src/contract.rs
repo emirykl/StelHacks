@@ -163,12 +163,12 @@ impl HackathonCore {
 
         let client = VaultClient::new(&env, &vault);
         if client.core() != env.current_contract_address() {
-            return Err(Error::VaultServesAnotherHackathon);
+            return Err(Error::VaultRejected);
         }
 
         let constitution = storage::load_constitution(&env)?;
         if client.asset() != constitution.prize_asset {
-            return Err(Error::VaultHoldsTheWrongAsset);
+            return Err(Error::VaultRejected);
         }
 
         storage::save_vault(&env, &vault);
@@ -226,7 +226,7 @@ impl HackathonCore {
         }
 
         if storage::has_registration(&env, &applicant) {
-            return Err(Error::ApplicationAlreadyExists);
+            return Err(Error::ApplicationNotPending);
         }
 
         storage::save_registration(&env, &applicant, &Registration::pending(&env, now));
@@ -339,7 +339,7 @@ impl HackathonCore {
         let state = storage::load_state(&env)?;
 
         if state.phase.closing_deadline().is_none() {
-            return Err(Error::PhaseOrderInvalid);
+            return Err(Error::WrongPhase);
         }
 
         let advanced = state.advance(env.ledger().timestamp())?;
@@ -380,10 +380,7 @@ impl HackathonCore {
         organizers.organizer.require_auth();
 
         let state = storage::load_state(&env)?;
-        if state.phase.is_configurable() {
-            return Err(Error::RulesNotLocked);
-        }
-        if state.phase.is_terminal() {
+        if state.phase.is_configurable() || state.phase.is_terminal() {
             return Err(Error::WrongPhase);
         }
 
@@ -453,7 +450,7 @@ impl HackathonCore {
 
         let constitution = storage::load_constitution(&env)?;
         if constitution.track(&track).is_none() {
-            return Err(Error::TrackNotFound);
+            return Err(Error::NotFound);
         }
 
         let revised = storage::has_submission(&env, team_id);
@@ -506,7 +503,7 @@ impl HackathonCore {
 
         if let Ok(case) = storage::load_disqualification(&env, team_id) {
             if !case.resolved {
-                return Err(Error::DisqualificationAlreadyOpen);
+                return Err(Error::CaseAlreadyOpen);
             }
         }
 
@@ -545,7 +542,7 @@ impl HackathonCore {
             return Err(Error::SubmissionNotEligible);
         }
         if storage::has_disqualification(&env, team_id) {
-            return Err(Error::DisqualificationAlreadyOpen);
+            return Err(Error::CaseAlreadyOpen);
         }
 
         let now = env.ledger().timestamp();
@@ -621,7 +618,7 @@ impl HackathonCore {
 
         let mut case = storage::load_disqualification(&env, team_id)?;
         if case.resolved {
-            return Err(Error::DisqualificationNotOpen);
+            return Err(Error::CaseNotOpen);
         }
         if storage::has_disqualification_approval(&env, team_id, &judge) {
             return Err(Error::AlreadySigned);
@@ -654,7 +651,7 @@ impl HackathonCore {
 
         let mut case = storage::load_disqualification(&env, team_id)?;
         if case.resolved {
-            return Err(Error::DisqualificationNotOpen);
+            return Err(Error::CaseNotOpen);
         }
 
         let constitution = storage::load_constitution(&env)?;
@@ -730,7 +727,7 @@ impl HackathonCore {
         Self::require_cancellation_phase(&env)?;
 
         if storage::has_cancellation(&env) {
-            return Err(Error::CancellationAlreadyOpen);
+            return Err(Error::CaseAlreadyOpen);
         }
 
         storage::save_cancellation(
@@ -893,7 +890,7 @@ impl HackathonCore {
         }
 
         if storage::has_recused(&env, &judge, team_id) {
-            return Err(Error::AlreadyRecused);
+            return Err(Error::JudgeRecused);
         }
 
         storage::save_recusal(&env, &judge, team_id);
@@ -929,7 +926,7 @@ impl HackathonCore {
             return Err(Error::DeadlineNotReached);
         }
         if storage::has_score_root(&env) {
-            return Err(Error::ScoreRootAlreadyPublished);
+            return Err(Error::RootAlreadyPublished);
         }
 
         storage::save_score_root(&env, &root);
@@ -980,7 +977,7 @@ impl HackathonCore {
 
         let track = constitution
             .track(&submission.track)
-            .ok_or(Error::TrackNotFound)?;
+            .ok_or(Error::NotFound)?;
         let weighted = scorecard.weighted_total(&track)?;
 
         storage::save_score(&env, scorecard.team, &scorecard.judge, weighted);
@@ -1024,7 +1021,7 @@ impl HackathonCore {
             return Err(Error::DeadlineNotReached);
         }
         if storage::has_ballot_root(&env) {
-            return Err(Error::BallotRootAlreadyPublished);
+            return Err(Error::RootAlreadyPublished);
         }
 
         storage::save_ballot_root(&env, &root);
@@ -1167,7 +1164,7 @@ impl HackathonCore {
             .prize_tiers
             .iter()
             .find(|tier| tier.track == track && tier.rank == rank)
-            .ok_or(Error::PrizeTiersInvalid)?;
+            .ok_or(Error::NotFound)?;
 
         let placement = storage::load_ranking(&env, &track)?
             .iter()
@@ -1284,7 +1281,7 @@ impl HackathonCore {
             .prize_tiers
             .iter()
             .find(|tier| tier.track == track && tier.rank == rank)
-            .ok_or(Error::PrizeTiersInvalid)?;
+            .ok_or(Error::NotFound)?;
 
         storage::mark_paid(&env, &track, rank);
 
@@ -1337,13 +1334,13 @@ impl HackathonCore {
         }
 
         let constitution = storage::load_constitution(&env)?;
-        let definition = constitution.track(&track).ok_or(Error::TrackNotFound)?;
+        let definition = constitution.track(&track).ok_or(Error::NotFound)?;
 
         if !definition.no_award_allowed {
             return Err(Error::NoAwardNotDeclarable);
         }
         if storage::has_no_award(&env, &track) {
-            return Err(Error::NoAwardAlreadyOpen);
+            return Err(Error::CaseAlreadyOpen);
         }
 
         storage::save_no_award(
@@ -1377,7 +1374,7 @@ impl HackathonCore {
 
         let mut case = storage::load_no_award(&env, &track)?;
         if case.resolved {
-            return Err(Error::NoAwardAlreadyResolved);
+            return Err(Error::CaseNotOpen);
         }
         if storage::has_no_award_approval(&env, &track, &judge) {
             return Err(Error::AlreadySigned);
@@ -1406,7 +1403,7 @@ impl HackathonCore {
 
         let mut case = storage::load_no_award(&env, &track)?;
         if case.resolved {
-            return Err(Error::NoAwardAlreadyResolved);
+            return Err(Error::CaseNotOpen);
         }
 
         let constitution = storage::load_constitution(&env)?;
@@ -1678,7 +1675,7 @@ impl HackathonCore {
 
     fn require_free_to_join(env: &Env, who: &Address, policy: &TeamPolicy) -> Result<(), Error> {
         if !policy.multi_team_allowed && !storage::load_membership(env, who).is_empty() {
-            return Err(Error::AlreadyOnAnotherTeam);
+            return Err(Error::TeamJoinRejected);
         }
 
         Ok(())
