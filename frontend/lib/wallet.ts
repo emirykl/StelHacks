@@ -64,12 +64,60 @@ async function kit() {
   return StellarWalletsKit;
 }
 
-/** Open the picker and return whatever the person chose. */
-export async function connect(): Promise<Connection> {
+/**
+ * Open the picker and return whatever the person chose, or nothing.
+ *
+ * Closing the picker is not a failure, so it comes back as `null` rather than
+ * as an exception the caller has to recognise. The first version of this told
+ * the two apart by looking for words in the message, which broke the moment
+ * the wording changed and put `[object Object]` on the page.
+ */
+export async function connect(): Promise<Connection | null> {
   const instance = await kit();
-  const { address } = await instance.authModal();
 
-  return { address, wallet: instance.selectedModule.productName };
+  try {
+    const { address } = await instance.authModal();
+    return { address, wallet: instance.selectedModule.productName };
+  } catch (thrown) {
+    if (cancelled(thrown)) {
+      return null;
+    }
+
+    throw new Error(explain(thrown));
+  }
+}
+
+/**
+ * The kit rejects with a plain object, not an `Error`.
+ *
+ * `{ code, message }`, where `-1` is the person closing the picker. Nothing in
+ * the type signatures says so, so both of these read the shape defensively: a
+ * wallet extension that answers in some third way should still produce a
+ * sentence rather than `[object Object]`.
+ */
+function cancelled(thrown: unknown): boolean {
+  return (
+    typeof thrown === "object" &&
+    thrown !== null &&
+    "code" in thrown &&
+    (thrown as { code: unknown }).code === -1
+  );
+}
+
+function explain(thrown: unknown): string {
+  if (thrown instanceof Error) {
+    return thrown.message;
+  }
+
+  if (typeof thrown === "object" && thrown !== null && "message" in thrown) {
+    const said = (thrown as { message: unknown }).message;
+
+    if (typeof said === "string" && said.length > 0) {
+      return said;
+    }
+  }
+
+  return "your wallet refused without saying why";
 }
 
 /**
@@ -82,7 +130,11 @@ export async function connect(): Promise<Connection> {
  */
 export async function proveAddress(address: string, challenge: string): Promise<string> {
   const instance = await kit();
-  const { signedMessage } = await instance.signMessage(challenge, { address });
 
-  return signedMessage;
+  try {
+    const { signedMessage } = await instance.signMessage(challenge, { address });
+    return signedMessage;
+  } catch (thrown) {
+    throw new Error(explain(thrown));
+  }
 }

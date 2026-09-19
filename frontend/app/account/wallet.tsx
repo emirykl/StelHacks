@@ -28,12 +28,16 @@ export function Wallet() {
     setRefused(null);
 
     try {
-      setWallet(await connect());
+      /* Null means the picker was closed, which is somebody changing their
+         mind rather than anything going wrong. Whatever was already connected
+         stays connected. */
+      const chosen = await connect();
+
+      if (chosen !== null) {
+        setWallet(chosen);
+      }
     } catch (error) {
-      /* Closing the picker is the ordinary way to change your mind, not a
-         failure worth a message. Anything else is worth saying. */
-      const said = error instanceof Error ? error.message : String(error);
-      setRefused(said.includes("chosen") || said.includes("closed") ? null : said);
+      setRefused(error instanceof Error ? error.message : "your wallet refused without saying why");
     } finally {
       setAsking(false);
     }
