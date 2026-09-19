@@ -8,6 +8,7 @@
 
 mod constitution;
 mod errors;
+mod hashing;
 mod phase;
 mod submission;
 mod team;
@@ -20,6 +21,7 @@ pub use constitution::{
     WEIGHT_TOTAL_BPS,
 };
 pub use errors::Error;
+pub use hashing::{hash_constitution, hash_submission_metadata};
 pub use phase::Phase;
 pub use submission::{SubmissionMetadata, SubmissionRequirements};
 pub use team::OrganizingTeam;
