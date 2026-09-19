@@ -121,6 +121,63 @@ function explain(thrown: unknown): string {
 }
 
 /**
+ * The address the kit already has, without opening anything.
+ *
+ * The kit keeps the last connected address in local storage, so somebody who
+ * connected on the account page and then navigated is still connected. Reading
+ * it back is what lets the header say so on every page rather than only on the
+ * one where the button was pressed.
+ */
+export async function restore(): Promise<Connection | null> {
+  const instance = await kit();
+
+  try {
+    const { address } = await instance.getAddress();
+
+    return address.length === 0
+      ? null
+      : { address, wallet: instance.selectedModule.productName };
+  } catch {
+    /* No wallet selected yet. Not a failure: it is the ordinary state of
+       somebody who has never connected. */
+    return null;
+  }
+}
+
+/** Forget the wallet, on this site only. The wallet itself is untouched. */
+export async function disconnect(): Promise<void> {
+  const instance = await kit();
+  await instance.disconnect();
+}
+
+/**
+ * Watch for the address changing underneath us.
+ *
+ * Somebody can switch accounts inside their wallet extension without touching
+ * this page, and a header still showing the old address would be quietly
+ * wrong about which key is about to sign something.
+ */
+export async function watch(onChange: (address: string | undefined) => void): Promise<() => void> {
+  const [instance, { KitEventType }] = await Promise.all([
+    kit(),
+    import("@creit.tech/stellar-wallets-kit/types"),
+  ]);
+
+  const stopState = instance.on(KitEventType.STATE_UPDATED, (event) => {
+    onChange(event.payload.address);
+  });
+
+  const stopDisconnect = instance.on(KitEventType.DISCONNECT, () => {
+    onChange(undefined);
+  });
+
+  return () => {
+    stopState();
+    stopDisconnect();
+  };
+}
+
+/**
  * Sign the server's challenge.
  *
  * The wallet signs a plain message rather than a transaction, because nothing

@@ -1,4 +1,5 @@
 import { ButtonLink, Measure } from "./primitives";
+import { WalletBadge } from "./wallet-badge";
 import { currentUser } from "../../lib/supabase/server";
 
 /**
@@ -48,10 +49,18 @@ export async function Header() {
 
         {/* The one place the header changes. "Browse" used to sit here and
             said the same thing as the Hackathons link beside it; whether
-            somebody is signed in does not. */}
-        <ButtonLink href="/account" size="sm" intent={user === null ? "primary" : "quiet"}>
-          {user === null ? "Sign in" : "Account"}
-        </ButtonLink>
+            somebody is signed in does not.
+
+            The badge sits to the left of it and appears only once a wallet is
+            connected, because the address in it is the key that signs the next
+            thing this person does and it should be visible wherever they are. */}
+        <div className="flex items-center gap-2">
+          <WalletBadge />
+
+          <ButtonLink href="/account" size="sm" intent={user === null ? "primary" : "quiet"}>
+            {user === null ? "Sign in" : "Account"}
+          </ButtonLink>
+        </div>
       </div>
     </header>
   );

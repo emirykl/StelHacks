@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 
 import { Footer, Header } from "./components/chrome";
+import { WalletProvider } from "./components/wallet-context";
 import "./globals.css";
 
 /**
@@ -63,9 +64,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${editorial.variable} ${technical.variable} ${mono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-paper text-ink">
-        <Header />
-        {children}
-        <Footer />
+        {/* Wraps everything, because the header and the account page both ask
+            which wallet is connected and they are on opposite sides of this
+            tree. Two copies of that answer could disagree, and a header naming
+            a different key from the one about to sign is the worst version of
+            being wrong. */}
+        <WalletProvider>
+          <Header />
+          {children}
+          <Footer />
+        </WalletProvider>
       </body>
     </html>
   );
