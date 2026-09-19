@@ -61,6 +61,11 @@ pub struct HackathonState {
     /// When the ranking closed, which is where the safety window counts from.
     /// Zero until then.
     pub finalized_at: u64,
+    /// When the money actually became payable, which is where the claim period
+    /// counts from. Kept apart from `finalized_at` because a settlement nobody
+    /// opened for a month would otherwise burn the claim period before any
+    /// winner could reach their prize.
+    pub settlement_opened_at: u64,
 }
 
 impl HackathonState {
@@ -71,6 +76,7 @@ impl HackathonState {
             schedule,
             settlement_paused: false,
             finalized_at: 0,
+            settlement_opened_at: 0,
         }
     }
 
@@ -94,6 +100,7 @@ impl HackathonState {
             schedule: self.schedule.clone(),
             settlement_paused: self.settlement_paused,
             finalized_at: self.finalized_at,
+            settlement_opened_at: self.settlement_opened_at,
         })
     }
 
@@ -125,6 +132,7 @@ impl HackathonState {
             schedule,
             settlement_paused: self.settlement_paused,
             finalized_at: self.finalized_at,
+            settlement_opened_at: self.settlement_opened_at,
         };
 
         Ok((state, usage.record(added)?))
@@ -150,6 +158,7 @@ mod test {
             schedule: schedule(),
             settlement_paused: false,
             finalized_at: 0,
+            settlement_opened_at: 0,
         }
     }
 

@@ -326,6 +326,25 @@ pub fn no_award_resolved(env: &Env, track: &Symbol, declared: bool, returned: i1
     .publish(env);
 }
 
+/// A prize nobody claimed went back along the announced route.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrizeSwept {
+    #[topic]
+    pub track: Symbol,
+    pub rank: u32,
+    pub amount: i128,
+}
+
+pub fn prize_swept(env: &Env, track: &Symbol, rank: u32, amount: i128) {
+    PrizeSwept {
+        track: track.clone(),
+        rank,
+        amount,
+    }
+    .publish(env);
+}
+
 pub fn prize_paid(env: &Env, to: &Address, track: &Symbol, rank: u32, team: u32, amount: i128) {
     PrizePaid {
         to: to.clone(),

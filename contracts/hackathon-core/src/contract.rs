@@ -68,6 +68,7 @@ impl HackathonCore {
                 schedule: constitution.schedule.clone(),
                 settlement_paused: state.settlement_paused,
                 finalized_at: state.finalized_at,
+                settlement_opened_at: state.settlement_opened_at,
             },
         );
 
@@ -774,7 +775,10 @@ impl HackathonCore {
             return Err(Error::SafetyWindowOpen);
         }
 
-        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
+        let mut opened = state.advance(env.ledger().timestamp())?;
+        opened.settlement_opened_at = env.ledger().timestamp();
+
+        storage::save_state(&env, &opened);
         events::phase_advanced(&env, Phase::Settlement);
 
         Ok(())
@@ -817,6 +821,70 @@ impl HackathonCore {
         state.settlement_paused = false;
         storage::save_state(&env, &state);
         events::settlement_held(&env, false, &reason);
+
+        Ok(())
+    }
+
+    /// Returns a prize nobody came for.
+    ///
+    /// A winner who never turns up leaves their prize sitting in the vault
+    /// forever otherwise, and a vault that can never empty is a vault whose
+    /// balance stops meaning anything. The claim period is announced before the
+    /// lock and counts from the moment the money became payable, so a winner
+    /// always had the full window the rules promised them.
+    pub fn sweep_unclaimed(env: Env, track: Symbol, rank: u32) -> Result<i128, Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+        if storage::is_paid(&env, &track, rank) {
+            return Err(Error::PrizeAlreadyPaid);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        let claim_period = constitution.discretion.prize_claim_period;
+
+        if env.ledger().timestamp() < state.settlement_opened_at + claim_period {
+            return Err(Error::ClaimPeriodOpen);
+        }
+
+        let tier = constitution
+            .prize_tiers
+            .iter()
+            .find(|tier| tier.track == track && tier.rank == rank)
+            .ok_or(Error::PrizeTiersInvalid)?;
+
+        storage::mark_paid(&env, &track, rank);
+
+        let organizer = storage::load_organizing_team(&env)?.organizer;
+        VaultClient::new(&env, &storage::load_vault(&env)?).pay(&organizer, &tier.amount);
+
+        events::prize_swept(&env, &track, rank, tier.amount);
+
+        Ok(tier.amount)
+    }
+
+    /// Closes the hackathon for good.
+    ///
+    /// Every prize position has to have been settled one way or another first:
+    /// paid to a winner, returned after a no award, or swept once the claim
+    /// period ran out. A hackathon that closed with money still owed would be
+    /// exactly the outcome the proof page exists to make impossible.
+    pub fn complete(env: Env) -> Result<(), Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        for tier in constitution.prize_tiers.iter() {
+            if !storage::is_paid(&env, &tier.track, tier.rank) {
+                return Err(Error::SettlementIncomplete);
+            }
+        }
+
+        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
+        events::phase_advanced(&env, Phase::Completed);
 
         Ok(())
     }

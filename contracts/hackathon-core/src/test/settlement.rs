@@ -663,3 +663,166 @@ mod no_award {
         assert_eq!(settled.token.balance(&captain), 5_000);
     }
 }
+
+/// Closing the hackathon, and what happens to a prize nobody came for.
+mod closing {
+    use super::*;
+
+    fn defi() -> Symbol {
+        symbol_short!("defi")
+    }
+
+    /// Settles every position the sample prize table holds.
+    ///
+    /// The defi track drew no entries, so its position has no winner to pay and
+    /// is closed by the sweep instead. That is the ordinary case rather than an
+    /// edge one: a track nobody entered still has to end somewhere.
+    fn settle_everything(settled: &Settled) {
+        settled.fixture.client.settle_prize(&payments(), &1);
+        settled.fixture.client.settle_prize(&payments(), &2);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        settled.fixture.client.sweep_unclaimed(&defi(), &1);
+    }
+
+    /// A hackathon that closed with money still owed would be the outcome the
+    /// proof page exists to make impossible.
+    #[test]
+    fn a_hackathon_cannot_close_while_a_prize_is_still_owed() {
+        let settled = Settled::open();
+        settled.fixture.client.settle_prize(&payments(), &1);
+
+        assert_eq!(
+            settled.fixture.client.try_complete().err(),
+            Some(Ok(Error::SettlementIncomplete))
+        );
+    }
+
+    #[test]
+    fn a_hackathon_closes_once_every_position_is_settled() {
+        let settled = Settled::open();
+
+        // The defi track had no entries, so its position falls to the sweep.
+        settled.fixture.client.settle_prize(&payments(), &1);
+        settled.fixture.client.settle_prize(&payments(), &2);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        settled.fixture.client.sweep_unclaimed(&defi(), &1);
+        settled.fixture.client.complete();
+
+        assert_eq!(settled.fixture.client.phase(), Phase::Completed);
+    }
+
+    /// The winner keeps the full window the rules promised them.
+    #[test]
+    fn nothing_is_swept_while_the_claim_period_is_open() {
+        let settled = Settled::open();
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_sweep_unclaimed(&defi(), &1)
+                .err(),
+            Some(Ok(Error::ClaimPeriodOpen))
+        );
+    }
+
+    #[test]
+    fn a_prize_nobody_came_for_goes_back_to_the_organizer() {
+        let settled = Settled::open();
+        let organizer = settled.fixture.organizer.clone();
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        let before = settled.token.balance(&organizer);
+        let swept = settled.fixture.client.sweep_unclaimed(&defi(), &1);
+
+        assert_eq!(swept, 2_000);
+        assert_eq!(settled.token.balance(&organizer), before + 2_000);
+    }
+
+    #[test]
+    fn a_prize_that_was_paid_cannot_also_be_swept() {
+        let settled = Settled::open();
+        settled.fixture.client.settle_prize(&payments(), &1);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_sweep_unclaimed(&payments(), &1)
+                .err(),
+            Some(Ok(Error::PrizeAlreadyPaid))
+        );
+    }
+
+    /// The invariant the vault exists to hold: what went in either reached a
+    /// winner or came back, and nothing is stranded.
+    #[test]
+    fn the_vault_empties_exactly_once_the_hackathon_closes() {
+        let settled = Settled::open();
+        assert_eq!(settled.vault.balance(), 10_000);
+
+        settled.fixture.client.settle_prize(&payments(), &1);
+        settled.fixture.client.settle_prize(&payments(), &2);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+        settled.fixture.client.sweep_unclaimed(&defi(), &1);
+
+        settled.fixture.client.complete();
+
+        assert_eq!(settled.vault.balance(), 0);
+    }
+
+    #[test]
+    fn a_closed_hackathon_cannot_be_closed_again() {
+        let settled = Settled::open();
+        settle_everything(&settled);
+        settled.fixture.client.complete();
+
+        assert_eq!(
+            settled.fixture.client.try_complete().err(),
+            Some(Ok(Error::WrongPhase))
+        );
+    }
+}

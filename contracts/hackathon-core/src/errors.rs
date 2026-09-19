@@ -126,4 +126,6 @@ pub enum Error {
     NoAwardAlreadyOpen = 148,
     NoAwardNotOpen = 149,
     NoAwardAlreadyResolved = 150,
+    ClaimPeriodOpen = 151,
+    SettlementIncomplete = 152,
 }
