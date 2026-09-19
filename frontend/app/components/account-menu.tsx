@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 
-import { ButtonLink } from "./primitives";
+import { CommitButton } from "./commit-button";
 import { Pop, Press } from "./motion";
 import { browserClient } from "../../lib/supabase/client";
 import { shorten, useWallet } from "./wallet-context";
@@ -69,9 +69,9 @@ export function AccountMenu({ email }: { email: string | null }) {
      here and it should look like a door from across the page. */
   if (email === null) {
     return (
-      <ButtonLink href="/login" size="sm" className="bg-ink text-signal hover:bg-ink/90">
+      <CommitButton href="/login" size="sm">
         Log In
-      </ButtonLink>
+      </CommitButton>
     );
   }
 

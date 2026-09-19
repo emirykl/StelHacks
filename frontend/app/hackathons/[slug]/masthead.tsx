@@ -1,4 +1,5 @@
 import { ButtonLink, Measure } from "../../components/primitives";
+import { CommitButton } from "../../components/commit-button";
 import { VISIBILITY, windowsOf, type Window } from "../../../lib/rules";
 import { prizeLabel, worthOf } from "../../../lib/money";
 import { phaseName } from "../../../lib/phase";
@@ -329,11 +330,7 @@ function Action({ phase }: { phase: number | null }) {
     );
   }
 
-  return (
-    <ButtonLink href="?tab=take-part" className="shrink-0 bg-ink text-signal hover:bg-ink/90">
-      Register as a hacker
-    </ButtonLink>
-  );
+  return <CommitButton href="?tab=take-part">Register as a hacker</CommitButton>;
 }
 
 /** A map pin, drawn rather than fetched, so the page ships no extra image. */

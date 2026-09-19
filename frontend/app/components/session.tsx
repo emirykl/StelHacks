@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "./primitives";
+import { CommitButton } from "./commit-button";
 import { Swap } from "./motion";
 import { browserClient } from "../../lib/supabase/client";
 
@@ -149,9 +150,9 @@ export function SignIn({ next = "/account" }: { next?: string }) {
             </label>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={busy || code.length < 6}>
+              <CommitButton type="submit" disabled={busy || code.length < 6}>
                 {busy ? "Checking" : "Sign in"}
-              </Button>
+              </CommitButton>
 
               <Button
                 type="button"
@@ -202,9 +203,11 @@ export function SignIn({ next = "/account" }: { next?: string }) {
               />
             </label>
 
-            <Button type="submit" disabled={busy || email.length === 0} className="justify-self-start">
-              {busy ? "Sending a code" : "Send me a code"}
-            </Button>
+            <div className="justify-self-start">
+              <CommitButton type="submit" disabled={busy || email.length === 0}>
+                {busy ? "Sending a code" : "Send me a code"}
+              </CommitButton>
+            </div>
 
             <Refusal message={refused} />
           </form>
