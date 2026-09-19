@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { Lift } from "./motion";
 import { phaseName } from "../../lib/phase";
 import { prizeLabel, worthOf } from "../../lib/money";
 import type { HackathonSummary } from "../../lib/chain";
@@ -32,95 +31,95 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
   const funding = hackathon.phase === 1;
 
   return (
-    /* The lift is on a wrapper rather than on the link itself, because the link
-       is the flex column that has to fill its grid cell and animating the same
-       element that is being stretched by a grid is how a row goes ragged. */
-    <Lift className="group h-full">
-      <Link
-        href={`/hackathons/${hackathon.slug}`}
-        className="flex h-full flex-col overflow-hidden border border-rule bg-paper transition-colors duration-150 ease-settle hover:border-ink-faint"
-      >
-        <Picture hackathon={hackathon} running={running} funding={funding} finished={finished} />
+    /* Hovering sharpens the frame rather than raising the card. The hairline
+       goes to full ink and a second one is drawn just inside it, so the edge
+       gains weight without gaining a pixel of size: an inset ring cannot push
+       its neighbours the way a border that thickens would, and a grid of these
+       has to stay still while one of them answers. */
+    <Link
+      href={`/hackathons/${hackathon.slug}`}
+      className="group flex h-full flex-col overflow-hidden border border-rule bg-paper transition-[border-color,box-shadow] duration-150 ease-settle hover:border-ink hover:ring-1 hover:ring-inset hover:ring-ink"
+    >
+      <Picture hackathon={hackathon} running={running} funding={funding} finished={finished} />
 
-        <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5">
-          <div className="min-w-0">
-            <div className="flex items-start gap-3">
-              {hackathon.logo_url !== null && (
-                /* The organizer's mark. A hackathon people have heard of is
-                   recognised by it before the name is read. */
-                <img
-                  src={hackathon.logo_url}
-                  alt=""
-                  width={32}
-                  height={32}
-                  className="size-8 shrink-0 rounded-[0.3rem] object-cover ring-1 ring-rule"
-                />
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5">
+        <div className="min-w-0">
+          <div className="flex items-start gap-3">
+            {hackathon.logo_url !== null && (
+              /* The organizer's mark. A hackathon people have heard of is
+                 recognised by it before the name is read. */
+              <img
+                src={hackathon.logo_url}
+                alt=""
+                width={32}
+                height={32}
+                className="size-8 shrink-0 rounded-[0.3rem] object-cover ring-1 ring-rule"
+              />
+            )}
+
+            <h3 className="min-w-0 text-[1.25rem] leading-tight transition-colors group-hover:text-ink-soft">
+              {hackathon.name}
+            </h3>
+          </div>
+
+          {hackathon.tagline !== null && (
+            <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+              {hackathon.tagline}
+            </p>
+          )}
+        </div>
+
+        <div>
+          {(hackathon.location !== null || hackathon.tags.length > 0) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              {/* A place is not a subject, so it is not dressed as one. The pin
+                  says which kind of fact it is without a word being spent. */}
+              {hackathon.location !== null && (
+                <span className="label flex items-center gap-1.5 text-ink-soft">
+                  <Pin />
+                  {hackathon.location}
+                </span>
               )}
 
-              <h3 className="min-w-0 text-[1.25rem] leading-tight transition-colors group-hover:text-ink-soft">
-                {hackathon.name}
-              </h3>
+              {hackathon.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="label bg-paper-sunk px-2 py-1 text-ink-faint"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
+          )}
 
-            {hackathon.tagline !== null && (
-              <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
-                {hackathon.tagline}
-              </p>
-            )}
-          </div>
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-rule pt-4">
+            {/* The two numbers somebody is actually comparing across a grid of
+                these, so they are the two things given weight. The money is
+                green because money is; the countdown is full ink because it is
+                the other half of the same decision, and a deadline set in the
+                soft grey the tags use loses to them. Everything else on the
+                card stays quiet so that this pair reads first. */}
+            <p className="tabular text-[1.25rem] font-bold text-verified">
+              {/* Absent rather than zero when the contract could not be reached.
+                  A prize shown as nothing is a claim; a prize shown as unknown
+                  is the truth. */}
+              {hackathon.prize === null ? (
+                <span className="label font-normal text-ink-faint">prize not readable</span>
+              ) : (
+                <>
+                  {prize.figure}{" "}
+                  <span className="label font-normal text-ink-faint">{prize.code}</span>
+                </>
+              )}
+            </p>
 
-          <div>
-            {(hackathon.location !== null || hackathon.tags.length > 0) && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                {/* A place is not a subject, so it is not dressed as one. The pin
-                    says which kind of fact it is without a word being spent. */}
-                {hackathon.location !== null && (
-                  <span className="label flex items-center gap-1.5 text-ink-soft">
-                    <Pin />
-                    {hackathon.location}
-                  </span>
-                )}
-
-                {hackathon.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="label bg-paper-sunk px-2 py-1 text-ink-faint"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-rule pt-4">
-              {/* The two numbers somebody is actually comparing across a grid of
-                  these, so they are the two things given weight. The money is
-                  green because money is; the countdown is full ink because it is
-                  the other half of the same decision, and a deadline set in the
-                  soft grey the tags use loses to them. Everything else on the
-                  card stays quiet so that this pair reads first. */}
-              <p className="tabular text-[1.25rem] font-bold text-verified">
-                {/* Absent rather than zero when the contract could not be reached.
-                    A prize shown as nothing is a claim; a prize shown as unknown
-                    is the truth. */}
-                {hackathon.prize === null ? (
-                  <span className="label font-normal text-ink-faint">prize not readable</span>
-                ) : (
-                  <>
-                    {prize.figure}{" "}
-                    <span className="label font-normal text-ink-faint">{prize.code}</span>
-                  </>
-                )}
-              </p>
-
-              <p className="label font-bold text-ink">
-                <Remaining closesAt={hackathon.closesAt} finished={finished} />
-              </p>
-            </div>
+            <p className="label font-bold text-ink">
+              <Remaining closesAt={hackathon.closesAt} finished={finished} />
+            </p>
           </div>
         </div>
-      </Link>
-    </Lift>
+      </div>
+    </Link>
   );
 }
 
