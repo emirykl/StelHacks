@@ -163,3 +163,29 @@ each of its last three buttons would have failed. And the weighted score is a
 criterion out of a hundred times ten thousand basis points, so a perfect card is
 a million; dividing by anything else printed this result as eighty six hundred
 percent.
+
+## The sealed route, proved end to end
+
+`frontend/scripts/sealed-lifecycle.mts` is the four minute walk again, but the
+scorecard goes to the collection service instead of the organizer publishing a
+root themselves. That is the arrangement the judge console uses, and it is the
+only way to find out whether the service, the SDK and the contract agree about
+what a leaf is and what a signature covers.
+
+| What | Address |
+|---|---|
+| `hackathon-core` | `CBJQGVRAX57HQ53G4TDMMMOXNKJTXAL4DWO3NG3FUU474JRVPYMITXHP` |
+| `prize-vault` | `CDNCIR2IIORTRKSEHK32R4FRZPAEJDNMCKQ4M3BA46T5UWHSTEZRSCVB` |
+| sealer | `GDTQSU3L2UVUEFOHEGDO5FNICW2URPWNFEQVZYK46LX6ZPNCYDUNEVGC` |
+
+The card was taken and receipted, the service built the tree and published the
+root on chain as the address the rules named, the inclusion proof came back, the
+card revealed to the same 860000, and the prize was paid.
+
+**Three things it caught.** The sealer's own account has to be funded, because
+publishing a root is a transaction like any other. Version 17 of the Stellar SDK
+returns a plain `Uint8Array` from `Keypair.sign`, and `Uint8Array.toString("hex")`
+is not hex: it is the comma separated decimals, which decode to a single byte
+and produce a signature rejected for its length rather than its contents. The
+frontend is on 17 and the backend and SDK are on 14, where the same call returns
+a `Buffer`, so anything moving between them has to wrap before it stringifies.

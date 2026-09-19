@@ -21,6 +21,7 @@ export {
 } from "./hashing.js";
 export {
   signScorecard,
+  signedPayload,
   signBallot,
   verifySealed,
   verifyScorecard,

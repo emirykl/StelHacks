@@ -2,6 +2,7 @@ import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import type { Scorecard } from "hackathon-core";
 
 import { ballotLeaf, scorecardLeaf } from "./hashing.js";
+import { toHex } from "./hex.js";
 import type { Digest } from "./merkle.js";
 
 /**
@@ -18,6 +19,18 @@ import type { Digest } from "./merkle.js";
  * What gets signed is the leaf, not the scorecard. That ties the signature to
  * the exact bytes the tree commits to, so a signature cannot be lifted off one
  * encoding and presented against another.
+ *
+ * The leaf is signed as its hexadecimal text rather than as its thirty two raw
+ * bytes, and that is a concession to where the signing actually happens. A
+ * judge signs in a wallet, and every wallet's message signing API takes a
+ * string; handing arbitrary bytes to a string interface is exactly where
+ * encodings get mangled, and differently in each wallet. Hex is unambiguous in
+ * all of them, and what is signed is still the leaf, only written down.
+ *
+ * Nothing on chain depends on this. The contract verifies a Merkle proof and
+ * never sees a signature, so the format is a convention between the judge, this
+ * SDK and the collection service, and can be read off `signedPayload` below by
+ * anybody rechecking the work.
  */
 
 /** A signature over a sealed entry, alongside the address that made it. */
@@ -69,7 +82,7 @@ export function verifySealed(entry: SealedSignature): boolean {
   }
 
   return Keypair.fromPublicKey(entry.signer).verify(
-    Buffer.from(entry.leaf),
+    Buffer.from(signedPayload(entry.leaf)),
     Buffer.from(entry.signature),
   );
 }
@@ -89,11 +102,22 @@ export function verifyBallot(voter: string, team: number, entry: SealedSignature
   return matches(ballotLeaf(voter, team), entry) && entry.signer === voter;
 }
 
+/**
+ * The exact bytes an ed25519 signature covers.
+ *
+ * Exported because a judge signing in a wallet has to produce a signature over
+ * this and nothing else, and because anybody rechecking a sealed entry needs to
+ * know what was signed without reading this file.
+ */
+export function signedPayload(leaf: Digest): Uint8Array {
+  return new TextEncoder().encode(toHex(leaf));
+}
+
 function sign(leaf: Digest, keypair: Keypair): SealedSignature {
   return {
     signer: keypair.publicKey(),
     leaf,
-    signature: new Uint8Array(keypair.sign(Buffer.from(leaf))),
+    signature: new Uint8Array(keypair.sign(Buffer.from(signedPayload(leaf)))),
   };
 }
 

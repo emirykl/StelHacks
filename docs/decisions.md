@@ -463,6 +463,37 @@ client ever writes a link.
 
 ---
 
+## 24. A judge signs the leaf as text, because that is what a wallet can carry
+
+**The rule was** that a sealed entry is signed over the leaf: the exact thirty
+two bytes the Merkle tree commits to, so a signature cannot be lifted off one
+encoding and presented against another.
+
+**Decided.** The same leaf, signed as its lowercase hexadecimal text.
+
+**Why.** The signing moved. When the SDK was written the signer was a keypair in
+a script, which can sign arbitrary bytes. A judge signs in a wallet, and every
+wallet's message signing interface takes a string. A digest routinely contains
+nulls and bytes above 0x7f, and handing those to a string interface is where
+encodings get mangled, differently in each wallet, with no error to point at.
+Hex is unambiguous everywhere and the thing signed is still the leaf, only
+written down.
+
+**What this does not touch.** The contract never sees these signatures. It
+verifies a Merkle proof at the reveal and takes no signature at all, so this is
+a convention between the judge, the SDK and the collection service. It is not in
+`fixtures/` and cannot drift the contract and the SDK apart. `sdk/test/signing`
+pins the payload, so changing it fails there rather than at a judge's wallet
+with nothing to read.
+
+**What is still unproven.** That a wallet's `signMessage` returns a raw ed25519
+signature over exactly those bytes rather than over some prefixed or rehashed
+form of them. The whole path has been run end to end with a keypair, which
+proves the service, the SDK and the contract agree; the wallet is the one link
+that needs a real extension in front of a real person.
+
+---
+
 ## Still open
 
 - Team structure: maximum size, who sets the in team prize shares, whether one

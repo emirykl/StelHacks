@@ -143,6 +143,20 @@ export function Console({ contractId }: { contractId: string }) {
         />
       )}
 
+      {/* The judges have their own surface and the organizer is usually one of
+          them, so the way in is here rather than in an email. */}
+      {state.phase >= 3 && state.phase <= 4 && (
+        <p className="text-[0.875rem] text-ink-soft">
+          Judges score at{" "}
+          <a
+            href={`/judge/${contractId}`}
+            className="tabular text-[0.8125rem] text-ink underline decoration-rule underline-offset-4 hover:decoration-ink"
+          >
+            /judge/{contractId.slice(0, 8)}…
+          </a>
+        </p>
+      )}
+
       {/* Screening runs from the moment projects can arrive rather than only
           in the screening phase, because the entries are worth seeing while
           they come in and the contract decides for itself when striking one

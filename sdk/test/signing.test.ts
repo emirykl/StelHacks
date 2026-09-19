@@ -5,6 +5,7 @@ import { scorecardLeaf } from "../src/hashing.js";
 import {
   signBallot,
   signScorecard,
+  signedPayload,
   verifyBallot,
   verifyScorecard,
   verifySealed,
@@ -126,5 +127,29 @@ describe("addresses that cannot sign this way", () => {
     const contract = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
     expect(verifySealed({ ...signed, signer: contract })).toBe(false);
+  });
+});
+
+/**
+ * What a judge's wallet has to sign, pinned.
+ *
+ * The signature is made in a wallet, whose message signing API takes a string,
+ * so the payload is the leaf written as hexadecimal rather than its raw bytes.
+ * Changing that silently would leave every wallet produced signature rejected
+ * at the collection service with nothing to point at, so it fails here instead.
+ */
+describe("what the signature covers", () => {
+  it("is the leaf as lowercase hexadecimal text", () => {
+    const leaf = new Uint8Array(32).fill(0xab);
+
+    expect(new TextDecoder().decode(signedPayload(leaf))).toBe("ab".repeat(32));
+  });
+
+  it("is text a wallet can carry, not bytes it would mangle", () => {
+    const leaf = new Uint8Array(32).fill(0);
+
+    /* Every byte in range for a string interface, which raw digest bytes are
+       not: a leaf routinely contains nulls and values above 0x7f. */
+    expect(signedPayload(leaf).every((byte) => byte >= 0x30 && byte <= 0x66)).toBe(true);
   });
 });
