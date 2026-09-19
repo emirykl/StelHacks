@@ -1,4 +1,4 @@
-import { ButtonLink, Measure } from "./primitives";
+import { Measure } from "./primitives";
 import { WalletBadge } from "./wallet-badge";
 import { currentUser } from "../../lib/supabase/server";
 
@@ -47,20 +47,11 @@ export async function Header() {
           ))}
         </nav>
 
-        {/* The one place the header changes. "Browse" used to sit here and
-            said the same thing as the Hackathons link beside it; whether
-            somebody is signed in does not.
-
-            The badge sits to the left of it and appears only once a wallet is
-            connected, because the address in it is the key that signs the next
-            thing this person does and it should be visible wherever they are. */}
-        <div className="flex items-center gap-2">
-          <WalletBadge />
-
-          <ButtonLink href="/account" size="sm" intent={user === null ? "primary" : "quiet"}>
-            {user === null ? "Sign in" : "Account"}
-          </ButtonLink>
-        </div>
+        {/* The one control on the right, and it changes with the situation:
+            sign in, then a way to the account, then the connected address once
+            there is one. "Browse" used to sit here and said the same thing as
+            the Hackathons link beside it. */}
+        <WalletBadge signedIn={user !== null} />
       </div>
     </header>
   );

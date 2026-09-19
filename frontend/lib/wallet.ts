@@ -17,6 +17,8 @@ export interface Connection {
   address: string;
   /** Which wallet answered, for showing back to the person who picked it. */
   wallet: string;
+  /** The kit's id for that wallet, which is how we find its icon. */
+  id: string;
 }
 
 /**
@@ -77,7 +79,9 @@ export async function connect(): Promise<Connection | null> {
 
   try {
     const { address } = await instance.authModal();
-    return { address, wallet: instance.selectedModule.productName };
+    const module = instance.selectedModule;
+
+    return { address, wallet: module.productName, id: module.productId };
   } catch (thrown) {
     if (cancelled(thrown)) {
       return null;
@@ -134,9 +138,13 @@ export async function restore(): Promise<Connection | null> {
   try {
     const { address } = await instance.getAddress();
 
-    return address.length === 0
-      ? null
-      : { address, wallet: instance.selectedModule.productName };
+    if (address.length === 0) {
+      return null;
+    }
+
+    const module = instance.selectedModule;
+
+    return { address, wallet: module.productName, id: module.productId };
   } catch {
     /* No wallet selected yet. Not a failure: it is the ordinary state of
        somebody who has never connected. */
