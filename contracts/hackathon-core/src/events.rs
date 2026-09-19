@@ -71,6 +71,77 @@ pub struct Published {
     pub required: i128,
 }
 
+/// Someone asked to take part.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Applied {
+    #[topic]
+    pub applicant: Address,
+}
+
+/// A request was decided.
+///
+/// The reason digest travels with a refusal, so a decision that keeps somebody
+/// out of a hackathon can never be a silent one.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApplicationDecided {
+    #[topic]
+    pub applicant: Address,
+    pub approved: bool,
+    pub reason: BytesN<32>,
+}
+
+/// A team was founded.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TeamFounded {
+    #[topic]
+    pub captain: Address,
+    pub team: u32,
+}
+
+/// Someone joined a team.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MemberJoined {
+    #[topic]
+    pub member: Address,
+    pub team: u32,
+}
+
+pub fn applied(env: &Env, applicant: &Address) {
+    Applied {
+        applicant: applicant.clone(),
+    }
+    .publish(env);
+}
+
+pub fn application_decided(env: &Env, applicant: &Address, approved: bool, reason: &BytesN<32>) {
+    ApplicationDecided {
+        applicant: applicant.clone(),
+        approved,
+        reason: reason.clone(),
+    }
+    .publish(env);
+}
+
+pub fn team_founded(env: &Env, captain: &Address, team: u32) {
+    TeamFounded {
+        captain: captain.clone(),
+        team,
+    }
+    .publish(env);
+}
+
+pub fn member_joined(env: &Env, member: &Address, team: u32) {
+    MemberJoined {
+        member: member.clone(),
+        team,
+    }
+    .publish(env);
+}
+
 pub fn vault_bound(env: &Env, vault: &Address) {
     VaultBound {
         vault: vault.clone(),

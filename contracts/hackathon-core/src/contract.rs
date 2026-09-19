@@ -1,11 +1,12 @@
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-use crate::constitution::Constitution;
+use crate::constitution::{Constitution, TeamPolicy};
 use crate::errors::Error;
 use crate::events;
 use crate::hashing::hash_constitution;
 use crate::organizers::OrganizingTeam;
 use crate::phase::Phase;
+use crate::roster::{Registration, Team};
 use crate::state::HackathonState;
 use crate::storage;
 use crate::vault::VaultClient;
@@ -30,7 +31,7 @@ impl HackathonCore {
         organizer.require_auth();
         constitution.validate()?;
 
-        storage::save_team(&env, &OrganizingTeam::new(&env, organizer.clone()));
+        storage::save_organizing_team(&env, &OrganizingTeam::new(&env, organizer.clone()));
         storage::save_state(&env, &HackathonState::draft(constitution.schedule.clone()));
         storage::save_constitution(&env, &constitution);
 
@@ -45,7 +46,7 @@ impl HackathonCore {
     /// phase check is what makes the lock mean anything: once the rules are
     /// frozen this call has no path back in, no matter who signs it.
     pub fn configure(env: Env, constitution: Constitution) -> Result<(), Error> {
-        let team = storage::load_team(&env)?;
+        let team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
         let state = storage::load_state(&env)?;
@@ -78,11 +79,11 @@ impl HackathonCore {
     /// wait for a new hackathon. The reach of that helper is narrow enough that
     /// widening the list under pressure is safe.
     pub fn add_collaborator(env: Env, collaborator: Address) -> Result<(), Error> {
-        let mut team = storage::load_team(&env)?;
+        let mut team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
         team.add_collaborator(collaborator.clone())?;
-        storage::save_team(&env, &team);
+        storage::save_organizing_team(&env, &team);
 
         events::collaborator_added(&env, &collaborator);
 
@@ -95,11 +96,11 @@ impl HackathonCore {
     /// mean a participant's admission could be revoked by an argument between
     /// organizers, which is not a thing the participant can defend against.
     pub fn remove_collaborator(env: Env, collaborator: Address) -> Result<(), Error> {
-        let mut team = storage::load_team(&env)?;
+        let mut team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
         team.remove_collaborator(&collaborator)?;
-        storage::save_team(&env, &team);
+        storage::save_organizing_team(&env, &team);
 
         events::collaborator_removed(&env, &collaborator);
 
@@ -113,7 +114,7 @@ impl HackathonCore {
     /// anyone and written by no one, so a participant who reads the page before
     /// they start building is reading the rules that will decide the result.
     pub fn lock_rules(env: Env) -> Result<BytesN<32>, Error> {
-        let team = storage::load_team(&env)?;
+        let team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
         let state = storage::load_state(&env)?;
@@ -142,7 +143,7 @@ impl HackathonCore {
     /// organizer could point at a pool they control and publish a hackathon
     /// whose prize was never really committed.
     pub fn bind_vault(env: Env, vault: Address) -> Result<(), Error> {
-        let team = storage::load_team(&env)?;
+        let team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
         if storage::has_vault(&env) {
@@ -196,6 +197,184 @@ impl HackathonCore {
         Ok(())
     }
 
+    /// Asks to take part.
+    ///
+    /// The request has to arrive before registration closes. An organizer may
+    /// still be working through the queue after that, and a late approval is
+    /// fine, but a late request is not: the deadline is what fixes who could
+    /// possibly be in the electorate.
+    pub fn apply(env: Env, applicant: Address) -> Result<(), Error> {
+        applicant.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Open {
+            return Err(Error::WrongPhase);
+        }
+
+        let now = env.ledger().timestamp();
+        if now < state.schedule.registration_opens_at {
+            return Err(Error::DeadlineNotReached);
+        }
+        if now > state.schedule.registration_closes_at {
+            return Err(Error::DeadlinePassed);
+        }
+
+        if storage::has_registration(&env, &applicant) {
+            return Err(Error::ApplicationAlreadyExists);
+        }
+
+        storage::save_registration(&env, &applicant, &Registration::pending(&env, now));
+        events::applied(&env, &applicant);
+
+        Ok(())
+    }
+
+    /// Lets someone in.
+    ///
+    /// Open to the organizer and to any collaborator, because a queue of a
+    /// hundred applications is exactly the thing one person cannot clear alone.
+    pub fn approve_application(
+        env: Env,
+        reviewer: Address,
+        applicant: Address,
+    ) -> Result<(), Error> {
+        reviewer.require_auth();
+        storage::load_organizing_team(&env)?.require_application_reviewer(&reviewer)?;
+
+        let now = env.ledger().timestamp();
+        let decided = storage::load_registration(&env, &applicant)?.approve(&env, now)?;
+
+        storage::save_registration(&env, &applicant, &decided);
+        events::application_decided(&env, &applicant, true, &decided.reason);
+
+        Ok(())
+    }
+
+    /// Keeps someone out, on the record.
+    ///
+    /// The reason digest is required rather than optional. A refusal that
+    /// leaves no trace is the quiet back door beside the disqualification
+    /// process the product makes so much noise about.
+    pub fn reject_application(
+        env: Env,
+        reviewer: Address,
+        applicant: Address,
+        reason: BytesN<32>,
+    ) -> Result<(), Error> {
+        reviewer.require_auth();
+        storage::load_organizing_team(&env)?.require_application_reviewer(&reviewer)?;
+
+        let now = env.ledger().timestamp();
+        let decided = storage::load_registration(&env, &applicant)?.reject(now, reason)?;
+
+        storage::save_registration(&env, &applicant, &decided);
+        events::application_decided(&env, &applicant, false, &decided.reason);
+
+        Ok(())
+    }
+
+    /// Starts a team, with the caller as its captain.
+    ///
+    /// The captain is the address the prize is paid to, so founding a team is
+    /// also the moment somebody takes responsibility for settling up with the
+    /// people who join it.
+    pub fn create_team(env: Env, captain: Address) -> Result<u32, Error> {
+        captain.require_auth();
+        Self::require_open_and_approved(&env, &captain)?;
+
+        let constitution = storage::load_constitution(&env)?;
+        Self::require_free_to_join(&env, &captain, &constitution.teams)?;
+
+        let id = storage::next_team_id(&env);
+        let team = Team::found(&env, id, captain.clone());
+
+        storage::save_team(&env, &team);
+        Self::record_membership(&env, &captain, id);
+
+        events::team_founded(&env, &captain, id);
+
+        Ok(id)
+    }
+
+    /// Adds someone to a team.
+    ///
+    /// Both sides sign: the captain because it is their team and their prize,
+    /// the member because being placed on a team can cost them the right to
+    /// join the one they meant to. Neither can do it alone.
+    pub fn add_member(env: Env, team_id: u32, member: Address) -> Result<(), Error> {
+        let team = storage::load_team(&env, team_id)?;
+
+        team.captain.require_auth();
+        member.require_auth();
+
+        Self::require_open_and_approved(&env, &member)?;
+
+        let constitution = storage::load_constitution(&env)?;
+        Self::require_free_to_join(&env, &member, &constitution.teams)?;
+
+        let grown = team.add_member(member.clone(), &constitution.teams)?;
+
+        storage::save_team(&env, &grown);
+        Self::record_membership(&env, &member, team_id);
+
+        events::member_joined(&env, &member, team_id);
+
+        Ok(())
+    }
+
+    /// One person's registration.
+    pub fn registration(env: Env, applicant: Address) -> Result<Registration, Error> {
+        storage::load_registration(&env, &applicant)
+    }
+
+    /// One team.
+    pub fn team_by_id(env: Env, id: u32) -> Result<Team, Error> {
+        storage::load_team(&env, id)
+    }
+
+    /// How many teams have been founded.
+    pub fn team_count(env: Env) -> u32 {
+        storage::team_count(&env)
+    }
+
+    /// The teams one person belongs to.
+    pub fn membership(env: Env, who: Address) -> Vec<u32> {
+        storage::load_membership(&env, &who)
+    }
+
+    /// Whether this person may cast a community ballot.
+    pub fn may_vote(env: Env, who: Address) -> Result<bool, Error> {
+        let closes_at = storage::load_state(&env)?.schedule.registration_closes_at;
+
+        Ok(storage::load_registration(&env, &who)?.may_vote(closes_at))
+    }
+
+    fn require_open_and_approved(env: &Env, who: &Address) -> Result<(), Error> {
+        if storage::load_state(env)?.phase != Phase::Open {
+            return Err(Error::WrongPhase);
+        }
+
+        if !storage::load_registration(env, who)?.is_approved() {
+            return Err(Error::NotApproved);
+        }
+
+        Ok(())
+    }
+
+    fn require_free_to_join(env: &Env, who: &Address, policy: &TeamPolicy) -> Result<(), Error> {
+        if !policy.multi_team_allowed && !storage::load_membership(env, who).is_empty() {
+            return Err(Error::AlreadyOnAnotherTeam);
+        }
+
+        Ok(())
+    }
+
+    fn record_membership(env: &Env, who: &Address, team_id: u32) {
+        let mut teams = storage::load_membership(env, who);
+        teams.push_back(team_id);
+        storage::save_membership(env, who, &teams);
+    }
+
     /// What the prize table adds up to.
     pub fn required_funding(env: Env) -> Result<i128, Error> {
         storage::load_constitution(&env)?.required_funding()
@@ -235,7 +414,7 @@ impl HackathonCore {
 
     /// The organizer and their collaborators.
     pub fn team(env: Env) -> Result<OrganizingTeam, Error> {
-        storage::load_team(&env)
+        storage::load_organizing_team(&env)
     }
 
     /// The current phase, which is the one value most readers want.

@@ -8,6 +8,7 @@
 //! product's promises live at that level, so this is where they are checked.
 
 mod funding;
+mod registration;
 mod setup;
 
 use soroban_sdk::testutils::Address as _;
@@ -54,6 +55,28 @@ impl Fixture {
     pub fn locked() -> Fixture {
         let fixture = Fixture::created();
         fixture.client.lock_rules();
+
+        fixture
+    }
+
+    /// A funded hackathon that has opened for applications.
+    pub fn funded_and_open() -> Fixture {
+        use prize_vault::{PrizeVault, PrizeVaultClient};
+        use soroban_sdk::token::StellarAssetClient;
+
+        let fixture = Fixture::locked_with_asset();
+        let asset = fixture.client.constitution().prize_asset;
+
+        let vault_id = fixture.env.register(PrizeVault, ());
+        let vault = PrizeVaultClient::new(&fixture.env, &vault_id);
+        vault.create(&fixture.client.address, &asset);
+        fixture.client.bind_vault(&vault.address);
+
+        let sponsor = Address::generate(&fixture.env);
+        StellarAssetClient::new(&fixture.env, &asset).mint(&sponsor, &10_000);
+        vault.deposit(&sponsor, &10_000);
+
+        fixture.client.publish();
 
         fixture
     }

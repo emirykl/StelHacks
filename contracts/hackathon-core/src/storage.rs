@@ -1,8 +1,9 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::constitution::Constitution;
 use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
+use crate::roster::{Registration, Team};
 use crate::state::HackathonState;
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
@@ -19,6 +20,13 @@ pub const INSTANCE_LIFETIME_LEDGERS: u32 = 120 * LEDGERS_PER_DAY;
 /// The remaining lifetime below which a write pushes the entry back out.
 pub const INSTANCE_BUMP_THRESHOLD_LEDGERS: u32 = 90 * LEDGERS_PER_DAY;
 
+/// Registrations and teams live in persistent storage rather than the instance,
+/// because there can be hundreds of them and loading the instance would then
+/// mean loading the whole event on every call. They carry the same lifetime as
+/// the instance, since the proof page reads them long after the event ends.
+const ENTRY_LIFETIME_LEDGERS: u32 = INSTANCE_LIFETIME_LEDGERS;
+const ENTRY_BUMP_THRESHOLD_LEDGERS: u32 = INSTANCE_BUMP_THRESHOLD_LEDGERS;
+
 /// Everything the core contract stores, one variant per family of entry.
 ///
 /// Keys are an enum rather than loose symbols so that adding a new kind of
@@ -29,7 +37,7 @@ pub const INSTANCE_BUMP_THRESHOLD_LEDGERS: u32 = 90 * LEDGERS_PER_DAY;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
     /// The organizer and their collaborators.
-    Team,
+    Organizers,
     /// The rules, once locked.
     Constitution,
     /// The digest of those rules, kept beside them so a reader never has to
@@ -39,6 +47,14 @@ pub enum DataKey {
     State,
     /// The vault holding this hackathon's prize.
     Vault,
+    /// One person's request to take part.
+    Registration(Address),
+    /// One team.
+    Team(u32),
+    /// How many teams exist, which is also the next team's identifier.
+    TeamCount,
+    /// The teams one person belongs to.
+    Membership(Address),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -51,18 +67,18 @@ fn touch(env: &Env) {
 
 /// Whether this contract instance has been created yet.
 pub fn is_initialized(env: &Env) -> bool {
-    env.storage().instance().has(&DataKey::Team)
+    env.storage().instance().has(&DataKey::Organizers)
 }
 
-pub fn save_team(env: &Env, team: &OrganizingTeam) {
-    env.storage().instance().set(&DataKey::Team, team);
+pub fn save_organizing_team(env: &Env, team: &OrganizingTeam) {
+    env.storage().instance().set(&DataKey::Organizers, team);
     touch(env);
 }
 
-pub fn load_team(env: &Env) -> Result<OrganizingTeam, Error> {
+pub fn load_organizing_team(env: &Env) -> Result<OrganizingTeam, Error> {
     env.storage()
         .instance()
-        .get(&DataKey::Team)
+        .get(&DataKey::Organizers)
         .ok_or(Error::NotInitialized)
 }
 
@@ -123,6 +139,99 @@ pub fn has_vault(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Vault)
 }
 
+fn touch_entry(env: &Env, key: &DataKey) {
+    env.storage().persistent().extend_ttl(
+        key,
+        ENTRY_BUMP_THRESHOLD_LEDGERS,
+        ENTRY_LIFETIME_LEDGERS,
+    );
+}
+
+pub fn save_registration(env: &Env, applicant: &Address, registration: &Registration) {
+    let key = DataKey::Registration(applicant.clone());
+    env.storage().persistent().set(&key, registration);
+    touch_entry(env, &key);
+}
+
+pub fn load_registration(env: &Env, applicant: &Address) -> Result<Registration, Error> {
+    let key = DataKey::Registration(applicant.clone());
+    let registration = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::ApplicationNotFound)?;
+    touch_entry(env, &key);
+
+    Ok(registration)
+}
+
+pub fn has_registration(env: &Env, applicant: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Registration(applicant.clone()))
+}
+
+/// The identifier the next team will take, counting from one so that zero can
+/// stay a sentinel meaning no team.
+pub fn next_team_id(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TeamCount)
+        .unwrap_or(0u32)
+        + 1
+}
+
+pub fn save_team(env: &Env, team: &Team) {
+    let key = DataKey::Team(team.id);
+    env.storage().persistent().set(&key, team);
+    touch_entry(env, &key);
+
+    if team.id
+        > env
+            .storage()
+            .instance()
+            .get(&DataKey::TeamCount)
+            .unwrap_or(0u32)
+    {
+        env.storage().instance().set(&DataKey::TeamCount, &team.id);
+        touch(env);
+    }
+}
+
+pub fn load_team(env: &Env, id: u32) -> Result<Team, Error> {
+    let key = DataKey::Team(id);
+    let team = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::TeamNotFound)?;
+    touch_entry(env, &key);
+
+    Ok(team)
+}
+
+pub fn team_count(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TeamCount)
+        .unwrap_or(0u32)
+}
+
+/// The teams one person belongs to. An unknown address belongs to none, which
+/// is the same answer as an empty list, so the caller never handles both.
+pub fn load_membership(env: &Env, who: &Address) -> Vec<u32> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Membership(who.clone()))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn save_membership(env: &Env, who: &Address, teams: &Vec<u32>) {
+    let key = DataKey::Membership(who.clone());
+    env.storage().persistent().set(&key, teams);
+    touch_entry(env, &key);
+}
+
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {
     env.storage()
         .instance()
@@ -153,7 +262,7 @@ mod test {
 
         in_contract(&env, || {
             assert!(!is_initialized(&env));
-            assert_eq!(load_team(&env), Err(Error::NotInitialized));
+            assert_eq!(load_organizing_team(&env), Err(Error::NotInitialized));
             assert_eq!(load_state(&env), Err(Error::NotInitialized));
         });
     }
@@ -167,10 +276,10 @@ mod test {
             let mut team = OrganizingTeam::new(&env, organizer.clone());
             team.add_collaborator(Address::generate(&env)).unwrap();
 
-            save_team(&env, &team);
+            save_organizing_team(&env, &team);
 
             assert!(is_initialized(&env));
-            assert_eq!(load_team(&env), Ok(team));
+            assert_eq!(load_organizing_team(&env), Ok(team));
         });
     }
 
