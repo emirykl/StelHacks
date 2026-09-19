@@ -6,6 +6,10 @@
 //! judge scorecards and community votes, and computes the final ranking. Nothing
 //! outside this contract is allowed to decide who won.
 
+mod errors;
+
+pub use errors::Error;
+
 use soroban_sdk::contract;
 
 #[contract]
