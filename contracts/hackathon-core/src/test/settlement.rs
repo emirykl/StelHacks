@@ -979,3 +979,174 @@ mod closing {
         );
     }
 }
+
+/// Fund conservation, stated as invariants rather than as single steps.
+///
+/// The vault has no administrator and no withdrawal function, so every unit
+/// that goes in has to leave through a route the rules named or not leave at
+/// all. These tests count both sides of that sentence.
+mod conservation {
+    use super::*;
+
+    use soroban_sdk::token::StellarAssetClient;
+
+    fn defi() -> Symbol {
+        symbol_short!("defi")
+    }
+
+    /// Adds to the pool from a fresh sponsor, the way a late top up arrives.
+    fn top_up(settled: &Settled, amount: i128) {
+        let asset = settled.fixture.client.constitution().prize_asset;
+        let sponsor = Address::generate(&settled.fixture.env);
+
+        StellarAssetClient::new(&settled.fixture.env, &asset).mint(&sponsor, &amount);
+        settled.vault.deposit(&sponsor, &amount);
+    }
+
+    /// Runs the settlement to its end: both payments positions paid, the
+    /// unentered defi position swept once its claim period runs out.
+    fn settle_everything(settled: &Settled) {
+        settled.fixture.client.settle_prize(&payments(), &1);
+        settled.fixture.client.settle_prize(&payments(), &2);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        settled.fixture.client.sweep_unclaimed(&defi(), &1);
+    }
+
+    /// The invariant in full. Every unit deposited is either sitting in the
+    /// vault or in an address the rules sent it to, and never in both places
+    /// and never in neither.
+    #[test]
+    fn the_pool_equals_what_went_in_minus_what_was_paid_out() {
+        let settled = Settled::open();
+        let organizer = settled.fixture.organizer.clone();
+        let first = settled.captain(settled.teams.get(0).unwrap());
+        let second = settled.captain(settled.teams.get(1).unwrap());
+
+        let deposited = 10_000i128;
+        assert_eq!(settled.vault.balance(), deposited);
+
+        settle_everything(&settled);
+
+        let paid_out = settled.token.balance(&first)
+            + settled.token.balance(&second)
+            + settled.token.balance(&organizer);
+
+        assert_eq!(paid_out, deposited);
+        assert_eq!(settled.vault.balance(), deposited - paid_out);
+    }
+
+    /// Each payout moves exactly the amount the locked prize table names, out
+    /// of the vault and into one account. A payment that took a different sum
+    /// from the pool than it delivered would break the invariant without any
+    /// single balance looking wrong.
+    #[test]
+    fn each_payout_takes_from_the_pool_exactly_what_it_delivers() {
+        let settled = Settled::open();
+
+        for (rank, amount) in [(1u32, 5_000i128), (2, 3_000)] {
+            let captain = settled.captain(
+                settled
+                    .fixture
+                    .client
+                    .ranking(&payments())
+                    .iter()
+                    .find(|placement| placement.rank == rank)
+                    .unwrap()
+                    .team,
+            );
+
+            let pool = settled.vault.balance();
+            let held = settled.token.balance(&captain);
+
+            assert_eq!(
+                settled.fixture.client.settle_prize(&payments(), &rank),
+                amount
+            );
+            assert_eq!(settled.vault.balance(), pool - amount);
+            assert_eq!(settled.token.balance(&captain), held + amount);
+        }
+    }
+
+    /// A refused payout has to be a payout that did not happen. If the pool
+    /// moved before the check that turned the call down, the money would be
+    /// gone and the position would still read as owed.
+    #[test]
+    fn a_refused_payout_leaves_the_pool_where_it_was() {
+        let settled = Settled::through_finalization();
+        let pool = settled.vault.balance();
+
+        // The safety window has not run out, so settlement is not open yet.
+        assert!(settled
+            .fixture
+            .client
+            .try_settle_prize(&payments(), &1)
+            .is_err());
+        assert_eq!(settled.vault.balance(), pool);
+
+        let opened = Settled::open();
+        opened.fixture.client.settle_prize(&payments(), &1);
+        let after_paying = opened.vault.balance();
+
+        assert!(opened
+            .fixture
+            .client
+            .try_settle_prize(&payments(), &1)
+            .is_err());
+        assert_eq!(
+            opened.vault.balance(),
+            after_paying,
+            "a second attempt at a paid position moves nothing"
+        );
+    }
+
+    /// A top up arriving mid event raises the pool and nothing else. It does
+    /// not raise what any winner is owed, because the prize table was locked
+    /// before anybody entered.
+    #[test]
+    fn a_top_up_raises_the_pool_without_raising_any_prize() {
+        let settled = Settled::open();
+        let first = settled.captain(settled.teams.get(0).unwrap());
+
+        top_up(&settled, 2_500);
+        assert_eq!(settled.vault.balance(), 12_500);
+
+        assert_eq!(settled.fixture.client.settle_prize(&payments(), &1), 5_000);
+        assert_eq!(settled.token.balance(&first), 5_000);
+        assert_eq!(settled.vault.balance(), 7_500);
+    }
+
+    /// A pool larger than the prize table has nowhere to go, and the hackathon
+    /// closes with the surplus still in the vault.
+    ///
+    /// This is a real gap rather than a design choice, and it is written down
+    /// in the roadmap's deferred table. Every route out of the vault is tied to
+    /// a prize position, so money deposited beyond the table is stranded: the
+    /// sweep only reaches positions the table names, and there is no
+    /// withdrawal function by design. The invariant itself still holds, which
+    /// is why this test asserts the surplus exactly rather than pretending the
+    /// vault empties.
+    #[test]
+    fn a_surplus_beyond_the_prize_table_has_no_route_out_yet() {
+        let settled = Settled::open();
+
+        top_up(&settled, 2_500);
+        settle_everything(&settled);
+        settled.fixture.client.complete();
+
+        assert_eq!(settled.fixture.client.phase(), Phase::Completed);
+        assert_eq!(
+            settled.vault.balance(),
+            2_500,
+            "the surplus stays in the vault; no route reaches it"
+        );
+    }
+}
