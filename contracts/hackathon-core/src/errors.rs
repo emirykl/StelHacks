@@ -19,6 +19,10 @@ pub enum Error {
     CollaboratorAlreadyAdded = 8,
     CollaboratorNotFound = 9,
     OrganizerCannotBeCollaborator = 10,
+    VaultAlreadyBound = 11,
+    VaultNotBound = 12,
+    VaultServesAnotherHackathon = 13,
+    VaultHoldsTheWrongAsset = 14,
 
     // Configuration
     TrackNotFound = 20,

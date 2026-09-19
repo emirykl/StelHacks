@@ -51,6 +51,37 @@ pub struct RulesLocked {
     pub constitution_hash: BytesN<32>,
 }
 
+/// The hackathon knows where its prize lives.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VaultBound {
+    #[topic]
+    pub vault: Address,
+}
+
+/// The prize is fully funded and the event is open.
+///
+/// This is the moment the status strip a participant reads turns green, so the
+/// funded amount travels along and nobody has to cross reference two contracts
+/// to know the prize was real before anyone started building.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Published {
+    pub funded: i128,
+    pub required: i128,
+}
+
+pub fn vault_bound(env: &Env, vault: &Address) {
+    VaultBound {
+        vault: vault.clone(),
+    }
+    .publish(env);
+}
+
+pub fn published(env: &Env, funded: i128, required: i128) {
+    Published { funded, required }.publish(env);
+}
+
 pub fn hackathon_created(env: &Env, organizer: &Address) {
     Created {
         organizer: organizer.clone(),

@@ -8,6 +8,7 @@ use crate::phase::Phase;
 use crate::state::HackathonState;
 use crate::storage;
 use crate::team::OrganizingTeam;
+use crate::vault::VaultClient;
 
 /// The authority for a single hackathon.
 #[contract]
@@ -131,6 +132,90 @@ impl HackathonCore {
         events::rules_locked(&env, &hash);
 
         Ok(hash)
+    }
+
+    /// Points the hackathon at the vault holding its prize.
+    ///
+    /// The binding is checked from both sides rather than taken on the
+    /// organizer's word. A vault serving a different hackathon, or holding a
+    /// different token from the one the rules name, is refused; otherwise an
+    /// organizer could point at a pool they control and publish a hackathon
+    /// whose prize was never really committed.
+    pub fn bind_vault(env: Env, vault: Address) -> Result<(), Error> {
+        let team = storage::load_team(&env)?;
+        team.organizer.require_auth();
+
+        if storage::has_vault(&env) {
+            return Err(Error::VaultAlreadyBound);
+        }
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Funding {
+            return Err(Error::WrongPhase);
+        }
+
+        let client = VaultClient::new(&env, &vault);
+        if client.core() != env.current_contract_address() {
+            return Err(Error::VaultServesAnotherHackathon);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        if client.asset() != constitution.prize_asset {
+            return Err(Error::VaultHoldsTheWrongAsset);
+        }
+
+        storage::save_vault(&env, &vault);
+        events::vault_bound(&env, &vault);
+
+        Ok(())
+    }
+
+    /// Opens the hackathon for registration and submissions.
+    ///
+    /// The funding check is the whole point of this call. A hackathon that
+    /// announces a prize it does not hold is the first problem the product set
+    /// out to remove, so the pool has to cover the prize table in full before
+    /// anybody can sign up. Anyone may call this once that is true; making it
+    /// the organizer's privilege would let them sit on a funded hackathon.
+    pub fn publish(env: Env) -> Result<(), Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Funding {
+            return Err(Error::WrongPhase);
+        }
+
+        let required = storage::load_constitution(&env)?.required_funding()?;
+        let funded = Self::funding(env.clone())?;
+
+        if funded < required {
+            return Err(Error::VaultUnderfunded);
+        }
+
+        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
+        events::published(&env, funded, required);
+
+        Ok(())
+    }
+
+    /// What the prize table adds up to.
+    pub fn required_funding(env: Env) -> Result<i128, Error> {
+        storage::load_constitution(&env)?.required_funding()
+    }
+
+    /// What the vault actually holds.
+    pub fn funding(env: Env) -> Result<i128, Error> {
+        let vault = storage::load_vault(&env)?;
+
+        Ok(VaultClient::new(&env, &vault).balance())
+    }
+
+    /// Whether the prize is covered in full.
+    pub fn is_fully_funded(env: Env) -> Result<bool, Error> {
+        Ok(Self::funding(env.clone())? >= Self::required_funding(env)?)
+    }
+
+    /// The vault holding this hackathon's prize.
+    pub fn vault(env: Env) -> Result<Address, Error> {
+        storage::load_vault(&env)
     }
 
     /// The rules, draft or locked.

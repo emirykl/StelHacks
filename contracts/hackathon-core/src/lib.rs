@@ -20,6 +20,7 @@ mod submission;
 mod team;
 #[cfg(test)]
 mod test;
+mod vault;
 
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, validate_tie_break, Constitution, Criterion,
@@ -36,3 +37,4 @@ pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
 pub use submission::{SubmissionMetadata, SubmissionRequirements};
 pub use team::OrganizingTeam;
+pub use vault::{Vault, VaultClient};

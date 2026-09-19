@@ -50,6 +50,12 @@ fn sample_criteria(env: &Env) -> Vec<Criterion> {
 /// Two tracks, three judges covering both, an eighty twenty split, a public
 /// gallery and a ten thousand unit prize pool.
 pub fn sample_constitution(env: &Env) -> Constitution {
+    sample_constitution_paying(env, Address::generate(env))
+}
+
+/// The same hackathon, denominated in a caller supplied asset, for tests that
+/// need the prize token to be a contract that actually exists.
+pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constitution {
     let payments = symbol_short!("payments");
     let defi = symbol_short!("defi");
 
@@ -64,7 +70,7 @@ pub fn sample_constitution(env: &Env) -> Constitution {
     Constitution {
         version: CONSTITUTION_VERSION,
         metadata_hash: BytesN::from_array(env, &[7u8; 32]),
-        prize_asset: Address::generate(env),
+        prize_asset,
         tracks: vec![
             env,
             Track {

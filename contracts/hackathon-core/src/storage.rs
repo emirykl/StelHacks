@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, BytesN, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 use crate::constitution::Constitution;
 use crate::errors::Error;
@@ -37,6 +37,8 @@ pub enum DataKey {
     ConstitutionHash,
     /// Phase, effective schedule and the rest of what changes as the event runs.
     State,
+    /// The vault holding this hackathon's prize.
+    Vault,
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -102,6 +104,23 @@ pub fn lock_constitution(env: &Env, hash: &BytesN<32>) {
         .instance()
         .set(&DataKey::ConstitutionHash, hash);
     touch(env);
+}
+
+/// Binds the hackathon to the vault that holds its prize.
+pub fn save_vault(env: &Env, vault: &Address) {
+    env.storage().instance().set(&DataKey::Vault, vault);
+    touch(env);
+}
+
+pub fn load_vault(env: &Env) -> Result<Address, Error> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Vault)
+        .ok_or(Error::VaultNotBound)
+}
+
+pub fn has_vault(env: &Env) -> bool {
+    env.storage().instance().has(&DataKey::Vault)
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {
