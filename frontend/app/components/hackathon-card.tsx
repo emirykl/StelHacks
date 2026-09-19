@@ -6,10 +6,11 @@ import type { HackathonSummary } from "../../lib/chain";
 /**
  * One hackathon, as somebody deciding between several of them reads it.
  *
- * Laid out along its width rather than down its height: the picture takes the
- * left and everything readable is beside it, so the eye crosses one card rather
- * than travelling down four. A wide card also lets the name, the subject and
- * the money sit on the same line of sight, which is the comparison being made.
+ * The banner runs across the top in its own proportions rather than down one
+ * side. A banner is a wide image by nature, and standing one on its end means
+ * cropping away most of what was drawn; keeping the shape it was made in also
+ * leaves the card narrow enough that three sit side by side, which is the
+ * number somebody actually compares at once.
  *
  * The card speaks in both voices, which is the point rather than a compromise.
  * The name and the tagline are a person's. The stage, the countdown and the
@@ -28,11 +29,11 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
   return (
     <Link
       href={`/hackathons/${hackathon.slug}`}
-      className="group grid overflow-hidden border border-rule bg-paper transition-colors duration-150 ease-settle hover:border-ink-faint sm:grid-cols-[15rem_1fr]"
+      className="group flex flex-col overflow-hidden border border-rule bg-paper transition-colors duration-150 ease-settle hover:border-ink-faint"
     >
       <Picture hackathon={hackathon} running={running} finished={finished} />
 
-      <div className="flex min-w-0 flex-col justify-between gap-5 p-6">
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5">
         <div className="min-w-0">
           <div className="flex items-start gap-3">
             {hackathon.logo_url !== null && (
@@ -47,7 +48,7 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
               />
             )}
 
-            <h3 className="min-w-0 text-[1.375rem] leading-tight transition-colors group-hover:text-ink-soft">
+            <h3 className="min-w-0 text-[1.25rem] leading-tight transition-colors group-hover:text-ink-soft">
               {hackathon.name}
             </h3>
           </div>
@@ -76,7 +77,7 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
           )}
 
           <div className="mt-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 border-t border-rule pt-4">
-            <p className="tabular text-[1.375rem] text-ink">
+            <p className="tabular text-[1.25rem] text-ink">
               {/* Absent rather than zero when the contract could not be reached.
                   A prize shown as nothing is a claim; a prize shown as unknown
                   is the truth. */}
@@ -100,7 +101,7 @@ export function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
 }
 
 /**
- * The left of the card, and the only place a picture is allowed.
+ * The top of the card, and the only place a picture is allowed.
  *
  * Without one it is the diagonal hatch rather than an empty box, so a hackathon
  * whose organizer skipped an upload still has a card the same shape as the
@@ -116,8 +117,11 @@ function Picture({
   running: boolean;
   finished: boolean;
 }) {
+  /* Two and a half to one, which is the shape a banner is drawn in. Fixing the
+     ratio rather than the height also keeps every card in a row the same, so a
+     grid does not go ragged because one image was a different size. */
   return (
-    <div className="relative h-32 overflow-hidden border-b border-rule sm:h-auto sm:border-b-0 sm:border-r">
+    <div className="relative aspect-[5/2] overflow-hidden border-b border-rule">
       {hackathon.banner_url === null ? (
         <div className="hatch size-full" aria-hidden />
       ) : (

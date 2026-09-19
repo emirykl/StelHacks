@@ -45,7 +45,7 @@ export default async function Hackathons() {
    turns up and there is one place to change how it reads. */
 function List({ hackathons }: { hackathons: HackathonSummary[] }) {
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {hackathons.map((hackathon) => (
         <HackathonCard key={hackathon.contract_id} hackathon={hackathon} />
       ))}
