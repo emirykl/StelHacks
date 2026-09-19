@@ -7,6 +7,7 @@ import { Button } from "../components/primitives";
 import { SpecHeading, SpecLabel } from "../components/spec";
 import { useWallet } from "../components/wallet-context";
 import { send, type Sent } from "../../lib/send";
+import { proveAddress } from "../../lib/wallet";
 import {
   WEIGHT_TOTAL_BPS,
   createArgs,
@@ -43,9 +44,20 @@ export function Wizard() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Sent | null>(null);
 
+  /* What the hackathon looks like. None of it decides anything, so none of it
+     is in the constitution and none of it is frozen; it is written beside the
+     contract afterwards and can be corrected. */
+  const [name, setName] = useState("");
+  const [tagline, setTagline] = useState("");
+  const [location, setLocation] = useState("");
+  const [tags, setTags] = useState("");
+  const [logo, setLogo] = useState("");
+  const [banner, setBanner] = useState("");
+
   const total = useMemo(() => totalPrize(tracks), [tracks]);
 
   const ready =
+    name.trim().length > 0 &&
     contractId.length === 56 &&
     asset.length === 56 &&
     wallet !== null &&
@@ -102,12 +114,68 @@ export function Wizard() {
     setResult(outcome);
     setBusy(false);
 
+    if (!outcome.ok) {
+      return;
+    }
+
+    /* The look is written after the contract exists, because the handler that
+       takes it asks the chain who the organizer is and there is nobody to ask
+       about until then. A failure here does not undo the hackathon: the rules
+       are on chain and the description can be written again. */
+    await describe();
+
     /* Straight on to the next thing rather than a page that says "done" and
        leaves somebody wondering what happens now. Creating is the first of
        four steps and the console is where the other three live. */
-    if (outcome.ok) {
-      router.push(`/manage/${contractId}`);
+    router.push(`/manage/${contractId}`);
+  }
+
+  /**
+   * Sign for the presentation columns and hand them over.
+   *
+   * The signature proves the organizer's key, which is the only thing that
+   * decides whether this may be written. The account and the time are in the
+   * challenge as well, so one captured from somebody else, or captured at all,
+   * stops working.
+   */
+  async function describe() {
+    if (wallet === null) {
+      return;
     }
+
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const account = await accountId();
+
+    if (account === null) {
+      return;
+    }
+
+    const message = `stelhacks.v1.metadata:${contractId}:${account}:${issuedAt}`;
+    const signature = await proveAddress(wallet.address, message).catch(() => null);
+
+    if (signature === null) {
+      return;
+    }
+
+    await fetch("/api/hackathon", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contract: contractId,
+        issuedAt,
+        signature: hexFrom(signature),
+        name: name.trim(),
+        tagline: tagline.trim(),
+        location: location.trim(),
+        logo_url: logo.trim(),
+        banner_url: banner.trim(),
+        tags: tags
+          .split(",")
+          .map((tag) => tag.trim().toLowerCase())
+          .filter((tag) => tag.length > 0)
+          .slice(0, 8),
+      }),
+    }).catch(() => null);
   }
 
   if (!known) {
@@ -126,7 +194,36 @@ export function Wizard() {
 
   return (
     <div className="space-y-16">
-      <Section index="01" title="Where it lives">
+      <Section index="01" title="What it is">
+        <Grid>
+          <Field label="Name" value={name} onChange={setName} placeholder="Open House" />
+          <Field label="Location" value={location} onChange={setLocation} placeholder="Virtual" />
+        </Grid>
+
+        <div className="mt-5 max-w-[46rem] space-y-5">
+          <Field
+            label="Tagline"
+            value={tagline}
+            onChange={setTagline}
+            placeholder="One line somebody decides on"
+          />
+
+          <Field
+            label="Tags"
+            value={tags}
+            onChange={setTags}
+            placeholder="payments, stellar, soroban"
+            note="Comma separated, eight at most"
+          />
+
+          <Grid>
+            <Field label="Logo URL" value={logo} onChange={setLogo} placeholder="https://" />
+            <Field label="Banner URL" value={banner} onChange={setBanner} placeholder="https://" />
+          </Grid>
+        </div>
+      </Section>
+
+      <Section index="02" title="Where it lives">
         <Grid>
           <Field
             label="Hackathon contract"
@@ -148,7 +245,7 @@ export function Wizard() {
         </Grid>
       </Section>
 
-      <Section index="02" title="Tracks">
+      <Section index="03" title="Tracks">
         <div className="space-y-10">
           {tracks.map((track, index) => (
             <TrackForm
@@ -172,7 +269,7 @@ export function Wizard() {
         </button>
       </Section>
 
-      <Section index="03" title="Judges">
+      <Section index="04" title="Judges">
         <div className="max-w-[40rem] space-y-3">
           {judges.map((judge, index) => (
             <div key={index} className="flex items-end gap-3">
@@ -203,7 +300,7 @@ export function Wizard() {
         </button>
       </Section>
 
-      <Section index="04" title="Schedule">
+      <Section index="05" title="Schedule">
         <Grid>
           <Days label="Registration" value={days.registration} onChange={(v) => setDays({ ...days, registration: v })} unit="days" />
           <Days label="Building" value={days.building} onChange={(v) => setDays({ ...days, building: v })} unit="days" />
@@ -217,7 +314,7 @@ export function Wizard() {
           one figure on this page somebody is committing real money to. */}
       <div className="hatch border-y border-rule">
         <div className="flex flex-wrap items-baseline justify-between gap-4 px-6 py-8">
-          <SpecLabel index="05">Total prize</SpecLabel>
+          <SpecLabel index="06">Total prize</SpecLabel>
 
           <p className="tabular text-[clamp(1.5rem,4vw,2.5rem)] text-ink">
             {format(total)}
@@ -519,6 +616,38 @@ function Remove({ onClick }: { onClick: () => void }) {
       <span aria-hidden className="text-[1.125rem] leading-none">×</span>
     </button>
   );
+}
+
+/**
+ * Which signed in account this is, from the browser's own session.
+ *
+ * Read here rather than passed in, because the challenge has to name the
+ * account the server will check it against and the server takes that from the
+ * cookie rather than from anything the page sends.
+ */
+async function accountId(): Promise<string | null> {
+  const { browserClient } = await import("../../lib/supabase/client");
+  const db = browserClient();
+
+  if (db === null) {
+    return null;
+  }
+
+  const { data } = await db.auth.getUser();
+
+  return data.user?.id ?? null;
+}
+
+/** The handler wants hex; a wallet returns base64. */
+function hexFrom(base64: string): string {
+  const raw = atob(base64);
+  let out = "";
+
+  for (let index = 0; index < raw.length; index += 1) {
+    out += raw.charCodeAt(index).toString(16).padStart(2, "0");
+  }
+
+  return out;
 }
 
 function blankTrack(): Track {
