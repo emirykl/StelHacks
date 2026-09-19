@@ -19,6 +19,37 @@ export {
   scorecardLeaf,
   ballotLeaf,
 } from "./hashing.js";
+export {
+  signScorecard,
+  signBallot,
+  verifySealed,
+  verifyScorecard,
+  verifyBallot,
+  type SealedSignature,
+} from "./signing.js";
+export {
+  decodeEvent,
+  decodeEvents,
+  knownEvents,
+  type DecodedEvent,
+  type UnknownEvent,
+  type RawEvent,
+} from "./events.js";
+export {
+  rankTrack,
+  compare,
+  communityScore,
+  finalScore,
+  average,
+  DecidedBy,
+  MAX_CRITERION_SCORE,
+  MAX_WEIGHTED_SCORE,
+  VOTE_SPLIT_TOTAL_BPS,
+  WEIGHT_TOTAL_BPS,
+  type Candidate,
+  type ProjectData,
+  type Tally,
+} from "./results.js";
 export { validateSubmission, type SubmissionProblem } from "./submission.js";
 export { toHex, fromHex } from "./hex.js";
 export { spec } from "./spec.js";

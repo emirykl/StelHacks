@@ -88,4 +88,22 @@ before the lock and leaves a reason hash behind.
 M10 is done too: the signature checks, the phase machine and fund conservation
 each have their own suite, coverage sits above ninety percent on every file, and
 both contracts are on testnet with their addresses and wasm hashes in
-`docs/deployments.md`. M11, the TypeScript SDK, is next.
+`docs/deployments.md`.
+
+M11 is done: `sdk/` holds the TypeScript SDK, which hashes, signs, decodes
+events and rederives a ranking from chain data alone. M12, Supabase, is next and
+is the first milestone needing an account rather than only code.
+
+## The cross language contract
+
+`fixtures/` holds the digests the contract and the SDK both have to reach, one
+value per file. `contracts/hackathon-core/src/test/interop.rs` proves the
+contract still produces them; `sdk/test/` proves TypeScript reaches them from
+independently written inputs. Changing one breaks both suites on purpose.
+
+Two rules follow from that. The SDK never hand writes an XDR layout: encoding
+goes through the contract spec generated from the wasm. And the SDK suite reads
+the built wasm, so `stellar contract build` has to have run before `npm test`.
+
+An error enum over fifty cases makes the whole contract interface unparseable
+outside Rust, silently. `sdk/test/spec.test.ts` is what catches it.

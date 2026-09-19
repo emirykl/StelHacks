@@ -20,7 +20,7 @@
   "scripts": {
     "bindings": "./scripts/generate-bindings.sh",
     "build": "npm run build --workspaces --if-present && tsc",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.examples.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },
