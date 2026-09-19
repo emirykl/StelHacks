@@ -9,11 +9,12 @@ import { entriesOf, type Entry } from "../../../lib/submissions";
 import { phaseOf } from "../../../lib/running";
 import { rubricOf, type Rubric } from "../../../lib/rubric";
 import {
+  inclusionOf,
   leafOf,
   payloadFor,
-  proofFor,
   sealingConfigured,
   submitScorecard,
+  type Inclusion,
   type Receipt,
 } from "../../../lib/judge";
 import { proveAddress } from "../../../lib/wallet";
@@ -153,7 +154,8 @@ function Card({
   onRefused: (why: string | null) => void;
 }) {
   const [scores, setScores] = useState<Record<string, string>>({});
-  const [included, setIncluded] = useState<"unknown" | "in" | "missing">("unknown");
+  const [included, setIncluded] = useState<Inclusion | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const filled = criteria.every((criterion) => (scores[criterion.id] ?? "").length > 0);
 
@@ -204,9 +206,9 @@ function Card({
       return;
     }
 
-    const found = await proofFor(contractId, held.leaf);
-
-    setIncluded(found === null ? "unknown" : "in");
+    setChecking(true);
+    setIncluded(await inclusionOf(contractId, held.leaf));
+    setChecking(false);
   }
 
   return (
@@ -276,27 +278,36 @@ function Card({
               <SpecValue>{held.receipt.signature}</SpecValue>
             </SpecRow>
 
-            <SpecRow index="04" label="Included">
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={`label ${
-                    included === "in"
-                      ? "text-verified"
-                      : included === "missing"
-                        ? "text-broken"
-                        : "text-ink-faint"
-                  }`}
-                >
-                  {included === "in"
-                    ? "proved"
-                    : included === "missing"
-                      ? "not in the tree"
-                      : "no root yet"}
-                </span>
+            <SpecRow index="04" label="Included" mark={included?.at === "omitted"}>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className={`label ${tone(included)}`}>
+                    {checking ? "asking" : verdict(included)}
+                  </span>
 
-                <Button size="sm" intent="quiet" onClick={() => void check()}>
-                  Check
-                </Button>
+                  <Button
+                    size="sm"
+                    intent="quiet"
+                    disabled={checking}
+                    onClick={() => void check()}
+                  >
+                    {checking ? "Checking" : "Check"}
+                  </Button>
+                </div>
+
+                {included?.at === "disagrees" && (
+                  <p className="max-w-[34rem] text-[0.8125rem] leading-relaxed text-broken">
+                    The service proved your card against a tree whose root is not
+                    the one on chain. Keep this receipt.
+                  </p>
+                )}
+
+                {included?.at === "omitted" && (
+                  <p className="max-w-[34rem] text-[0.8125rem] leading-relaxed text-broken">
+                    Cards are held for this hackathon and yours is not among
+                    them. This is what the receipt is for.
+                  </p>
+                )}
               </div>
             </SpecRow>
           </SpecRows>
@@ -313,6 +324,44 @@ function Card({
       )}
     </section>
   );
+}
+
+/**
+ * What the check found, in a word.
+ *
+ * Nothing until it has been run. A page that says "no root yet" before anybody
+ * asked is answering a question that was never put, and is wrong as often as it
+ * is right.
+ */
+function verdict(found: Inclusion | null): string {
+  if (found === null) {
+    return "not checked";
+  }
+
+  switch (found.at) {
+    case "included":
+      return "proved";
+    case "omitted":
+      return "not in the tree";
+    case "disagrees":
+      return "root does not match";
+    case "waiting":
+      return "nothing sealed yet";
+    case "unreachable":
+      return found.why;
+  }
+}
+
+function tone(found: Inclusion | null): string {
+  if (found === null) {
+    return "text-ink-faint";
+  }
+
+  return found.at === "included"
+    ? "text-verified"
+    : found.at === "omitted" || found.at === "disagrees"
+      ? "text-broken"
+      : "text-ink-faint";
 }
 
 /**

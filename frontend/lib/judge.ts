@@ -148,27 +148,96 @@ function explain(said: string, status: number): string {
 }
 
 /**
- * The proof that a card was in the tree, once the root exists.
+ * Whether a card is in the tree the contract committed to.
  *
- * Absent means the root has not been published yet. Present but not matching is
- * the case worth having: a judge holding a receipt and no proof has what they
- * need to say the service dropped their card.
+ * Three outcomes and they are not interchangeable. `waiting` is nothing
+ * collected yet. `omitted` is the alarm: the service holds cards and this one
+ * is not among them, which is what a receipt exists to be able to say.
+ * `included` means a proof came back and the root it belongs to is the root on
+ * chain.
+ *
+ * That last part is the difference between a check worth running and a
+ * reassurance. A service asked to prove its own honesty can always build a tree
+ * that contains the card and return a proof against it; what it cannot do is
+ * make that tree's root match the one it already published on chain.
  */
-export async function proofFor(
-  contract: string,
-  leaf: string,
-): Promise<{ root: string; proof: string[] } | null> {
+export type Inclusion =
+  | { at: "waiting" }
+  | { at: "omitted" }
+  | { at: "included"; root: string }
+  | { at: "disagrees"; serviceRoot: string; chainRoot: string }
+  | { at: "unreachable"; why: string };
+
+export async function inclusionOf(contract: string, leaf: string): Promise<Inclusion> {
   if (sealerUrl === undefined) {
-    return null;
+    return { at: "unreachable", why: "no collection service is configured" };
   }
 
-  const answer = await fetch(
-    `${sealerUrl}/proof?contract=${contract}&kind=scorecards&leaf=${leaf}`,
-  );
+  let answer: Response;
+
+  try {
+    answer = await fetch(
+      `${sealerUrl}/proof?contract=${contract}&kind=scorecards&leaf=${leaf}`,
+    );
+  } catch {
+    return { at: "unreachable", why: "the collection service did not answer" };
+  }
 
   if (!answer.ok) {
+    const said = ((await answer.json()) as { error?: string }).error ?? "";
+
+    /* The two refusals mean opposite things and the service says which. */
+    return said.includes("not in the tree") ? { at: "omitted" } : { at: "waiting" };
+  }
+
+  const { root } = (await answer.json()) as { root: string; proof: string[] };
+  const onChain = await publishedRoot(contract);
+
+  if (onChain === null) {
+    /* The tree exists but nothing has been committed to it yet, so there is
+       nothing to compare against and no claim to make. */
+    return { at: "included", root };
+  }
+
+  return onChain === root
+    ? { at: "included", root }
+    : { at: "disagrees", serviceRoot: root, chainRoot: onChain };
+}
+
+/** The score root the contract holds, or nothing if none was published. */
+async function publishedRoot(contract: string): Promise<string | null> {
+  const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
+  const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
+
+  if (rpcUrl === undefined || passphrase === undefined) {
     return null;
   }
 
-  return (await answer.json()) as { root: string; proof: string[] };
+  const [{ Account, Contract, TransactionBuilder, BASE_FEE, scValToNative }, rpc] =
+    await Promise.all([
+      import("@stellar/stellar-sdk/base"),
+      import("@stellar/stellar-sdk/rpc"),
+    ]);
+
+  const server = new rpc.Server(rpcUrl);
+
+  try {
+    const tx = new TransactionBuilder(
+      new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
+      { fee: BASE_FEE, networkPassphrase: passphrase },
+    )
+      .addOperation(new Contract(contract).call("score_root"))
+      .setTimeout(30)
+      .build();
+
+    const simulated = await server.simulateTransaction(tx);
+
+    if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
+      return null;
+    }
+
+    return toHex(scValToNative(simulated.result.retval) as Uint8Array);
+  } catch {
+    return null;
+  }
 }
