@@ -1,4 +1,4 @@
-import { Keypair, StrKey } from "@stellar/stellar-sdk";
+import { Keypair, StrKey, hash } from "@stellar/stellar-sdk";
 import type { Scorecard } from "hackathon-core";
 
 import { ballotLeaf, scorecardLeaf } from "./hashing.js";
@@ -20,17 +20,20 @@ import type { Digest } from "./merkle.js";
  * the exact bytes the tree commits to, so a signature cannot be lifted off one
  * encoding and presented against another.
  *
- * The leaf is signed as its hexadecimal text rather than as its thirty two raw
- * bytes, and that is a concession to where the signing actually happens. A
- * judge signs in a wallet, and every wallet's message signing API takes a
- * string; handing arbitrary bytes to a string interface is exactly where
- * encodings get mangled, and differently in each wallet. Hex is unambiguous in
- * all of them, and what is signed is still the leaf, only written down.
+ * The leaf is signed as its hexadecimal text under SEP-53, not as its thirty
+ * two raw bytes. That is where the signing actually happens: a judge signs in a
+ * wallet, and a wallet's message signing interface takes a string and wraps it
+ * the way SEP-53 says. Handing arbitrary bytes to a string interface is where
+ * encodings get mangled, differently in each wallet; hex is unambiguous in all
+ * of them, and what is signed is still the leaf, only written down.
  *
- * Nothing on chain depends on this. The contract verifies a Merkle proof and
- * never sees a signature, so the format is a convention between the judge, this
- * SDK and the collection service, and can be read off `signedPayload` below by
- * anybody rechecking the work.
+ * Following the standard rather than inventing a wrapper is what makes a
+ * signature made in any Stellar wallet verifiable here, and one made here
+ * verifiable by anything else that knows SEP-53.
+ *
+ * Nothing on chain depends on it. The contract verifies a Merkle proof and
+ * never sees a signature, so this is a convention between the judge, this SDK
+ * and the collection service, and `signedPayload` below is the whole of it.
  */
 
 /** A signature over a sealed entry, alongside the address that made it. */
@@ -110,8 +113,26 @@ export function verifyBallot(voter: string, team: number, entry: SealedSignature
  * know what was signed without reading this file.
  */
 export function signedPayload(leaf: Digest): Uint8Array {
-  return new TextEncoder().encode(toHex(leaf));
+  const message = new TextEncoder().encode(toHex(leaf));
+  const prefix = new TextEncoder().encode(SEP53_PREFIX);
+
+  const joined = new Uint8Array(prefix.length + message.length);
+  joined.set(prefix);
+  joined.set(message, prefix.length);
+
+  /* SEP-53 signs the digest of the prefixed message, not the message. Signing
+     the bytes directly produces something no wallet will ever agree with. */
+  return new Uint8Array(hash(Buffer.from(joined)));
 }
+
+/**
+ * The prefix SEP-53 puts in front of anything signed as a message.
+ *
+ * It exists so a signature over a message can never be replayed as a signature
+ * over a transaction, which is why it is fixed and why nothing may be inserted
+ * before it.
+ */
+const SEP53_PREFIX = "Stellar Signed Message:\n";
 
 function sign(leaf: Digest, keypair: Keypair): SealedSignature {
   return {

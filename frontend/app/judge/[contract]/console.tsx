@@ -185,7 +185,15 @@ function Card({
 
       onHeld({ receipt, leaf: toHex(leaf) });
     } catch (error) {
-      onRefused(error instanceof Error ? error.message : "the card was not taken");
+      /* A browser that cannot reach the service at all says only "Failed to
+         fetch", which tells a judge nothing about what to do. */
+      const said = error instanceof Error ? error.message : "";
+
+      onRefused(
+        said.includes("Failed to fetch") || said.length === 0
+          ? "Could not reach the collection service. It may not be running."
+          : said,
+      );
     } finally {
       onBusy(false);
     }

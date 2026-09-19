@@ -72,13 +72,18 @@ export async function leafOf(scorecard: Scorecard): Promise<Uint8Array> {
 }
 
 /**
- * What the wallet is asked to sign.
+ * The message handed to the wallet, which is the leaf as hexadecimal text.
  *
- * The leaf as hexadecimal text, not as its thirty two raw bytes. Every wallet's
- * message signing API takes a string, and handing arbitrary bytes to a string
- * interface is where encodings get mangled, differently in each one. The SDK
- * signs and the service verifies over exactly this, and `sdk/test/signing`
- * pins it so a change breaks there rather than at a judge's wallet.
+ * Not the thirty two raw bytes: a wallet's message signing interface takes a
+ * string, and arbitrary bytes through a string interface get mangled
+ * differently in each one. Hex is unambiguous everywhere.
+ *
+ * What the wallet then signs is not this either. Under SEP-53 it prefixes the
+ * message with "Stellar Signed Message:\n", hashes that, and signs the digest,
+ * so a message signature can never be replayed as a transaction. The SDK builds
+ * the same payload when it verifies, and `sdk/test/signing` pins it, because
+ * getting it wrong fails at a judge's wallet with nothing to read rather than
+ * anywhere a test would catch.
  */
 export function payloadFor(leaf: Uint8Array): string {
   return toHex(leaf);
@@ -103,7 +108,40 @@ export async function submitScorecard(
   const said = (await answer.json()) as Receipt & { error?: string };
 
   if (!answer.ok) {
-    throw new Error(said.error ?? `the service refused with ${answer.status}`);
+    throw new Error(explain(said.error ?? "", answer.status));
+  }
+
+  return said;
+}
+
+/**
+ * What went wrong, said to a judge rather than to whoever wrote the service.
+ *
+ * The service answers in its own terms, which are precise and mean nothing to
+ * somebody who has just filled in two numbers. Each one below is turned into
+ * what the person can actually do about it; anything unrecognised is passed
+ * through rather than replaced by a friendlier guess, because a wrong
+ * explanation is worse than an unfamiliar one.
+ */
+function explain(said: string, status: number): string {
+  if (said.includes("signature does not cover")) {
+    return "Your wallet signed something other than this card. Check that it is on Test Net, then try again.";
+  }
+
+  if (said.includes("not collecting scorecards")) {
+    return "Judging is not open for this hackathon right now.";
+  }
+
+  if (said.includes("no such hackathon")) {
+    return "This hackathon has not been indexed yet, so there is nowhere to file the card. Try again shortly.";
+  }
+
+  if (said.includes("already")) {
+    return "You have already scored this project. A card cannot be replaced once it is sealed.";
+  }
+
+  if (status === 0 || said.length === 0) {
+    return "The collection service did not answer. It may not be running.";
   }
 
   return said;

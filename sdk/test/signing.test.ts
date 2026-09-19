@@ -1,4 +1,4 @@
-import { Keypair } from "@stellar/stellar-sdk";
+import { Keypair, hash } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 
 import { scorecardLeaf } from "../src/hashing.js";
@@ -139,17 +139,29 @@ describe("addresses that cannot sign this way", () => {
  * at the collection service with nothing to point at, so it fails here instead.
  */
 describe("what the signature covers", () => {
-  it("is the leaf as lowercase hexadecimal text", () => {
+  /**
+   * SEP-53, exactly.
+   *
+   * A judge signs in a wallet, and a wallet builds this payload itself. Getting
+   * it wrong here does not fail here: it produces a signature every wallet
+   * rejects, at the collection service, with nothing for a judge to read.
+   */
+  it("is the sha256 of the prefixed hexadecimal leaf", () => {
     const leaf = new Uint8Array(32).fill(0xab);
+    const expected = hash(Buffer.from(`Stellar Signed Message:\n${"ab".repeat(32)}`, "utf8"));
 
-    expect(new TextDecoder().decode(signedPayload(leaf))).toBe("ab".repeat(32));
+    expect(Buffer.from(signedPayload(leaf)).equals(expected)).toBe(true);
   });
 
-  it("is text a wallet can carry, not bytes it would mangle", () => {
-    const leaf = new Uint8Array(32).fill(0);
+  it("is a digest, so what reaches ed25519 is always thirty two bytes", () => {
+    expect(signedPayload(new Uint8Array(32).fill(0))).toHaveLength(32);
+  });
 
-    /* Every byte in range for a string interface, which raw digest bytes are
-       not: a leaf routinely contains nulls and values above 0x7f. */
-    expect(signedPayload(leaf).every((byte) => byte >= 0x30 && byte <= 0x66)).toBe(true);
+  /** Without the prefix a message signature could be replayed as a transaction. */
+  it("is not the bare message", () => {
+    const leaf = new Uint8Array(32).fill(0xab);
+    const bare = hash(Buffer.from("ab".repeat(32), "utf8"));
+
+    expect(Buffer.from(signedPayload(leaf)).equals(bare)).toBe(false);
   });
 });

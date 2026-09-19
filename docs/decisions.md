@@ -486,11 +486,18 @@ a convention between the judge, the SDK and the collection service. It is not in
 pins the payload, so changing it fails there rather than at a judge's wallet
 with nothing to read.
 
-**What is still unproven.** That a wallet's `signMessage` returns a raw ed25519
-signature over exactly those bytes rather than over some prefixed or rehashed
-form of them. The whole path has been run end to end with a keypair, which
-proves the service, the SDK and the contract agree; the wallet is the one link
-that needs a real extension in front of a real person.
+**And it does not sign those bytes either, which a real wallet settled.** A
+judge signed in Freighter and the service refused the card. Wallets implement
+SEP-53: the message is prefixed with `Stellar Signed Message:\n`, that is
+hashed with SHA-256, and the signature covers the digest. The prefix is the
+point of the standard, because without it a signature over a message could be
+replayed as a signature over a transaction.
+
+So the SDK builds the SEP-53 payload rather than a wrapper of its own. Following
+the standard is what makes a signature made in any Stellar wallet verifiable
+here, and one made here verifiable by anything else that knows SEP-53. It was
+found the only way it could be: by a person with a real extension, after the
+whole path had already passed end to end with a keypair.
 
 ---
 
