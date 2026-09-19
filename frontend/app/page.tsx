@@ -60,7 +60,7 @@ function Happening({ hackathons }: { hackathons: Awaited<ReturnType<typeof listH
           </ButtonLink>
         </div>
 
-        <div className="mt-12 grid gap-px bg-rule sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-5 lg:grid-cols-2">
           {shown.map((hackathon) => (
             <HackathonCard key={hackathon.contract_id} hackathon={hackathon} />
           ))}

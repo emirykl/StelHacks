@@ -48,6 +48,11 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
+/* So the browser's own furniture agrees: scrollbars, form controls and the
+   space beyond the page are drawn light rather than following the system into
+   dark and framing a white document in black. */
+export const viewport = { colorScheme: "light" as const };
+
 export const metadata: Metadata = {
   title: {
     default: "StelHacks",

@@ -107,29 +107,26 @@
 }
 
 /*
-  Dark is a first class mode rather than an inversion.
+  The page is paper, whatever the machine prefers.
 
-  The night surfaces are the same ones the editorial layout already uses for its
-  inverted sections, so a page in dark mode is the same design rather than a
-  photographic negative of it.
+  Following the system into dark mode was the earlier arrangement and it is
+  gone. This product is read like a document rather than used like an
+  application: the editorial layout, the serif, the halftone and the hairlines
+  are all built for a light ground, and the inverted sections only read as a
+  change of register because everything around them does not.
 
-  These are plain custom properties rather than a second `@theme`. A `@theme`
-  block nested in a media query is not conditional in Tailwind v4: it registers
-  the same tokens unconditionally, and the last one written wins. Written that
-  way, this file served the dark palette to everybody and light mode looked
-  identical to dark, which is how it was found.
+  Dark surfaces are still here and still used, but as a choice a section makes
+  rather than a mode the whole site enters. The proof strip inverts, the chain
+  sections carry the night palette, and both mean something because the page
+  they sit on does not.
+
+  A note for whoever restores it. These were plain custom properties inside a
+  media query rather than a second `@theme` block, because a `@theme` nested in
+  a media query is not conditional in Tailwind v4: it registers the same tokens
+  unconditionally and the last one written wins. Written that way, this file
+  once served the dark palette to everybody and light mode looked identical to
+  dark.
 */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-paper: oklch(16% 0.006 60);
-    --color-paper-sunk: oklch(13% 0.006 60);
-    --color-ink: oklch(96% 0.004 95);
-    --color-ink-soft: oklch(72% 0.008 60);
-    --color-ink-faint: oklch(58% 0.008 60);
-    --color-rule: oklch(26% 0.006 60);
-    --color-rule-strong: oklch(34% 0.006 60);
-  }
-}
 
 @layer base {
   html {
