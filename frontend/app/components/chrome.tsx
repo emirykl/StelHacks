@@ -11,8 +11,21 @@ export function Header() {
   return (
     <header className="sticky top-0 z-10 border-b border-rule bg-paper/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-[76rem] items-center justify-between px-6">
-        <a href="/" className="display text-xl tracking-normal">
-          StelHacks
+        <a href="/" className="flex items-center gap-2.5">
+          {/* The mark ships on its own black tile rather than transparent. The
+              art has a black laptop screen and a black shadow in it, so a
+              cut out version loses half of itself the moment it lands on a
+              dark surface. A square of night is a surface this system already
+              uses, so the tile reads as deliberate in both colour schemes. */}
+          <img
+            src="/mark.png"
+            alt=""
+            width={32}
+            height={32}
+            className="size-8 rounded-[0.45rem]"
+          />
+
+          <span className="display text-xl tracking-normal">StelHacks</span>
         </a>
 
         <nav className="hidden items-center gap-1 sm:flex" aria-label="Sections">
@@ -46,8 +59,7 @@ export function Footer() {
       <Measure wide>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[0.8125rem] text-ink-faint">
-            Running on Stellar testnet. Contract addresses and build hashes are
-            published.
+            Stellar testnet. Contract addresses and build hashes are published.
           </p>
 
           <nav className="flex gap-5 text-[0.8125rem] text-ink-soft" aria-label="Elsewhere">

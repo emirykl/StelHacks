@@ -30,8 +30,8 @@ export default async function Hackathons() {
           <h1 className="mt-4 text-[clamp(2rem,4.5vw,3.25rem)]">Hackathons</h1>
 
           <p className="mt-5 max-w-[38rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-            Each one has its rules frozen on chain and its prize sitting in a
-            contract. Open any of them without an account.
+            Rules frozen on chain, prize sitting in a contract. Open any of them
+            without an account.
           </p>
         </Measure>
       </section>
@@ -104,8 +104,8 @@ function Empty() {
       <p className="text-[1.0625rem] text-ink">Nothing here yet.</p>
 
       <p className="mx-auto mt-3 max-w-[30rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-        Either no hackathon has been created, or the indexer has not caught up
-        with the chain. Both are visible from the outside, which is the point.
+        Either nobody has created one, or our indexer is behind the chain. The
+        contract will tell you which.
       </p>
 
       <Rule className="mx-auto mt-10 max-w-[12rem]" />

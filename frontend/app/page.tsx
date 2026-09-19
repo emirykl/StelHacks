@@ -33,12 +33,12 @@ function Hero() {
       <Measure className="relative py-24 text-center sm:py-32">
         <Eyebrow>Hackathons on Stellar</Eyebrow>
 
-        <Display className="mt-6">No black swans</Display>
+        <Display className="mt-6">Check it yourself</Display>
 
         <p className="mx-auto mt-6 max-w-[34rem] text-pretty text-[1.0625rem] leading-relaxed text-ink-soft">
-          The prize is locked in a contract before anybody starts building. The
-          rules are frozen before anybody reads them. The result follows from the
-          scores, and the money moves without anybody deciding to send it.
+          The prize goes into a contract before registration opens. The rules get
+          hashed and frozen. Judges score under seal. At the end the contract
+          pays the winners. Nobody presses send.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -48,12 +48,12 @@ function Hero() {
           </ButtonLink>
 
           <ButtonLink href="/how-it-works" intent="quiet">
-            How the proof works
+            How it works
           </ButtonLink>
         </div>
 
         <p className="mt-12 text-[0.8125rem] text-ink-faint">
-          Every claim on this site can be checked without an account.
+          No account needed to check any of it.
         </p>
       </Measure>
     </section>
@@ -61,25 +61,25 @@ function Hero() {
 }
 
 /**
- * The three things the product actually removes, stated as the problems they
- * are rather than as features.
+ * The three failures, named the way somebody who has been burned by one would
+ * name them. A feature list would say the same things and land as marketing.
  */
 function Promise() {
   const removed = [
     {
-      before: "The prize might not exist",
+      before: "The prize never showed up",
       after:
-        "A hackathon cannot open for registration until the full prize table is sitting in the vault. The balance is public before anybody writes a line of code.",
+        "Registration stays shut until the whole prize table is in the vault. The balance is public from day one.",
     },
     {
-      before: "The rules might change",
+      before: "The rules changed halfway",
       after:
-        "The rules are hashed and frozen at the lock. After that they can be read by anyone and written by no one, and the page shows the digest the contract stored.",
+        "Rules are hashed and frozen at the lock. Read them whenever you like. Nobody can edit them after that, us included.",
     },
     {
-      before: "The result might be decided elsewhere",
+      before: "The winner was picked in a group chat",
       after:
-        "Scorecards are sealed until the reveal, then opened all at once. The contract computes the ranking itself and refuses to accept one from anywhere else.",
+        "Scorecards stay sealed until the reveal, then open at once. The contract does the ranking, and it will not take one from anywhere else.",
     },
   ];
 
@@ -87,9 +87,9 @@ function Promise() {
     <section className="border-b border-rule py-24">
       <Measure wide>
         <div className="max-w-[34rem]">
-          <Eyebrow>What it takes away</Eyebrow>
+          <Eyebrow>Why bother</Eyebrow>
           <h2 className="mt-4 text-[clamp(1.75rem,3.5vw,2.5rem)]">
-            Three things that go wrong, and cannot here
+            Three ways a hackathon goes bad
           </h2>
         </div>
 
@@ -124,17 +124,17 @@ function Audiences() {
     {
       who: "For builders",
       what:
-        "See the prize, the rubric and the schedule before you commit a weekend. Check afterwards that the result follows from the scores.",
+        "See the prize, the rubric and the deadline before you give up a weekend. Afterwards, check the result against the scores.",
     },
     {
       who: "For organizers",
       what:
-        "Keep every power you need, including disqualification and cancellation. Each one is announced before the lock and leaves a reason behind.",
+        "You keep every power you need, disqualification and cancellation included. You announce them before the lock and leave a reason when you use them.",
     },
     {
       who: "For judges",
       what:
-        "Score under seal, sign your own card, and hold a receipt that proves it was counted. Step away from a project without it looking like silence.",
+        "Score under seal and sign your own card. Your receipt proves it was counted. Recuse yourself from a project without it looking like silence.",
     },
   ];
 

@@ -136,9 +136,9 @@ export function ProofHeadline({
   digest: string;
 }) {
   const said = {
-    verified: "The rules on this page are the rules that were locked.",
-    broken: "The rules on this page are not the rules that were locked.",
-    unchecked: "Nobody has checked these rules against the chain yet.",
+    verified: "These are the rules that were locked.",
+    broken: "These are not the rules that were locked.",
+    unchecked: "Nobody has checked these against the chain yet.",
   }[standing];
 
   return (

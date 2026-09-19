@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     template: "%s · StelHacks",
   },
   description:
-    "Hackathons whose results follow from rules everyone read up front, and whose prizes are paid by a contract rather than a promise.",
+    "The prize is in a contract before registration opens, the rules are frozen, and you can check the result yourself.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

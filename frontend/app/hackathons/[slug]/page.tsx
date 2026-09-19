@@ -84,7 +84,7 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
         <Measure wide className="py-16">
           <SpecLabel index="01">On chain</SpecLabel>
 
-          <SpecHeading className="mt-3">Where to check it yourself</SpecHeading>
+          <SpecHeading className="mt-3">Where all of this lives</SpecHeading>
 
           <div className="mt-10">
             <SpecRows>

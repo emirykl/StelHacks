@@ -93,12 +93,12 @@ export function CheckableProofStrip({
 function said(stage: Stage): string {
   switch (stage.at) {
     case "idle":
-      return "Your browser asks the contract directly, over your own connection. Nothing goes through this site.";
+      return "Your browser asks the contract. Nothing goes through us.";
     case "asking":
       return "Reading the contract.";
     case "unreachable":
       return `Nothing was checked: ${stage.why}`;
     case "answered":
-      return "Checked from your browser just now.";
+      return "Checked just now, from your browser.";
   }
 }
