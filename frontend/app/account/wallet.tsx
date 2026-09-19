@@ -76,10 +76,13 @@ export function Wallet() {
               : "Use a different one"}
         </Button>
 
-        <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
-          {refused ??
-            "Connecting only reads your address. Nothing is signed and nothing is sent."}
-        </p>
+        {/* Only when there is something to say. A line of reassurance under
+            every button is the kind of text that stops being read. */}
+        {refused !== null && (
+          <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
+            {refused}
+          </p>
+        )}
       </div>
     </>
   );

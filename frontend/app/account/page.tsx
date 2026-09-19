@@ -5,12 +5,17 @@ import { Wallet } from "./wallet";
 import { authConfigured, currentUser, serverClient } from "../../lib/supabase/server";
 
 /**
- * Your account, which is two separate things stacked.
+ * Your account, in the order the two halves actually depend on each other.
  *
- * Google says who you are. A wallet says what you hold. The product keeps them
- * apart on purpose: a Google account with no address attached can read every
- * page and do nothing on chain, and an address with no Google account behind it
- * still wins prizes perfectly well. Neither is a login for the other.
+ * Google says who you are. A wallet says what you hold. They are separate
+ * layers and neither is a login for the other, but they are not
+ * interchangeable in time: a wallet is attached to a profile, so there has to
+ * be a profile first.
+ *
+ * That is why the wallet section is absent rather than disabled when nobody is
+ * signed in. Connecting without a session cannot be finished at all, because a
+ * challenge is issued to a person and there is nobody to issue it to. Offering
+ * the button anyway would show an address and then have nowhere to put it.
  */
 
 export const metadata = { title: "Account" };
@@ -30,22 +35,12 @@ export default async function Account() {
           <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">
             {user === null ? "Sign in" : "Account"}
           </h1>
-
-          <p className="mt-5 max-w-[38rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-            {user === null
-              ? "Google is only your name here. Applying, forming a team and submitting a project are signed by your wallet, so you will need both."
-              : "Google is your name. Your wallet does the signing. Applying, forming a team and submitting all need an address, so attach one below."}
-          </p>
         </Measure>
       </section>
 
       <section className="hatch">
         <Measure wide className="py-16">
-          {user === null ? <SignedOut /> : <Identity user={user} />}
-
-          <div className="mt-16">
-            <Wallet />
-          </div>
+          {user === null ? <SignedOut /> : <SignedIn user={user} />}
         </Measure>
       </section>
     </main>
@@ -53,30 +48,31 @@ export default async function Account() {
 }
 
 function SignedOut() {
-  return (
-    <>
-      <SpecLabel index="01">Identity</SpecLabel>
+  if (!authConfigured()) {
+    /* Said plainly rather than shown as a button that fails. A deployment
+       without the keys is one where signing in does not exist, and offering it
+       anyway teaches somebody to distrust the next button too. */
+    return (
+      <p className="max-w-[34rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+        Sign in is not configured on this deployment. Everything a signed in
+        person can verify can still be verified here without an account.
+      </p>
+    );
+  }
 
-      <div className="mt-6 max-w-[34rem]">
-        {authConfigured() ? (
-          <SignIn />
-        ) : (
-          /* Said plainly rather than shown as a button that fails. A deployment
-             without the keys is a deployment where signing in is not a thing
-             that exists, and offering it anyway teaches somebody to distrust
-             the next button too. */
-          <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
-            Sign in is not configured on this deployment. Everything a signed in
-            person can verify can still be verified here without an account,
-            which is the part that matters.
-          </p>
-        )}
-      </div>
-    </>
+  return (
+    <div className="max-w-[34rem]">
+      <SignIn />
+
+      <p className="mt-5 text-[0.875rem] leading-relaxed text-ink-soft">
+        Google is only your name. Your wallet does the signing, and you attach
+        one after this.
+      </p>
+    </div>
   );
 }
 
-async function Identity({ user }: { user: { id: string; email?: string | undefined } }) {
+async function SignedIn({ user }: { user: { id: string; email?: string | undefined } }) {
   const db = await serverClient();
 
   /* Created by a trigger the moment the account exists, so this is a read
@@ -84,7 +80,7 @@ async function Identity({ user }: { user: { id: string; email?: string | undefin
      second, weaker place where identity begins. */
   const { data: profile } = (await db
     ?.from("profiles")
-    .select("username, display_name")
+    .select("username")
     .eq("id", user.id)
     .maybeSingle()) ?? { data: null };
 
@@ -106,6 +102,10 @@ async function Identity({ user }: { user: { id: string; email?: string | undefin
 
       <div className="mt-6">
         <SignOut />
+      </div>
+
+      <div className="mt-16">
+        <Wallet />
       </div>
     </>
   );
