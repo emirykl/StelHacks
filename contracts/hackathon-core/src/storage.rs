@@ -2,8 +2,8 @@ use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 use crate::constitution::Constitution;
 use crate::errors::Error;
+use crate::organizers::OrganizingTeam;
 use crate::state::HackathonState;
-use crate::team::OrganizingTeam;
 
 /// Ledgers closed in a day, at roughly five seconds a ledger.
 const LEDGERS_PER_DAY: u32 = 17_280;

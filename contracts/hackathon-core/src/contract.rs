@@ -4,10 +4,10 @@ use crate::constitution::Constitution;
 use crate::errors::Error;
 use crate::events;
 use crate::hashing::hash_constitution;
+use crate::organizers::OrganizingTeam;
 use crate::phase::Phase;
 use crate::state::HackathonState;
 use crate::storage;
-use crate::team::OrganizingTeam;
 use crate::vault::VaultClient;
 
 /// The authority for a single hackathon.

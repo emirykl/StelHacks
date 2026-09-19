@@ -13,11 +13,12 @@ mod events;
 #[cfg(test)]
 mod fixtures;
 mod hashing;
+mod organizers;
 mod phase;
+mod roster;
 mod state;
 mod storage;
 mod submission;
-mod team;
 #[cfg(test)]
 mod test;
 mod vault;
@@ -32,9 +33,10 @@ pub use constitution::{
 pub use contract::{HackathonCore, HackathonCoreClient};
 pub use errors::Error;
 pub use hashing::{hash_constitution, hash_submission_metadata};
+pub use organizers::OrganizingTeam;
 pub use phase::Phase;
+pub use roster::{ApplicationStatus, Registration, Team};
 pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
 pub use submission::{SubmissionMetadata, SubmissionRequirements};
-pub use team::OrganizingTeam;
 pub use vault::{Vault, VaultClient};
