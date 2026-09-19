@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { currentUser } from "../../../lib/supabase/server";
+import { signedByOrganizer } from "../../../lib/organizer";
 
 /**
  * Writing what a hackathon looks like, for the wallet the contract calls the
@@ -18,6 +19,9 @@ import { currentUser } from "../../../lib/supabase/server";
  * not theirs: a session without a signature is anybody with an account, and a
  * signature without a session is a signature that can be replayed by whoever
  * captured it.
+ *
+ * What makes the signature the organizer's is in `lib/organizer.ts`, apart from
+ * this and tested there. Every way that check can be wrong is silent.
  */
 
 const url = process.env["NEXT_PUBLIC_SUPABASE_URL"];
@@ -40,27 +44,6 @@ interface Body {
   description?: string;
   slug?: string;
 }
-
-/**
- * What the organizer signs.
- *
- * Three things are in it and each closes a way a signature could be reused.
- * The contract, so one made for a hackathon cannot be presented for another.
- * The account, so one captured from somebody else's session is refused here
- * rather than accepted as theirs. And the time, so one captured at all stops
- * working shortly afterwards.
- *
- * No nonce, because a nonce only means anything if the server remembers which
- * ones it has seen, and that would be a table for a signature already bound to
- * an account and a five minute window. This is the weaker guarantee, and it is
- * the one being made rather than implied.
- */
-export function challengeFor(contract: string, account: string, issuedAt: number): string {
-  return `stelhacks.v1.metadata:${contract}:${account}:${issuedAt}`;
-}
-
-/** How long a signed challenge is worth anything. */
-const WINDOW_SECONDS = 300;
 
 export async function POST(request: Request) {
   if (url === undefined || serviceRole === undefined) {
@@ -100,7 +83,15 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await signedByOrganizer(organizer, body, user.id))) {
+  const proved = await signedByOrganizer({
+    organizer,
+    contract: body.contract,
+    account: user.id,
+    issuedAt: body.issuedAt,
+    signature: body.signature,
+  });
+
+  if (!proved) {
     return NextResponse.json(
       { error: "that signature is not the organizer's" },
       { status: 403 },
@@ -184,44 +175,5 @@ async function organizerOf(contract: string): Promise<string | null> {
     return typeof team.organizer === "string" ? team.organizer : null;
   } catch {
     return null;
-  }
-}
-
-/**
- * Whether the signature really is the organizer's, under SEP-53.
- *
- * The same construction a wallet uses: the message is prefixed, hashed, and the
- * digest is what the signature covers. Verifying anything else would accept a
- * signature no wallet could have produced, or refuse every one that they do.
- */
-async function signedByOrganizer(
-  organizer: string,
-  body: Body,
-  account: string,
-): Promise<boolean> {
-  const { Keypair, StrKey, hash } = await import("@stellar/stellar-sdk/base");
-
-  if (!StrKey.isValidEd25519PublicKey(organizer) || typeof body.issuedAt !== "number") {
-    return false;
-  }
-
-  /* Both directions. A challenge from the future is as suspect as an old one,
-     and a clock nobody bounds is a window nobody closes. */
-  const age = Math.floor(Date.now() / 1000) - body.issuedAt;
-
-  if (age > WINDOW_SECONDS || age < -WINDOW_SECONDS) {
-    return false;
-  }
-
-  const message = challengeFor(body.contract, account, body.issuedAt);
-  const payload = hash(Buffer.from(`Stellar Signed Message:\n${message}`, "utf8"));
-
-  try {
-    return Keypair.fromPublicKey(organizer).verify(
-      Buffer.from(payload),
-      Buffer.from(body.signature, "hex"),
-    );
-  } catch {
-    return false;
   }
 }
