@@ -46,24 +46,6 @@ export interface HackathonDetail extends HackathonSummary {
   vault_id: string | null;
 }
 
-/** The phases, numbered as the contract numbers them. */
-export const PHASES = [
-  "Draft",
-  "Funding",
-  "Open",
-  "Screening",
-  "Judging",
-  "Reveal",
-  "Finalization",
-  "Settlement",
-  "Completed",
-  "Cancelled",
-] as const;
-
-export function phaseName(phase: number | null): string {
-  return phase === null ? "Not published yet" : (PHASES[phase] ?? "Unknown");
-}
-
 /**
  * The two halves of a hackathon, fetched separately and joined here.
  *

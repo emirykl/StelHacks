@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "shoot": "node scripts/shoot.mjs"
+    "shoot": "node scripts/shoot.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^17.0.1",
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19",
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }

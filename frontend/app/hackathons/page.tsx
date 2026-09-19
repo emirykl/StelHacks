@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { Eyebrow, Measure, Rule } from "../components/primitives";
-import { listHackathons, phaseName, type HackathonSummary } from "../../lib/chain";
+import { listHackathons, type HackathonSummary } from "../../lib/chain";
+import { phaseName } from "../../lib/phase";
 
 /**
  * Everything running, readable by anybody.

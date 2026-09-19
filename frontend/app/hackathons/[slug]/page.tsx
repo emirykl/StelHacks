@@ -11,7 +11,8 @@ import {
 } from "../../components/spec";
 import { CheckableProofStrip } from "../../components/checkable";
 import { type Proof } from "../../components/proof-strip";
-import { findHackathon, phaseName, type HackathonDetail } from "../../../lib/chain";
+import { findHackathon, type HackathonDetail } from "../../../lib/chain";
+import { phaseName } from "../../../lib/phase";
 
 /**
  * One hackathon, as somebody with no account sees it.

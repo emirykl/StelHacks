@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 import { ProofStrip, type Proof } from "./proof-strip";
-import { phaseName } from "../../lib/chain";
-import { canCheck, check, type Check, type Claims, type Findings } from "../../lib/verify";
+import { canCheck, check } from "../../lib/verify";
+import { settle, type Claims, type Findings } from "../../lib/verdict";
 
 /**
  * The proof strip, with the button that makes it worth having.
@@ -101,50 +101,4 @@ function said(stage: Stage): string {
     case "answered":
       return "Checked from your browser just now.";
   }
-}
-
-/**
- * The findings, folded back into the strip.
- *
- * A claim the check could not reach stays unchecked rather than becoming
- * broken. A digest we failed to ask about is not a digest that failed, and a
- * strip that could not tell the two apart would turn every outage into an
- * accusation.
- */
-function settle(proofs: Proof[], findings: Findings): Proof[] {
-  const checks: Record<string, Check | undefined> = {
-    "Rules digest": findings.digest,
-    Stage: findings.phase,
-    "Prize vault": findings.vault,
-  };
-
-  return proofs.map((proof) => {
-    /* The address needs no separate call. If the contract answered at all, a
-       contract exists at this address and it is the one the page named; that
-       is the entire claim the row makes. */
-    if (proof.label === "Hackathon contract") {
-      return { ...proof, standing: findings.reached ? "verified" : proof.standing };
-    }
-
-    const result = checks[proof.label];
-
-    if (result === undefined || "failed" in result) {
-      return proof;
-    }
-
-    return result.matches
-      ? { ...proof, standing: "verified" as const }
-      : { ...proof, standing: "broken" as const, found: legible(proof.label, result.found) };
-  });
-}
-
-/**
- * What the contract said, in the same words the page used to say it.
- *
- * The phase comes back as a number and the page shows a name. Printing "4"
- * under a row that reads "Judging" would leave a reader comparing two things
- * that are not written in the same language.
- */
-function legible(label: string, found: string): string {
-  return label === "Stage" ? phaseName(Number(found)) : found;
 }

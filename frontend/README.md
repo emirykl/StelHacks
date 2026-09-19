@@ -9,6 +9,7 @@ by somebody with no account at all.
 
 ```bash
 npm run dev
+npm run test    # the verdict rules, which decide what a check is allowed to claim
 npm run shoot   # screenshot both colour schemes, in another terminal
 npm run build
 ```
@@ -63,9 +64,44 @@ because a strip that reassures by default is worse than no strip at all. State
 is carried by shape as well as colour, so somebody who cannot separate the two
 still gets the answer.
 
+## Checking, and who does it
+
+Every fact on a hackathon page arrives through our indexer and our database, and
+a reader has no reason to take either on faith. Pressing **Check this yourself**
+loads the Stellar library, asks the contract three questions over the reader's
+own connection, and reports what came back. Nothing in that path touches our
+servers, which is the only arrangement under which the answer means anything.
+
+It does not run on load. A page that verified itself would be making the claim
+it exists to let somebody else make, and the strip would go green for reasons
+the reader never saw.
+
+The split matters more than it looks. `lib/verify.ts` asks; `lib/verdict.ts`
+decides, and has no network in it. What it decides is an accusation — `does not
+match` on a rules digest says this site is misrepresenting a contract — so the
+rules for making one are testable without a testnet. Two distinctions carry the
+weight, and both are in `lib/verdict.test.ts`:
+
+- **A refusal is not silence.** The contract declining to name a vault is an
+  answer. The network never replying is not.
+- **Not knowing is not finding nothing wrong.** A check that could not be made
+  leaves a claim unchecked, never verified. Otherwise every RPC outage becomes
+  an accusation against an organizer who did nothing.
+
+When a check fails, the strip prints what the contract actually said beside what
+the page said. An alarm a reader cannot act on is not worth raising.
+
 ## What running it taught us
 
-The first version served the dark palette to everybody, in both colour schemes.
+The Stellar library the browser loads is version 17, and the SDK under `sdk/` is
+on 14. That is deliberate rather than neglect: the two never share code, and
+what keeps them agreeing about digests is `fixtures/`, not a version number.
+Version 17 changed how XDR values are represented — the old `retval.switch()`
+union is now a plain object — and the first version of the checker decoded them
+the old way, silently returning `unchecked` for every claim it could not read.
+
+The first version of the design served the dark palette to everybody, in both
+colour schemes.
 A `@theme` block nested inside a media query is not conditional in Tailwind v4:
 it registers the same tokens unconditionally and the last one written wins. It
 type checked, it built, and it was wrong in a way only a screenshot could show.
@@ -73,7 +109,9 @@ type checked, it built, and it was wrong in a way only a screenshot could show.
 
 ## Not built yet
 
-The surfaces themselves. The home page is here as the reference for the system;
-the organizer wizard, judge console, participant flow and transparency page
-follow. Google sign in needs OAuth credentials, which are tracked in the
-roadmap's deferred table.
+The surfaces themselves. The home page and the hackathon page are here as the
+reference for the system; the organizer wizard, judge console, participant flow
+and transparency page follow. The check currently covers the four claims on the
+strip; the ranking, the scorecard proofs and the payments are the next things a
+reader should be able to confirm the same way. Google sign in needs OAuth
+credentials, which are tracked in the roadmap's deferred table.
