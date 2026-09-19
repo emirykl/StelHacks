@@ -6,9 +6,14 @@
 //! judge scorecards and community votes, and computes the final ranking. Nothing
 //! outside this contract is allowed to decide who won.
 
+mod constitution;
 mod errors;
 mod phase;
 
+pub use constitution::{
+    total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,
+    WEIGHT_TOTAL_BPS,
+};
 pub use errors::Error;
 pub use phase::Phase;
 
