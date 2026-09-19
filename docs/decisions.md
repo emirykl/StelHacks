@@ -147,6 +147,73 @@ signed receipt, immediate inclusion proof, appeal window. Row level security has
 to make those tables unreadable by every client role including the organizer's,
 and that has its own adversarial test.
 
+## 10. Registration is by application, with a snapshot that fixes the electorate
+
+**Decided.** Every hackathon admits participants by application. Approval after
+the registration deadline is legitimate and lets the person take part, but it
+carries no vote.
+
+**Why.** Clearing a backlog late is ordinary organiser work. Admitting an
+electorate once you already know what it would decide is not, and the two look
+identical without this rule.
+
+## 11. Team size and multi team membership are the organizer's to set
+
+**Decided.** `TeamPolicy` carries a maximum size, capped at ten, and a flag for
+whether one person may join more than one team. Both are locked with the rules.
+
+**Why ten.** Past that a hackathon team stops being a team and starts being a
+company with an unfair head start. Fixing the ceiling means the judgement is
+made once rather than argued at every event.
+
+## 12. The prize goes to the captain, and there are no on chain shares
+
+**Decided.** The whole prize is paid to the team captain, who settles up with
+their team off the platform.
+
+**Why.** It keeps the contract out of arguments it cannot resolve and removes a
+whole class of failure where shares do not add up at the deadline.
+
+**What it costs.** A teammate the captain does not pay has no recourse on chain,
+and the proof page cannot show the last hop of the money. Members are still
+recorded, so the receipt shows who built the project.
+
+## 13. The judging mode names the address that seals the scorecards
+
+**Decided.** `JudgingMode::Easy(Address)` carries the sealer. `Strict` carries
+nobody, because in that mode the judges commit for themselves.
+
+**Why.** That address is the one piece of trust the design does not remove.
+Hiding it would be dishonest, and naming it in the locked rules means a
+participant reads who holds it before they start building.
+
+## 14. Sealed reveals need no signature
+
+**Decided.** `reveal_score` and `reveal_ballot` ask for no authorization. So do
+`publish`, `advance_phase` and `settle_prize`.
+
+**Why.** In the reveals, the inclusion proof is the authorization: an entry that
+does not sit under the published root is refused, and one that does was written
+by whoever it names before the window closed. In the others, the condition is
+already settled on chain. Making any of them an organizer privilege would only
+grant the power to sit on a funded hackathon or an earned prize.
+
+## 15. Prizes are paid one position at a time
+
+**Decided.** `settle_prize(track, rank)` pays a single winner.
+
+**Why.** A Stellar account with no trustline for the prize asset cannot receive
+it. One call paying everyone would let a single unprepared captain block every
+other winner's money; paid separately, they block only themselves.
+
+## 16. Proportional refunds to sponsors are refused rather than promised
+
+**Decided.** `RefundRoute::Depositors` fails validation.
+
+**Why.** The vault does not remember who deposited what, so the route cannot be
+walked. Accepting the setting and quietly not honouring it would be worse than
+not offering it. Recorded in the roadmap's deferred table.
+
 ---
 
 ## Still open
