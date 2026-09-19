@@ -115,6 +115,18 @@ Locked under digest
 ten lumens against a single ten lumen first prize, and open for registration.
 One address has applied and is waiting.
 
+It is indexed and reachable at `/hackathons/open-house`, and the whole chain has
+been walked end to end: the contract was written from the browser's own encoder,
+the indexer read it back into Postgres, the page served what Postgres held, and
+the browser then asked the contract directly and found all four claims sound.
+The digest on the page is the one the lock returned, character for character.
+
+Catching the indexer up took twelve passes. It starts at the oldest ledger the
+node still holds and scans about ten thousand per pass, so a contract whose
+events are recent is a hundred thousand ledgers of empty scanning away. That is
+the same bounded window the applications queue runs into, and the same reason
+both are slower than they look like they should be.
+
 **Two things it caught, both of which the frontend had wrong.** A judge with an
 empty track list is refused: the contract will not read that as "every track",
 because a judge who can score nothing breaks a quorum for projects that did

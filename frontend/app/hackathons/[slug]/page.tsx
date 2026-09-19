@@ -77,7 +77,7 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
         </Measure>
       )}
 
-      <Join contractId={hackathon.contract_id} phase={hackathon.phase} />
+      <Join contractId={hackathon.contract_id} />
 
       {/* Below here the chain is speaking, and the page changes voice to say
           so: condensed capitals, monospaced labels, square corners, hairline

@@ -17,6 +17,8 @@ const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 export type Application = "none" | "pending" | "approved" | "rejected";
 
 export interface Standing {
+  /** The phase the contract is in, which decides whether any of this is open. */
+  phase: number | null;
   application: Application;
   /** The teams this address belongs to. Empty until one is created or joined. */
   teams: number[];
@@ -31,7 +33,7 @@ const statuses: Record<number, Application> = {
 };
 
 export async function standingOf(contractId: string, address: string): Promise<Standing> {
-  const blank: Standing = { application: "none", teams: [], submitted: false };
+  const blank: Standing = { phase: null, application: "none", teams: [], submitted: false };
 
   if (rpcUrl === undefined || passphrase === undefined) {
     return blank;
@@ -71,7 +73,12 @@ export async function standingOf(contractId: string, address: string): Promise<S
     has never applied, which is exactly the state the first step needs to know
     about, so each read falls back rather than failing the whole page.
   */
-  const [registration, membership] = await Promise.all([
+  const [phase, registration, membership] = await Promise.all([
+    /* From the contract, not from our database. The indexer is allowed to be
+       behind, and a page that hides the apply button because our copy of the
+       phase has not caught up is a page that closes registration on people
+       the contract would have let in. */
+    ask("phase").catch(() => null),
     ask("registration", who).catch(() => null),
     ask("membership", who).catch(() => null),
   ]);
@@ -91,7 +98,7 @@ export async function standingOf(contractId: string, address: string): Promise<S
           () => false,
         );
 
-  return { application, teams, submitted };
+  return { phase: phase === null ? null : Number(phase), application, teams, submitted };
 
   async function u32(value: number) {
     const { nativeToScVal } = await import("@stellar/stellar-sdk/base");

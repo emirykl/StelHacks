@@ -24,7 +24,7 @@ import { metadataHash, standingOf, type Standing } from "../../../lib/participat
 
 type Step = 1 | 2 | 3;
 
-export function Join({ contractId, phase }: { contractId: string; phase: number | null }) {
+export function Join({ contractId }: { contractId: string }) {
   const { wallet, known } = useWallet();
   const [standing, setStanding] = useState<Standing | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,9 +45,11 @@ export function Join({ contractId, phase }: { contractId: string; phase: number 
     void reread();
   }, [reread]);
 
-  /* Open is the only phase in which any of this is allowed. Outside it the
-     contract refuses everything below, so the section says so instead. */
-  if (phase !== 2) {
+  /* Open is the only phase in which any of this is allowed, and which phase
+     that is comes from the contract along with everything else here. Outside
+     it the contract refuses all three steps, so the section is absent rather
+     than offering them. */
+  if (standing !== null && standing.phase !== 2) {
     return null;
   }
 
