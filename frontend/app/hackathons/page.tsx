@@ -81,7 +81,7 @@ function Stage({ phase }: { phase: number | null }) {
 
   return (
     <span
-      className={`shrink-0 rounded-full px-3 py-1 text-[0.75rem] ring-1 ring-inset ${
+      className={`label shrink-0 px-3 py-1.5 ring-1 ring-inset ${
         settled ? "text-ink-faint ring-rule" : "text-ink ring-rule-strong"
       }`}
     >

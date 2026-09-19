@@ -50,13 +50,11 @@ export function ProofStrip({ proofs }: { proofs: Proof[] }) {
 function Fact({ proof }: { proof: Proof }) {
   const body = (
     <>
-      <p className="text-[0.6875rem] font-medium uppercase tracking-[0.14em] text-night-ink-soft">
-        {proof.label}
-      </p>
+      <p className="label text-night-ink-soft">{proof.label}</p>
 
       <p className="mt-2 tabular text-sm break-all text-night-ink">{proof.value}</p>
 
-      <p className="mt-3 flex items-center gap-2 text-[0.75rem] text-night-ink-soft">
+      <p className="label mt-3 flex items-center gap-2 text-night-ink-soft">
         <Dot standing={proof.standing} />
         {standingText[proof.standing]}
       </p>
@@ -72,7 +70,7 @@ function Fact({ proof }: { proof: Proof }) {
       href={proof.href}
       target="_blank"
       rel="noreferrer"
-      className="rounded-md px-4 py-4 transition-colors duration-150 ease-settle hover:bg-night-raised"
+      className="px-4 py-4 transition-colors duration-150 ease-settle hover:bg-night-raised"
     >
       {body}
     </a>

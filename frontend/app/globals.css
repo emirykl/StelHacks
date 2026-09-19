@@ -3,20 +3,29 @@
 /*
   The design system, as tokens.
 
-  Two traditions meet here and they do not mix evenly, so the split is written
-  down rather than left to taste.
+  Three traditions meet here, and rather than blend them the system gives each
+  one a job. The jobs are not decorative: they follow the distinction the whole
+  product is built on, which is that the chain decides and everything else
+  merely remembers.
 
-  Apple's Human Interface Guidelines supply the system: the spacing scale, the
-  type hierarchy, the restraint. Neutral surfaces, one accent, hairline rules,
-  motion you notice only when it is missing. Ninety percent of any screen is
-  this, and it is what makes an interface feel calm.
+  APPLE supplies the system. The spacing scale, the type hierarchy, the
+  restraint, the motion you notice only when it is missing. Ninety percent of
+  any screen is this and it is what makes an interface feel calm.
 
-  The editorial tradition behind stellar.org supplies the accent: a high
-  contrast serif for display type, halftone texture, spot colour. Used at three
-  points and no more, because riso texture and Apple calm are opposites, and an
-  interface that shouts in both loses the character of each.
+  EDITORIAL supplies the human voice. The high contrast serif, the halftone,
+  the generous measure. A hackathon's name, a headline, a paragraph somebody
+  wrote: anywhere a person is speaking.
 
-  The rule: never both loud at once.
+  TECHNICAL BRUTALISM supplies the chain's voice. Condensed capitals,
+  monospaced labels, bracketed indices, hairline spec rows, square corners,
+  tabular figures. A digest, an address, a phase, a ranking, a payment:
+  anywhere the chain is speaking.
+
+  So the typeface is the argument. Serif means a person said this. Mono and
+  condensed caps mean the chain did, and you can go and check. An interface
+  that mixed them would be making a claim it could not support.
+
+  The rule: one voice per surface, and never two loud at once.
 */
 
 @theme {
@@ -30,8 +39,9 @@
      large headline read as considered rather than merely big. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "Menlo", monospace;
+  --font-display: var(--font-editorial), Georgia, "Times New Roman", serif;
+  --font-technical: var(--font-technical), "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-mono-loaded), ui-monospace, "SF Mono", monospace;
 
   /* Surfaces ---------------------------------------------------------------
      Warm rather than pure. A hackathon page is read for a long time, and pure
@@ -57,6 +67,10 @@
      buttons would make the one place it matters unremarkable. */
   --color-signal: oklch(84% 0.16 92);
   --color-signal-ink: oklch(28% 0.09 92);
+  /* The accent again, pulled down until it holds its own against warm paper.
+     The bright one is mixed for dark surfaces and goes pale and unreadable on
+     light ones, which is where a row index lives half the time. */
+  --color-signal-deep: oklch(68% 0.15 92);
 
   /* Reserved for the two states a verifiable product has to be able to show
      plainly, and for nothing decorative. */
@@ -69,6 +83,10 @@
   --color-rule: oklch(90% 0.004 95);
   --color-rule-strong: oklch(83% 0.005 95);
   --color-night-rule: oklch(28% 0.006 60);
+
+  /* Square corners belong to the chain's surfaces, rounded ones to everything
+     else. A radius is a softening, and nothing about a digest is soft. */
+  --radius-chain: 0px;
 
   /* Rhythm -----------------------------------------------------------------
      A four point grid, which is Apple's, halved. Everything on a page lands on
@@ -179,6 +197,53 @@
     background-size: 14px 14px, 14px 14px;
     background-position: 0 0, 7px 7px;
     mask-image: linear-gradient(to bottom, black, transparent 78%);
+  }
+
+  /*
+    The diagonal hatch, which is the technical tradition's texture the way the
+    halftone is the editorial one's.
+
+    It belongs on chain facing surfaces and nowhere else, so a reader can tell
+    at a glance which half of the page they are in without reading a word.
+  */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--color-rule) 0px,
+      var(--color-rule) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+  }
+
+  /*
+    A label in the chain's voice.
+
+    Monospaced, capitalised and tracked out. Tracking matters more than it
+    looks at this size: small capitals set tight stop being legible well before
+    they stop being readable.
+  */
+  .label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+    A heading in the chain's voice.
+
+    Condensed, capitalised, tracked in. A specification rather than an
+    announcement, which is what the content under it always is.
+  */
+  .technical {
+    font-family: var(--font-technical);
+    font-stretch: 85%;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 1;
   }
 
   /* The grain that makes a flat surface read as printed. Kept separate from

@@ -1,6 +1,14 @@
 import { notFound } from "next/navigation";
 
-import { Chain, Eyebrow, Measure, Rule } from "../../components/primitives";
+import { Eyebrow, Measure } from "../../components/primitives";
+import {
+  SpecButton,
+  SpecHeading,
+  SpecLabel,
+  SpecRow,
+  SpecRows,
+  SpecValue,
+} from "../../components/spec";
 import { ProofStrip, type Proof } from "../../components/proof-strip";
 import { findHackathon, phaseName, type HackathonDetail } from "../../../lib/chain";
 
@@ -58,37 +66,60 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
         </Measure>
       )}
 
-      <Measure wide className="pb-20">
-        <Rule />
+      {/* Below here the chain is speaking, and the page changes voice to say
+          so: condensed capitals, monospaced labels, square corners, hairline
+          rows. A reader can tell which half of the page they are in without
+          reading a word. */}
+      <section className="hatch border-t border-rule">
+        <Measure wide className="py-16">
+          <SpecLabel index="01">On chain</SpecLabel>
 
-        <div className="mt-10">
-          <Eyebrow>Where to check it yourself</Eyebrow>
-        </div>
+          <SpecHeading className="mt-3">Where to check it yourself</SpecHeading>
 
-        <dl className="mt-6 grid gap-x-10 gap-y-6 sm:grid-cols-2">
-          <Row label="Hackathon contract" value={hackathon.contract_id} />
-          <Row label="Prize vault" value={hackathon.vault_id} />
-          <Row label="Organizer" value={hackathon.organizer} />
-          <Row label="Prize asset" value={hackathon.prize_asset} />
-        </dl>
-      </Measure>
+          <div className="mt-10">
+            <SpecRows>
+              <SpecRow index="01" label="Rules digest" mark>
+                <SpecValue>{hackathon.constitution_hash ?? "not locked yet"}</SpecValue>
+              </SpecRow>
+
+              <SpecRow index="02" label="Hackathon contract" mark>
+                <div className="flex flex-wrap items-center gap-4">
+                  <SpecValue>{hackathon.contract_id}</SpecValue>
+                  <SpecButton
+                    href={`https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`}
+                  >
+                    Explorer
+                  </SpecButton>
+                </div>
+              </SpecRow>
+
+              <SpecRow index="03" label="Prize vault" mark={hackathon.vault_id !== null}>
+                {hackathon.vault_id === null ? (
+                  <span className="label text-ink-faint">not bound yet</span>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-4">
+                    <SpecValue>{hackathon.vault_id}</SpecValue>
+                    <SpecButton
+                      href={`https://stellar.expert/explorer/testnet/contract/${hackathon.vault_id}`}
+                    >
+                      Explorer
+                    </SpecButton>
+                  </div>
+                )}
+              </SpecRow>
+
+              <SpecRow index="04" label="Organizer">
+                <SpecValue>{hackathon.organizer ?? "not published yet"}</SpecValue>
+              </SpecRow>
+
+              <SpecRow index="05" label="Prize asset">
+                <SpecValue>{hackathon.prize_asset ?? "not published yet"}</SpecValue>
+              </SpecRow>
+            </SpecRows>
+          </div>
+        </Measure>
+      </section>
     </main>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div>
-      <dt className="text-[0.8125rem] text-ink-faint">{label}</dt>
-
-      <dd className="mt-1.5">
-        {value === null ? (
-          <span className="text-[0.8125rem] text-ink-faint">not published yet</span>
-        ) : (
-          <Chain>{value}</Chain>
-        )}
-      </dd>
-    </div>
   );
 }
 

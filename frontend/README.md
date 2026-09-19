@@ -15,8 +15,10 @@ npm run build
 
 ## The design system
 
-Two traditions meet here and they do not mix evenly, so the split is written
-down rather than left to taste.
+Three traditions meet here, and rather than blend them the system gives each one
+a job. The jobs are not decorative: they follow the distinction the whole
+product is built on, which is that the chain decides and everything else merely
+remembers.
 
 **Apple's Human Interface Guidelines supply the system.** The four point
 spacing scale, the type hierarchy, the restraint. Neutral surfaces, one accent,
@@ -30,10 +32,20 @@ precisely: Swiss typographic layout with a high contrast serif for display type,
 a halftone dot field for texture, and risograph spot illustration. Used at three
 points and no more.
 
-**The rule is that they are never both loud at once.** Riso texture and Apple
-calm are opposites; an interface that shouts in both loses the character of
-each. The halftone sits at an opacity where you would not name it if asked, and
-that is the intended dose.
+**Technical brutalism supplies the chain's voice.** Condensed capitals,
+monospaced labels, bracketed indices, hairline spec rows, square corners,
+diagonal hatch, tabular figures. A digest, an address, a phase, a ranking, a
+payment: anywhere the chain is speaking.
+
+**So the typeface is the argument.** Serif means a person said this. Mono and
+condensed capitals mean the chain did, and you can go and check. A reader can
+tell which half of a page they are in without reading a word, and an interface
+that mixed the two would be making a claim it could not support.
+
+**The rule is one voice per surface, and never two loud at once.** Riso texture
+and Apple calm are opposites; an interface that shouts in both loses the
+character of each. The halftone sits at an opacity where you would not name it
+if asked, and that is the intended dose.
 
 **One accent colour, and it means one thing: the chain is speaking.** Proof
 strips, verified digests, settled payments. Spending it on ordinary buttons
