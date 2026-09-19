@@ -1,17 +1,21 @@
 use soroban_sdk::contracttype;
 
+use crate::constitution::Deadline;
+
 /// The stages a hackathon walks through, in order.
 ///
 /// A hackathon only ever moves forward and every stage has exactly one legal
 /// successor, so a caller can never skip a gate by picking a target state
 /// itself.
 ///
-/// The community vote is deliberately not a stage of its own. It is a timed
-/// window inside [`Phase::Judging`], opened by a UTC timestamp the organizer
-/// chose before the lock, usually right after the presentations while the
-/// judges are scoring. Both the scorecards and the ballots stay sealed until
-/// [`Phase::Reveal`] opens them together, which keeps the community signal
-/// independent of the judges rather than an echo of a ranking it already saw.
+/// A stage is not the same thing as a window. Two stages carry two windows
+/// each, because the underlying activities genuinely overlap and pretending
+/// otherwise would force a schedule nobody runs. [`Phase::Open`] holds the
+/// registration window and the submission window, since people sign up and
+/// start building on the same evening. [`Phase::Judging`] holds the scoring
+/// window and the community vote window, both sealed, so the crowd never votes
+/// with the judge table already in front of it. Each window is gated by its own
+/// timestamps rather than by the stage alone.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -20,25 +24,24 @@ pub enum Phase {
     Draft = 0,
     /// The prize is being deposited and full funding is being verified.
     Funding = 1,
-    /// Participants sign up and form teams.
-    Registration = 2,
-    /// Projects are submitted and pinned at the deadline.
-    Submission = 3,
-    /// The organizer runs the screening round for spam and rule breaches.
-    Screening = 4,
+    /// The event is running: participants apply, teams form, projects arrive.
+    Open = 2,
+    /// The organizer works through the screening round for spam and rule
+    /// breaches, before any scorecard exists to be influenced by it.
+    Screening = 3,
     /// Judges score their assigned projects and eligible wallets cast their
     /// community ballots, both sealed.
-    Judging = 5,
+    Judging = 4,
     /// Every scorecard and every ballot is published at once.
-    Reveal = 6,
+    Reveal = 5,
     /// The contract computes the ranking from the locked formula.
-    Finalization = 7,
+    Finalization = 6,
     /// The vault pays the winners.
-    Settlement = 8,
+    Settlement = 7,
     /// The proof page is permanent and nothing can change.
-    Completed = 9,
+    Completed = 8,
     /// Ended early under the cancellation policy declared before the lock.
-    Cancelled = 10,
+    Cancelled = 9,
 }
 
 impl Phase {
@@ -61,9 +64,8 @@ impl Phase {
     pub fn next(self) -> Option<Phase> {
         let next = match self {
             Phase::Draft => Phase::Funding,
-            Phase::Funding => Phase::Registration,
-            Phase::Registration => Phase::Submission,
-            Phase::Submission => Phase::Screening,
+            Phase::Funding => Phase::Open,
+            Phase::Open => Phase::Screening,
             Phase::Screening => Phase::Judging,
             Phase::Judging => Phase::Reveal,
             Phase::Reveal => Phase::Finalization,
@@ -75,6 +77,22 @@ impl Phase {
         Some(next)
     }
 
+    /// The deadline that has to pass before this phase can end.
+    ///
+    /// Only three stages end on the clock. The rest end when somebody does the
+    /// work that closes them: locking the rules, publishing a funded hackathon,
+    /// revealing the sealed input, computing the ranking, paying the winners.
+    /// Returning `None` therefore means the phase is waiting on an action, not
+    /// that it can be skipped.
+    pub fn closing_deadline(self) -> Option<Deadline> {
+        match self {
+            Phase::Open => Some(Deadline::Submission),
+            Phase::Screening => Some(Deadline::Screening),
+            Phase::Judging => Some(Deadline::Judging),
+            _ => None,
+        }
+    }
+
     /// Cancellation is a sideways exit rather than a step in the sequence, and
     /// it is only available while the hackathon is still running.
     pub fn can_cancel(self) -> bool {
@@ -84,7 +102,7 @@ impl Phase {
 
 #[cfg(test)]
 mod test {
-    use super::Phase;
+    use super::*;
 
     /// Walking from the draft must visit every stage exactly once and stop at
     /// completion.
@@ -92,8 +110,7 @@ mod test {
     fn full_sequence_reaches_completion() {
         let expected = [
             Phase::Funding,
-            Phase::Registration,
-            Phase::Submission,
+            Phase::Open,
             Phase::Screening,
             Phase::Judging,
             Phase::Reveal,
@@ -140,5 +157,27 @@ mod test {
         assert!(Phase::Draft.can_cancel());
         assert!(Phase::Judging.can_cancel());
         assert!(Phase::Settlement.can_cancel());
+    }
+
+    #[test]
+    fn only_three_phases_end_on_the_clock() {
+        assert_eq!(Phase::Open.closing_deadline(), Some(Deadline::Submission));
+        assert_eq!(
+            Phase::Screening.closing_deadline(),
+            Some(Deadline::Screening)
+        );
+        assert_eq!(Phase::Judging.closing_deadline(), Some(Deadline::Judging));
+
+        for phase in [
+            Phase::Draft,
+            Phase::Funding,
+            Phase::Reveal,
+            Phase::Finalization,
+            Phase::Settlement,
+            Phase::Completed,
+            Phase::Cancelled,
+        ] {
+            assert_eq!(phase.closing_deadline(), None);
+        }
     }
 }
