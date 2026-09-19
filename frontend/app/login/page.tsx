@@ -48,56 +48,61 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
   const providers = providersOffered();
 
   return (
-    <main className="flex-1">
-      <div className="grid min-h-[calc(100vh-4rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Hidden on a narrow screen. Stacked above a form a picture becomes an
-            obstacle between somebody and the field they came to fill in. */}
-        <aside className="relative hidden overflow-hidden bg-night lg:block">
-          <img
-            src="/login-screen.png"
-            alt=""
-            className="absolute inset-0 size-full object-cover"
-          />
-        </aside>
+    <main className="relative flex-1 overflow-hidden bg-night">
+      {/* The whole page, not half of it. A split screen gives the artwork a
+          column and a hard edge down the middle; letting it run under
+          everything makes it the room the form is standing in, which is what a
+          picture on a sign in page is for. */}
+      <img
+        src="/login-screen.png"
+        alt=""
+        className="absolute inset-0 size-full object-cover"
+      />
 
-        <div className="grid place-items-center px-6 py-16">
-          <div className="w-full max-w-[24rem]">
-            <h1 className="text-[clamp(2rem,4vw,2.75rem)]">Welcome</h1>
+      <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[96rem] items-center justify-center px-6 py-12 lg:justify-end lg:px-12">
+        {/*
+          The one card in this product that casts a real shadow.
 
-            <p className="mt-4 text-[0.9375rem] leading-relaxed text-ink-soft">
-              {authConfigured()
-                ? offered(providers.length)
-                : "Sign in is not configured on this deployment."}
+          Everywhere else a surface is drawn with a hairline, because a shadow
+          claims depth an interface this flat has no reason to claim. Here it is
+          not a claim: the card is genuinely above a picture, and without the
+          shadow it reads as a hole cut in the artwork rather than as paper
+          lying on it.
+        */}
+        <div className="w-full max-w-[26rem] rounded-lg bg-paper p-8 shadow-[0_28px_70px_-24px_rgba(0,0,0,0.6)] sm:p-10">
+          <h1 className="text-[2rem]">Welcome</h1>
+
+          <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+            {authConfigured()
+              ? offered(providers.length)
+              : "Sign in is not configured on this deployment."}
+          </p>
+
+          {authConfigured() ? (
+            <>
+              <div className="mt-7">
+                <SignIn next={next} />
+              </div>
+
+              <div className="mt-6">
+                <OAuthButtons providers={providers} next={next} />
+              </div>
+            </>
+          ) : (
+            /* Said plainly rather than shown as a button that fails. A
+               deployment without the keys is one where signing in does not
+               exist, and offering it anyway teaches somebody to distrust the
+               next button too. */
+            <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-soft">
+              Everything a signed in person can verify can still be verified
+              here without an account.
             </p>
+          )}
 
-            {authConfigured() ? (
-              <>
-                <div className="mt-8">
-                  <SignIn next={next} />
-                </div>
-
-                <div className="mt-6">
-                  <OAuthButtons providers={providers} next={next} />
-                </div>
-              </>
-            ) : (
-              /* Said plainly rather than shown as a button that fails. A
-                 deployment without the keys is one where signing in does not
-                 exist, and offering it anyway teaches somebody to distrust the
-                 next button too. */
-              <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-soft">
-                Everything a signed in person can verify can still be verified
-                here without an account.
-              </p>
-            )}
-
-            <p className="mt-10 border-t border-rule pt-5 text-[0.8125rem] leading-relaxed text-ink-faint">
-              An account is a name and nothing else. Your wallet does every
-              signature, you attach one after this, and no account can move money
-              without it. You do not need one to read a hackathon, check a digest
-              or recompute a result.
-            </p>
-          </div>
+          <p className="mt-8 border-t border-rule pt-5 text-[0.8125rem] leading-relaxed text-ink-faint">
+            An account is a name and nothing else. Your wallet does every
+            signature and you attach one after this.
+          </p>
         </div>
       </div>
     </main>
