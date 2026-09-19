@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif } from "next/font/google";
 
+import { Footer, Header } from "./components/chrome";
 import "./globals.css";
 
 /**
@@ -29,7 +30,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${display.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-paper text-ink">{children}</body>
+      <body className="min-h-full flex flex-col bg-paper text-ink">
+        <Header />
+        {children}
+        <Footer />
+      </body>
     </html>
   );
 }

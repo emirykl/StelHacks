@@ -1,4 +1,4 @@
-import { Badge, ButtonLink, Card, Display, Eyebrow, Measure, Rule } from "./components/primitives";
+import { ButtonLink, Badge, Display, Eyebrow, Measure, Rule } from "./components/primitives";
 
 /**
  * The page somebody lands on knowing nothing.
@@ -10,50 +10,11 @@ import { Badge, ButtonLink, Card, Display, Eyebrow, Measure, Rule } from "./comp
 
 export default function Home() {
   return (
-    <>
-      <Header />
-
-      <main className="flex-1">
-        <Hero />
-        <Promise />
-        <Audiences />
-      </main>
-
-      <Footer />
-    </>
-  );
-}
-
-function Header() {
-  return (
-    <header className="sticky top-0 z-10 border-b border-rule bg-paper/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-[76rem] items-center justify-between px-6">
-        <a href="/" className="display text-xl tracking-normal">
-          StelHacks
-        </a>
-
-        <nav className="hidden items-center gap-1 sm:flex" aria-label="Sections">
-          {[
-            ["Hackathons", "/hackathons"],
-            ["How it works", "/how-it-works"],
-            ["Builders", "/builders"],
-          ].map(([label, href]) => (
-            <a
-              key={href}
-              href={href}
-              className="rounded-full px-3.5 py-2 text-[0.875rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-
-        <ButtonLink href="/hackathons" size="sm">
-          Browse
-          <Badge>→</Badge>
-        </ButtonLink>
-      </div>
-    </header>
+    <main className="flex-1">
+      <Hero />
+      <Promise />
+      <Audiences />
+    </main>
   );
 }
 
@@ -196,29 +157,5 @@ function Audiences() {
         </div>
       </Measure>
     </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-rule py-12">
-      <Measure wide>
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[0.8125rem] text-ink-faint">
-            Running on Stellar testnet. Contract addresses and build hashes are
-            published.
-          </p>
-
-          <nav className="flex gap-5 text-[0.8125rem] text-ink-soft" aria-label="Elsewhere">
-            <a href="/how-it-works" className="hover:text-ink">
-              How it works
-            </a>
-            <a href="/hackathons" className="hover:text-ink">
-              Hackathons
-            </a>
-          </nav>
-        </div>
-      </Measure>
-    </footer>
   );
 }
