@@ -9,7 +9,8 @@ import {
   SpecRows,
   SpecValue,
 } from "../../components/spec";
-import { ProofStrip, type Proof } from "../../components/proof-strip";
+import { CheckableProofStrip } from "../../components/checkable";
+import { type Proof } from "../../components/proof-strip";
 import { findHackathon, phaseName, type HackathonDetail } from "../../../lib/chain";
 
 /**
@@ -39,7 +40,15 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
 
   return (
     <main className="flex-1">
-      <ProofStrip proofs={proofsFor(hackathon)} />
+      <CheckableProofStrip
+        contractId={hackathon.contract_id}
+        claims={{
+          digest: hackathon.constitution_hash,
+          phase: hackathon.phase,
+          vault: hackathon.vault_id,
+        }}
+        proofs={proofsFor(hackathon)}
+      />
 
       <section className="border-b border-rule">
         <Measure wide className="py-16">
@@ -126,11 +135,11 @@ export default async function Hackathon({ params }: PageProps<"/hackathons/[slug
 /**
  * The four claims the strip carries.
  *
- * Every one of them reads `unchecked`, and that is not a placeholder. The page
- * is server rendered and nothing here has compared a digest against the
- * contract; saying so is the honest state. Checking happens in the browser
- * through the SDK, and until that lands the strip says what it knows rather
- * than what would look better.
+ * Every one of them leaves here reading `unchecked`, and that is not a
+ * placeholder. The page is server rendered and nothing on this side has
+ * compared a digest against the contract; saying so is the honest state. The
+ * reader changes it by pressing the button, which asks the contract from their
+ * own browser.
  */
 function proofsFor(hackathon: HackathonDetail): Proof[] {
   return [

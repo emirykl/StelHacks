@@ -24,6 +24,14 @@ export interface Proof {
   standing: Standing;
   /** Where a reader goes to check it for themselves. */
   href?: string;
+  /**
+   * What the contract said, when that is not what the page said.
+   *
+   * Only ever set after a check found a mismatch. "Does not match" on its own
+   * tells a reader something is wrong and leaves them no way to find out what;
+   * the value the contract actually holds is the thing they came for.
+   */
+  found?: string;
 }
 
 const standingText: Record<Standing, string> = {
@@ -58,6 +66,16 @@ function Fact({ proof }: { proof: Proof }) {
         <Dot standing={proof.standing} />
         {standingText[proof.standing]}
       </p>
+
+      {proof.found !== undefined && (
+        <p className="mt-2 border-l-2 border-broken pl-2.5">
+          <span className="label text-night-ink-soft">the contract says</span>
+
+          <span className="mt-1 block tabular text-sm break-all text-night-ink">
+            {proof.found}
+          </span>
+        </p>
+      )}
     </>
   );
 
