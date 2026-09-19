@@ -57,8 +57,15 @@ export function WalletBadge({ signedIn }: { signedIn: boolean }) {
      address is a flicker that reads as a bug. */
   if (!known || wallet === null) {
     return (
-      <ButtonLink href="/account" size="sm" intent={signedIn ? "quiet" : "primary"}>
-        {signedIn ? "Account" : "Sign in"}
+      <ButtonLink
+        href="/account"
+        size="sm"
+        /* Black and yellow rather than the quiet grey it used to be when signed
+           in. This is the one control in the header and it should look like a
+           way in from across the page. */
+        className="bg-ink text-signal hover:bg-ink/90"
+      >
+        {signedIn ? "My account" : "Log in"}
       </ButtonLink>
     );
   }
