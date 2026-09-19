@@ -163,22 +163,26 @@ function proofsFor(hackathon: HackathonDetail): Proof[] {
   return [
     {
       label: "Rules digest",
+      hint: "A fingerprint of the frozen rules. Change one word of them and this changes.",
       value: hackathon.constitution_hash ?? "not locked yet",
       standing: "unchecked",
     },
     {
       label: "Stage",
+      hint: "Where the event has got to. The contract refuses anything out of order.",
       value: phaseName(hackathon.phase),
       standing: "unchecked",
     },
     {
       label: "Hackathon contract",
+      hint: "The program running this event. It holds the rules and computes the result.",
       value: shorten(hackathon.contract_id),
       standing: "unchecked",
       href: `https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`,
     },
     {
       label: "Prize vault",
+      hint: "Where the money sits. Nobody can withdraw from it, including us.",
       value: hackathon.vault_id === null ? "not bound yet" : shorten(hackathon.vault_id),
       standing: "unchecked",
       ...(hackathon.vault_id === null

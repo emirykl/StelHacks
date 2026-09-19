@@ -225,15 +225,23 @@
   /*
     A label in the chain's voice.
 
-    Monospaced, capitalised and tracked out. Tracking matters more than it
-    looks at this size: small capitals set tight stop being legible well before
-    they stop being readable.
+    Monospaced, capitalised and tracked. It names a value; it is never the
+    value itself and it is never a sentence. Both of those were tried across
+    this build and both were a mistake: tracked out capitals in a mono face
+    cost a reader real speed, which is nothing over two words and unbearable
+    over twelve.
+
+    A little larger and a good deal tighter than it started. It was set at
+    eleven pixels with a seventh of an em between the letters, on the theory
+    that small capitals set tight stop being legible. They do, but they stop
+    being legible at both ends of that dial, and the earlier value was past the
+    far one.
   */
   .label {
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.08em;
     font-variant-numeric: tabular-nums;
   }
 

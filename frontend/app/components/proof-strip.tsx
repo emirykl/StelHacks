@@ -22,6 +22,16 @@ export interface Proof {
   value: string;
   /** Whether anybody has checked it yet, and what they found. */
   standing: Standing;
+  /**
+   * What this fact is, in a sentence, for somebody who has not met it before.
+   *
+   * "Rules digest" and "Prize vault" are terms this product taught itself and
+   * then forgot it had. A reader arriving at their first hackathon page sees
+   * four labels and four long strings and cannot tell whether that is
+   * reassuring or alarming, which is the opposite of what a proof strip is
+   * for.
+   */
+  hint?: string;
   /** Where a reader goes to check it for themselves. */
   href?: string;
   /**
@@ -46,10 +56,23 @@ export function ProofStrip({ proofs }: { proofs: Proof[] }) {
       aria-label="What the chain says"
       className="grain relative overflow-hidden bg-night text-night-ink"
     >
-      <div className="mx-auto grid w-full max-w-[96rem] gap-px px-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
-        {proofs.map((proof) => (
-          <Fact key={proof.label} proof={proof} />
-        ))}
+      <div className="mx-auto w-full max-w-[96rem] px-6 py-8">
+        {/* Said once, above the four of them. Without it the strip is four
+            unexplained strings on a black band, and a reader who cannot tell
+            what it is for reads it as decoration and never presses the button
+            underneath. */}
+        <p className="max-w-[46rem] text-[0.875rem] leading-relaxed text-night-ink-soft">
+          <span className="font-semibold text-night-ink">What the chain holds.</span>{" "}
+          Four facts about this hackathon that live in a contract rather than in
+          our database. You can check every one of them yourself, without an
+          account.
+        </p>
+
+        <div className="mt-7 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-px">
+          {proofs.map((proof) => (
+            <Fact key={proof.label} proof={proof} />
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -60,7 +83,11 @@ function Fact({ proof }: { proof: Proof }) {
     <>
       <p className="label text-night-ink-soft">{proof.label}</p>
 
-      <p className="mt-2 tabular text-sm break-all text-night-ink">{proof.value}</p>
+      {proof.hint !== undefined && (
+        <p className="mt-1.5 text-[0.8125rem] leading-snug text-night-ink-soft">{proof.hint}</p>
+      )}
+
+      <p className="mt-2.5 tabular text-sm break-all text-night-ink">{proof.value}</p>
 
       <p className="label mt-3 flex items-center gap-2 text-night-ink-soft">
         <Dot standing={proof.standing} />
