@@ -269,6 +269,63 @@ pub struct SettlementHeld {
     pub reason: BytesN<32>,
 }
 
+/// A track moved to award nothing, or that move was settled.
+///
+/// The reason travels with it and the signature count travels with it, because
+/// a prize that was announced and then not paid is the single thing a
+/// participant is most owed an explanation for.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoAwardOpened {
+    #[topic]
+    pub track: Symbol,
+    pub reason: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoAwardApproved {
+    #[topic]
+    pub track: Symbol,
+    pub judge: Address,
+    pub approvals: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoAwardResolved {
+    #[topic]
+    pub track: Symbol,
+    pub declared: bool,
+    pub returned: i128,
+}
+
+pub fn no_award_opened(env: &Env, track: &Symbol, reason: &BytesN<32>) {
+    NoAwardOpened {
+        track: track.clone(),
+        reason: reason.clone(),
+    }
+    .publish(env);
+}
+
+pub fn no_award_approved(env: &Env, track: &Symbol, judge: &Address, approvals: u32) {
+    NoAwardApproved {
+        track: track.clone(),
+        judge: judge.clone(),
+        approvals,
+    }
+    .publish(env);
+}
+
+pub fn no_award_resolved(env: &Env, track: &Symbol, declared: bool, returned: i128) {
+    NoAwardResolved {
+        track: track.clone(),
+        declared,
+        returned,
+    }
+    .publish(env);
+}
+
 pub fn prize_paid(env: &Env, to: &Address, track: &Symbol, rank: u32, team: u32, amount: i128) {
     PrizePaid {
         to: to.clone(),

@@ -33,11 +33,15 @@ impl RefundRoute {
     ///
     /// `RemainingTracks` is refused here. A cancelled hackathon has no
     /// remaining tracks to pay, and an unclaimed prize belongs to a track that
-    /// ran perfectly well, so there is nothing to spread it across. A track
-    /// that declares no award is the one case where all three routes work, and
-    /// that case does not call this.
+    /// ran perfectly well, so there is nothing to spread it across.
+    ///
+    /// `Depositors` is refused too, for now and for a different reason: paying
+    /// sponsors back in proportion needs the vault to remember who put in what,
+    /// and it does not yet. Allowing the setting before the machinery exists
+    /// would let an organizer promise a refund route the contract cannot walk,
+    /// which is worse than not offering it.
     fn valid_for_return(self) -> bool {
-        !matches!(self, RefundRoute::RemainingTracks)
+        matches!(self, RefundRoute::Organizer)
     }
 }
 
@@ -165,7 +169,7 @@ mod test {
             unclaimed_refund: RefundRoute::Organizer,
             no_award_refund: RefundRoute::Organizer,
             cancellation_threshold: 3,
-            cancellation_refund: RefundRoute::Depositors,
+            cancellation_refund: RefundRoute::Organizer,
         }
     }
 
@@ -275,13 +279,15 @@ mod test {
         assert_eq!(policy.validate(5), Err(Error::RefundRouteInvalid));
     }
 
+    /// Paying sponsors back in proportion is the route they would want, and it
+    /// is refused until the vault can actually do it rather than accepted and
+    /// quietly unhonoured.
     #[test]
-    fn sponsors_can_be_paid_back_directly_on_cancellation() {
+    fn paying_sponsors_back_directly_is_not_offered_yet() {
         let mut policy = policy();
         policy.cancellation_refund = RefundRoute::Depositors;
-        policy.unclaimed_refund = RefundRoute::Depositors;
 
-        assert_eq!(policy.validate(5), Ok(()));
+        assert_eq!(policy.validate(5), Err(Error::RefundRouteInvalid));
     }
 
     #[test]

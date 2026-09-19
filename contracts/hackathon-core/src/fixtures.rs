@@ -121,7 +121,7 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
             unclaimed_refund: RefundRoute::Organizer,
             no_award_refund: RefundRoute::Organizer,
             cancellation_threshold: 2,
-            cancellation_refund: RefundRoute::Depositors,
+            cancellation_refund: RefundRoute::Organizer,
         },
         schedule: sample_schedule(),
         extensions: ExtensionPolicy {

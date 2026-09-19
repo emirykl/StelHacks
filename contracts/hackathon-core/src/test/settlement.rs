@@ -421,3 +421,245 @@ fn the_pool_falls_by_exactly_the_prize_that_was_paid() {
 
     assert_eq!(settled.vault.balance(), before - 8_000);
 }
+
+/// The move to award nothing, which is the sharpest power an organizer keeps
+/// and therefore the one with the most conditions on it.
+mod no_award {
+    use super::*;
+
+    fn defi() -> Symbol {
+        symbol_short!("defi")
+    }
+
+    fn reason(settled: &Settled) -> BytesN<32> {
+        BytesN::from_array(&settled.fixture.env, &[8u8; 32])
+    }
+
+    fn judge(settled: &Settled, index: u32) -> Address {
+        settled
+            .fixture
+            .client
+            .constitution()
+            .judges
+            .get(index)
+            .unwrap()
+            .judge
+    }
+
+    /// The window has to run out before anything settles, so this walks the
+    /// clock past it.
+    fn past_the_window(settled: &Settled) {
+        let opened_at = settled.fixture.client.no_award(&defi()).opened_at;
+        let window = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .appeal_window;
+
+        settled
+            .fixture
+            .env
+            .ledger()
+            .set_timestamp(opened_at + window);
+    }
+
+    /// The first condition: the track carried the clause before the rules
+    /// locked, so every participant read it before writing a line of code.
+    #[test]
+    fn a_track_that_never_carried_the_clause_cannot_reach_for_it() {
+        let settled = Settled::through_finalization();
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_open_no_award(&payments(), &reason(&settled))
+                .err(),
+            Some(Ok(Error::NoAwardNotDeclarable))
+        );
+    }
+
+    #[test]
+    fn a_marked_track_can_open_the_move_with_a_reason() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+
+        let case = settled.fixture.client.no_award(&defi());
+
+        assert_eq!(case.reason, reason(&settled));
+        assert_eq!(case.approvals, 0);
+        assert!(!case.resolved);
+    }
+
+    #[test]
+    fn the_move_cannot_be_opened_twice() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_open_no_award(&defi(), &reason(&settled))
+                .err(),
+            Some(Ok(Error::NoAwardAlreadyOpen))
+        );
+    }
+
+    /// The appeal window is a condition, not a formality.
+    #[test]
+    fn nothing_settles_while_the_appeal_window_is_open() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+
+        assert_eq!(
+            settled.fixture.client.try_resolve_no_award(&defi()).err(),
+            Some(Ok(Error::AppealWindowOpen))
+        );
+    }
+
+    /// The default when the bar is not cleared: the prize is owed. A track that
+    /// opened the move and failed to gather signatures pays out normally.
+    #[test]
+    fn a_move_the_judges_did_not_sign_fails_and_the_prize_stands() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+        past_the_window(&settled);
+
+        assert!(!settled.fixture.client.resolve_no_award(&defi()));
+        assert!(!settled.fixture.client.is_paid(&defi(), &1));
+    }
+
+    #[test]
+    fn a_move_the_judges_signed_returns_the_prize_to_the_organizer() {
+        let settled = Settled::through_finalization();
+        let organizer = settled.fixture.organizer.clone();
+
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+
+        // The sample hackathon asks for two signatures.
+        settled
+            .fixture
+            .client
+            .approve_no_award(&judge(&settled, 0), &defi());
+        settled
+            .fixture
+            .client
+            .approve_no_award(&judge(&settled, 1), &defi());
+
+        past_the_window(&settled);
+
+        let before = settled.token.balance(&organizer);
+        assert!(settled.fixture.client.resolve_no_award(&defi()));
+
+        assert_eq!(settled.token.balance(&organizer), before + 2_000);
+        assert!(
+            settled.fixture.client.is_paid(&defi(), &1),
+            "the position is closed so settlement cannot reach it"
+        );
+    }
+
+    #[test]
+    fn a_judge_cannot_sign_the_same_move_twice() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+
+        let judge = judge(&settled, 0);
+        settled.fixture.client.approve_no_award(&judge, &defi());
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_approve_no_award(&judge, &defi())
+                .err(),
+            Some(Ok(Error::AlreadySigned))
+        );
+        assert_eq!(settled.fixture.client.no_award(&defi()).approvals, 1);
+    }
+
+    #[test]
+    fn somebody_who_is_not_a_judge_here_cannot_sign() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+
+        let stranger = Address::generate(&settled.fixture.env);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_approve_no_award(&stranger, &defi())
+                .err(),
+            Some(Ok(Error::NotJudge))
+        );
+    }
+
+    #[test]
+    fn a_settled_move_cannot_be_settled_again() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+        past_the_window(&settled);
+        settled.fixture.client.resolve_no_award(&defi());
+
+        assert_eq!(
+            settled.fixture.client.try_resolve_no_award(&defi()).err(),
+            Some(Ok(Error::NoAwardAlreadyResolved))
+        );
+    }
+
+    /// Withholding one track's prize leaves the others alone.
+    #[test]
+    fn the_other_tracks_pay_out_as_normal() {
+        let settled = Settled::through_finalization();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+        settled
+            .fixture
+            .client
+            .approve_no_award(&judge(&settled, 0), &defi());
+        settled
+            .fixture
+            .client
+            .approve_no_award(&judge(&settled, 1), &defi());
+        past_the_window(&settled);
+        settled.fixture.client.resolve_no_award(&defi());
+
+        let hold = 24 * 60 * 60;
+        let now = settled.fixture.client.state().finalized_at + hold;
+        settled.fixture.env.ledger().set_timestamp(now);
+        settled.fixture.client.open_settlement();
+
+        let captain = settled.captain(settled.teams.get(0).unwrap());
+        settled.fixture.client.settle_prize(&payments(), &1);
+
+        assert_eq!(settled.token.balance(&captain), 5_000);
+    }
+}

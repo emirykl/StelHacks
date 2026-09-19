@@ -3,7 +3,7 @@ use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol, Vec};
 use crate::constitution::Constitution;
 use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
-use crate::results::Placement;
+use crate::results::{NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionTally, ScoreTally};
 use crate::state::HackathonState;
@@ -87,6 +87,10 @@ pub enum DataKey {
     Ranking(Symbol),
     /// A prize position that has already been paid.
     Paid(Symbol, u32),
+    /// A track's move to award nothing.
+    NoAward(Symbol),
+    /// One judge's signature on that move.
+    NoAwardApproval(Symbol, Address),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -462,6 +466,42 @@ pub fn is_paid(env: &Env, track: &Symbol, rank: u32) -> bool {
 
 pub fn mark_paid(env: &Env, track: &Symbol, rank: u32) {
     let key = DataKey::Paid(track.clone(), rank);
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
+}
+
+pub fn save_no_award(env: &Env, track: &Symbol, case: &NoAwardCase) {
+    let key = DataKey::NoAward(track.clone());
+    env.storage().persistent().set(&key, case);
+    touch_entry(env, &key);
+}
+
+pub fn load_no_award(env: &Env, track: &Symbol) -> Result<NoAwardCase, Error> {
+    let key = DataKey::NoAward(track.clone());
+    let case = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::NoAwardNotOpen)?;
+    touch_entry(env, &key);
+
+    Ok(case)
+}
+
+pub fn has_no_award(env: &Env, track: &Symbol) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::NoAward(track.clone()))
+}
+
+pub fn has_no_award_approval(env: &Env, track: &Symbol, judge: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::NoAwardApproval(track.clone(), judge.clone()))
+}
+
+pub fn save_no_award_approval(env: &Env, track: &Symbol, judge: &Address) {
+    let key = DataKey::NoAwardApproval(track.clone(), judge.clone());
     env.storage().persistent().set(&key, &true);
     touch_entry(env, &key);
 }

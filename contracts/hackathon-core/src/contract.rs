@@ -7,7 +7,7 @@ use crate::hashing::{self, hash_constitution};
 use crate::merkle;
 use crate::organizers::OrganizingTeam;
 use crate::phase::Phase;
-use crate::results::{self, Candidate, Placement};
+use crate::results::{self, Candidate, NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard};
 use crate::state::HackathonState;
@@ -819,6 +819,134 @@ impl HackathonCore {
         events::settlement_held(&env, false, &reason);
 
         Ok(())
+    }
+
+    /// Opens a track's move to award nothing.
+    ///
+    /// The track had to be marked for this before the rules locked, which means
+    /// every participant read it before writing a line of code. An organizer
+    /// who did not mark it cannot reach for this afterwards, however
+    /// disappointing the entries turned out to be.
+    pub fn open_no_award(env: Env, track: Symbol, reason: BytesN<32>) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Finalization {
+            return Err(Error::WrongPhase);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        let definition = constitution.track(&track).ok_or(Error::TrackNotFound)?;
+
+        if !definition.no_award_allowed {
+            return Err(Error::NoAwardNotDeclarable);
+        }
+        if storage::has_no_award(&env, &track) {
+            return Err(Error::NoAwardAlreadyOpen);
+        }
+
+        storage::save_no_award(
+            &env,
+            &track,
+            &NoAwardCase {
+                opened_at: env.ledger().timestamp(),
+                reason: reason.clone(),
+                approvals: 0,
+                resolved: false,
+            },
+        );
+
+        events::no_award_opened(&env, &track, &reason);
+
+        Ok(())
+    }
+
+    /// Adds a judge's signature to that move.
+    ///
+    /// Withholding a prize is the one decision that most needs somebody other
+    /// than the organizer to agree, since the organizer is the party the money
+    /// goes back to.
+    pub fn approve_no_award(env: Env, judge: Address, track: Symbol) -> Result<(), Error> {
+        judge.require_auth();
+
+        let constitution = storage::load_constitution(&env)?;
+        if !constitution.judges_track(&judge, &track) {
+            return Err(Error::NotJudge);
+        }
+
+        let mut case = storage::load_no_award(&env, &track)?;
+        if case.resolved {
+            return Err(Error::NoAwardAlreadyResolved);
+        }
+        if storage::has_no_award_approval(&env, &track, &judge) {
+            return Err(Error::AlreadySigned);
+        }
+
+        storage::save_no_award_approval(&env, &track, &judge);
+        case.approvals += 1;
+        storage::save_no_award(&env, &track, &case);
+
+        events::no_award_approved(&env, &track, &judge, case.approvals);
+
+        Ok(())
+    }
+
+    /// Settles the move, one way or the other.
+    ///
+    /// The appeal window has to have run out and the judges have to have
+    /// signed. If either is missing the move fails and the track pays out
+    /// normally, which is the right default: a prize that was announced is owed
+    /// unless somebody clears a bar to withhold it.
+    pub fn resolve_no_award(env: Env, track: Symbol) -> Result<bool, Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Finalization {
+            return Err(Error::WrongPhase);
+        }
+
+        let mut case = storage::load_no_award(&env, &track)?;
+        if case.resolved {
+            return Err(Error::NoAwardAlreadyResolved);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        let window = constitution.discretion.appeal_window;
+
+        if env.ledger().timestamp() < case.opened_at + window {
+            return Err(Error::AppealWindowOpen);
+        }
+
+        let declared = case.approvals >= constitution.discretion.disqualification_threshold;
+
+        case.resolved = true;
+        storage::save_no_award(&env, &track, &case);
+
+        let mut returned = 0i128;
+        if declared {
+            // Every position in the track is marked paid so settlement cannot
+            // reach them, and the money goes back along the announced route.
+            let organizer = storage::load_organizing_team(&env)?.organizer;
+            let vault = VaultClient::new(&env, &storage::load_vault(&env)?);
+
+            for tier in constitution.prize_tiers.iter() {
+                if tier.track != track || storage::is_paid(&env, &track, tier.rank) {
+                    continue;
+                }
+
+                storage::mark_paid(&env, &track, tier.rank);
+                vault.pay(&organizer, &tier.amount);
+                returned += tier.amount;
+            }
+        }
+
+        events::no_award_resolved(&env, &track, declared, returned);
+
+        Ok(declared)
+    }
+
+    /// A track's move to award nothing, if one was opened.
+    pub fn no_award(env: Env, track: Symbol) -> Result<NoAwardCase, Error> {
+        storage::load_no_award(&env, &track)
     }
 
     /// Whether a prize position has already been paid.

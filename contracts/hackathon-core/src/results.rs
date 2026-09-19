@@ -1,6 +1,6 @@
 use core::cmp::Ordering;
 
-use soroban_sdk::{contracttype, Symbol, Vec};
+use soroban_sdk::{contracttype, BytesN, Symbol, Vec};
 
 use crate::constitution::{TieBreakRule, VotePolicy, VOTE_SPLIT_TOTAL_BPS};
 use crate::scorecard::{CriterionScore, MAX_WEIGHTED_SCORE};
@@ -35,6 +35,28 @@ pub fn final_score(vote: &VotePolicy, judge_average: Option<u32>, community: u32
     let weighted = judge * vote.judge_bps as u64 + community as u64 * vote.community_bps as u64;
 
     (weighted / VOTE_SPLIT_TOTAL_BPS as u64) as u32
+}
+
+/// A track's move to award nothing, and how far along it is.
+///
+/// The five conditions the product attaches to this power are all here rather
+/// than in a policy document: the track was marked before the rules locked, the
+/// reason is recorded, the judges have to sign, the appeal window has to run
+/// out, and only then does the money move. Every one of them is a line in
+/// `resolve_no_award`, which is what makes this discretion rather than a
+/// loophole.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoAwardCase {
+    /// When the organizer opened it, which is where the appeal window counts
+    /// from.
+    pub opened_at: u64,
+    /// Digest of the written reason.
+    pub reason: BytesN<32>,
+    /// How many judges have signed.
+    pub approvals: u32,
+    /// Whether it has been settled one way or the other.
+    pub resolved: bool,
 }
 
 /// One project's place in its track, and why it sits there.

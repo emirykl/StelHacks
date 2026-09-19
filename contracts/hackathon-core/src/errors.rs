@@ -123,4 +123,7 @@ pub enum Error {
     SafetyWindowOpen = 145,
     PrizeAlreadyPaid = 146,
     VaultUnderfunded = 147,
+    NoAwardAlreadyOpen = 148,
+    NoAwardNotOpen = 149,
+    NoAwardAlreadyResolved = 150,
 }
