@@ -83,5 +83,9 @@ The contract layer is complete through settlement and the discretion paths: a
 hackathon runs from creation to paying winners, the vault empties exactly when
 it closes, and every use of organizer discretion (deadline extension,
 disqualification with an appeal, cancellation) is bounded by something announced
-before the lock and leaves a reason hash behind. M10, hardening and the testnet
-deployment, is next.
+before the lock and leaves a reason hash behind.
+
+M10 is done too: the signature checks, the phase machine and fund conservation
+each have their own suite, coverage sits above ninety percent on every file, and
+both contracts are on testnet with their addresses and wasm hashes in
+`docs/deployments.md`. M11, the TypeScript SDK, is next.
