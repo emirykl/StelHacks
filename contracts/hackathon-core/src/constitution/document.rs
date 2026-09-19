@@ -5,6 +5,7 @@ use crate::constitution::judging::JudgingMode;
 use crate::constitution::ranking::{validate_tie_break, TieBreakRule};
 use crate::constitution::schedule::{ExtensionPolicy, Schedule};
 use crate::constitution::scoring::{total_prize_amount, validate_prize_tiers, PrizeTier, Track};
+use crate::constitution::teams::TeamPolicy;
 use crate::constitution::visibility::ProjectVisibility;
 use crate::constitution::voting::VotePolicy;
 use crate::errors::Error;
@@ -58,6 +59,8 @@ pub struct Constitution {
     pub visibility: ProjectVisibility,
     /// Which links a team has to supply with their project.
     pub submission_requirements: SubmissionRequirements,
+    /// How teams may be formed.
+    pub teams: TeamPolicy,
     /// Payable positions per track.
     pub prize_tiers: Vec<PrizeTier>,
     /// The chain that separates two projects on the same score.
@@ -128,6 +131,7 @@ impl Constitution {
         self.validate_judges()?;
 
         self.vote.validate()?;
+        self.teams.validate()?;
         self.discretion.validate(self.judge_count())?;
         self.extensions.validate()?;
         self.schedule.validate(self.community_vote_enabled())?;

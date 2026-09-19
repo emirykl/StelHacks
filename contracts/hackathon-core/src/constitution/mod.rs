@@ -10,6 +10,7 @@ mod judging;
 mod ranking;
 mod schedule;
 mod scoring;
+mod teams;
 mod visibility;
 mod voting;
 
@@ -22,5 +23,6 @@ pub use scoring::{
     total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,
     WEIGHT_TOTAL_BPS,
 };
+pub use teams::{TeamPolicy, MAX_TEAM_SIZE, MIN_TEAM_SIZE};
 pub use visibility::ProjectVisibility;
 pub use voting::{VotePolicy, VOTE_SPLIT_TOTAL_BPS};

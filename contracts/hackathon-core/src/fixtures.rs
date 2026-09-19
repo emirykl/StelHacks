@@ -10,8 +10,8 @@ use soroban_sdk::{symbol_short, vec, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::constitution::{
     Constitution, Criterion, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode,
-    PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TieBreakRule, Track,
-    VotePolicy, CONSTITUTION_VERSION,
+    PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy, TieBreakRule,
+    Track, VotePolicy, CONSTITUTION_VERSION,
 };
 use crate::submission::{SubmissionMetadata, SubmissionRequirements};
 
@@ -93,6 +93,7 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
         },
         visibility: ProjectVisibility::Public,
         submission_requirements: SubmissionRequirements::code_and_video(),
+        teams: TeamPolicy::small_teams(),
         prize_tiers: vec![
             env,
             PrizeTier {

@@ -46,6 +46,11 @@ pub enum Error {
     VisibilityConflictsWithVote = 38,
     NoAwardRefundNeedsAnotherTrack = 39,
 
+    // Configuration, continued. The first block ran out of room at 39 rather
+    // than being reordered, because renumbering a code a client already logs
+    // turns an old error report into a misleading one.
+    TeamPolicyInvalid = 50,
+
     // Lifecycle
     WrongPhase = 40,
     PhaseOrderInvalid = 41,
