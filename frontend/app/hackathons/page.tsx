@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Eyebrow, Measure, Rule } from "../components/primitives";
+import { Measure, Rule } from "../components/primitives";
 import { HackathonCard } from "../components/hackathon-card";
 import { Filters } from "./filters";
 import {
@@ -43,13 +43,14 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
     <main className="flex-1">
       <section className="border-b border-rule">
         <Measure wide className="py-16 sm:py-20">
-          <Eyebrow>Every event</Eyebrow>
-
-          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3.25rem)]">Hackathons</h1>
+          {/* The eyebrow above this said "Every event", which is what a listing
+              already is. A line of small capitals earns its place by telling a
+              reader something the heading under it does not. */}
+          <h1 className="text-[clamp(2rem,4.5vw,3.25rem)]">Hackathons</h1>
 
           <p className="mt-5 max-w-[38rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-            Rules frozen on chain, prize sitting in a contract. Open any of them
-            without an account.
+            Every hackathon listed here has its rules and its prize written on
+            chain before anybody registers.
           </p>
         </Measure>
       </section>
