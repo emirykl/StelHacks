@@ -64,7 +64,7 @@ export function CheckableProofStrip({
 
       {canCheck() && (
         <div className="border-b border-rule bg-paper-sunk">
-          <div className="mx-auto flex w-full max-w-[76rem] flex-wrap items-center gap-x-6 gap-y-3 px-6 py-4">
+          <div className="mx-auto flex w-full max-w-[96rem] flex-wrap items-center gap-x-6 gap-y-3 px-6 py-4">
             <button
               type="button"
               onClick={run}

@@ -71,7 +71,7 @@ export function Join({ contractId }: { contractId: string }) {
 
   return (
     <section className="border-t border-rule">
-      <div className="mx-auto w-full max-w-[76rem] px-6 py-16">
+      <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
         <SpecLabel index="02">Take part</SpecLabel>
 
         <SpecHeading className="mt-3">Three steps</SpecHeading>

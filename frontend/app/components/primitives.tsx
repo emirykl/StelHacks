@@ -193,7 +193,7 @@ export function Measure({
     <div
       className={join(
         "mx-auto w-full px-6",
-        wide ? "max-w-[76rem]" : "max-w-[46rem]",
+        wide ? "max-w-[96rem]" : "max-w-[46rem]",
         className,
       )}
     >
