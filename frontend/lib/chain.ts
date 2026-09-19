@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { rulesFor, type Rules } from "./rules";
+
 /**
  * Reading a hackathon, the way an observer reads one.
  *
@@ -55,6 +57,13 @@ export interface HackathonDetail extends HackathonSummary {
   constitution_hash: string | null;
   prize_asset: string | null;
   vault_id: string | null;
+  /**
+   * The whole frozen document, or absent when the contract could not be
+   * reached. A card only needs the prize and the deadline off it; a hackathon
+   * page shows the schedule, the tracks and the prize table, and all of them
+   * have to come from the same read or they could disagree.
+   */
+  rules: Rules | null;
 }
 
 /**
@@ -278,60 +287,24 @@ function standing(hackathon: HackathonSummary): number {
 }
 
 /**
- * The two things a card needs from the frozen rules, in one call.
+ * The two things a card needs from the frozen rules.
  *
- * The prize and the deadline both live in the constitution, so asking for it
- * once and taking both is a round trip rather than two, on a page that makes
- * one of these per hackathon.
+ * A card wants a prize and a deadline; a hackathon page wants the whole
+ * document. Both come from the same single call, so this is a narrowing rather
+ * than a second way of asking.
  */
 async function rulesOf(
   contractId: string,
 ): Promise<{ prize: bigint; closesAt: number; asset: string | null } | null> {
-  const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
-  const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
+  const rules = await rulesFor(contractId);
 
-  if (rpcUrl === undefined || passphrase === undefined) {
-    return null;
-  }
-
-  const [{ Account, Contract, TransactionBuilder, BASE_FEE, scValToNative }, rpc] =
-    await Promise.all([
-      import("@stellar/stellar-sdk/base"),
-      import("@stellar/stellar-sdk/rpc"),
-    ]);
-
-  const server = new rpc.Server(rpcUrl);
-
-  const tx = new TransactionBuilder(
-    new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
-    { fee: BASE_FEE, networkPassphrase: passphrase },
-  )
-    .addOperation(new Contract(contractId).call("constitution"))
-    .setTimeout(30)
-    .build();
-
-  const simulated = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
-    return null;
-  }
-
-  const constitution = scValToNative(simulated.result.retval) as {
-    prize_tiers?: unknown;
-    prize_asset?: unknown;
-    schedule?: { submission_closes_at?: unknown };
-  };
-
-  const tiers = Array.isArray(constitution.prize_tiers) ? constitution.prize_tiers : [];
-
-  return {
-    prize: tiers.reduce(
-      (sum: bigint, tier) => sum + BigInt((tier as { amount?: bigint }).amount ?? 0),
-      BigInt(0),
-    ),
-    closesAt: Number(constitution.schedule?.submission_closes_at ?? 0),
-    asset: typeof constitution.prize_asset === "string" ? constitution.prize_asset : null,
-  };
+  return rules === null
+    ? null
+    : {
+        prize: rules.total,
+        closesAt: rules.schedule.submissionCloses,
+        asset: rules.prizeAsset,
+      };
 }
 
 export async function findHackathon(slug: string): Promise<HackathonDetail | null> {
@@ -339,23 +312,52 @@ export async function findHackathon(slug: string): Promise<HackathonDetail | nul
     return null;
   }
 
-  const { data } = await db
-    .from("hackathons")
-    .select("contract_id, slug, name, tagline, description")
-    .eq("slug", slug)
-    .maybeSingle();
+  /* Same two step as the listing, and for the same reason: a database one
+     migration behind fails the whole select rather than dropping the column,
+     and a hackathon that exists must not read as one that does not. */
+  const plain = "contract_id, slug, name, tagline, description";
+  const dressed = `${plain}, logo_url, banner_url, website_url, location, tags`;
 
-  if (data === null) {
+  const written = await db
+    .from("hackathons")
+    .select(dressed)
+    .eq("slug", slug)
+    .maybeSingle()
+    .then((answer) =>
+      answer.error === null
+        ? answer.data
+        : db.from("hackathons").select(plain).eq("slug", slug).maybeSingle().then((f) => f.data),
+    );
+
+  if (written === null || written === undefined) {
     return null;
   }
 
-  const { data: chain } = await db
-    .from("hackathon_state")
-    .select("phase, visibility, organizer, constitution_hash, prize_asset, vault_id")
-    .eq("contract_id", data.contract_id)
-    .maybeSingle();
+  const contractId = String((written as Record<string, unknown>)["contract_id"]);
 
-  return merge(data, chain ?? {});
+  /* Both at once. The indexer's row and the contract's own document are
+     independent reads and a page needs both before it can render anything, so
+     making them wait for each other costs a round trip for nothing. */
+  const [{ data: chain }, rules] = await Promise.all([
+    db
+      .from("hackathon_state")
+      .select("phase, visibility, organizer, constitution_hash, prize_asset, vault_id")
+      .eq("contract_id", contractId)
+      .maybeSingle(),
+    rulesFor(contractId),
+  ]);
+
+  const merged = merge(written as Record<string, unknown>, chain ?? {});
+
+  return {
+    ...merged,
+    rules,
+    /* Filled from the contract rather than left null, so the hackathon page and
+       the card in the listing quote the same figure from the same source. */
+    prize: rules?.total ?? null,
+    closesAt: rules?.schedule.submissionCloses ?? null,
+    asset: rules?.prizeAsset ?? null,
+  };
 }
 
 /**
@@ -388,6 +390,7 @@ function merge(
     constitution_hash: hex(chain["constitution_hash"]),
     prize_asset: (chain["prize_asset"] as string | null) ?? null,
     vault_id: (chain["vault_id"] as string | null) ?? null,
+    rules: null,
   };
 }
 
