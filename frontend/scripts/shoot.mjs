@@ -18,6 +18,7 @@ const pages = [
   ["how-it-works", "/how-it-works"],
   ["hackathon", "/hackathons/first-light"],
   ["account", "/account"],
+  ["create", "/create"],
 ];
 
 const browser = await chromium.launch();
