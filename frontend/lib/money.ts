@@ -100,13 +100,44 @@ export async function worthOf(asset: string | null, amount: bigint | null): Prom
   return { code, dollars: price === null ? null : units * price };
 }
 
-/** A dollar figure as somebody reads it, with no false precision. */
-export function dollars(value: number): string {
-  if (value >= 1000) {
-    return `$${Math.round(value).toLocaleString("en-US")}`;
+/**
+ * A prize as one figure, in the currency somebody thinks in.
+ *
+ * Dollars lead. A reader comparing five hackathons is comparing what they are
+ * worth, and ten thousand of a token they have never held is not a number they
+ * can weigh; the token follows so they still know what they would be paid in.
+ *
+ * A dollar stablecoin is already the answer, so it says "500 USDC" rather than
+ * converting a dollar into a dollar and printing it twice.
+ */
+export function prizeLabel(worth: Worth, amount: bigint | null): { figure: string; code: string } {
+  if (worth.code === "USDC" && amount !== null) {
+    return { figure: round(Number(amount) / 10_000_000), code: "USDC" };
   }
 
-  /* Under a thousand the cents matter, and under a cent saying "$0" would read
-     as free when it is merely small. */
-  return value < 0.01 ? "under $0.01" : `$${value.toFixed(2)}`;
+  if (worth.dollars !== null) {
+    return { figure: `${round(worth.dollars)}$`, code: worth.code };
+  }
+
+  /* No honest conversion, so the token amount stands on its own rather than
+     being dressed up as money nobody quoted. */
+  return {
+    figure: amount === null ? "—" : round(Number(amount) / 10_000_000),
+    code: worth.code,
+  };
+}
+
+/**
+ * Whole numbers wherever a whole number is honest.
+ *
+ * A prize is compared, not audited, and "$1,247.38" is harder to weigh against
+ * its neighbour than "$1,247". The exception is an amount small enough that
+ * rounding it would print zero, which reads as free.
+ */
+function round(value: number): string {
+  if (value >= 1) {
+    return Math.round(value).toLocaleString("en-US");
+  }
+
+  return value < 0.01 ? "<0.01" : value.toFixed(2);
 }

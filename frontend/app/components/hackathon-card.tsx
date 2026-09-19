@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { phaseName } from "../../lib/phase";
-import { dollars, worthOf } from "../../lib/money";
+import { prizeLabel, worthOf } from "../../lib/money";
 import type { HackathonSummary } from "../../lib/chain";
 
 /**
@@ -25,6 +25,7 @@ import type { HackathonSummary } from "../../lib/chain";
 
 export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
   const worth = await worthOf(hackathon.asset, hackathon.prize);
+  const prize = prizeLabel(worth, hackathon.prize);
   const running = hackathon.phase !== null && hackathon.phase >= 2 && hackathon.phase <= 7;
   const finished = hackathon.phase !== null && hackathon.phase >= 8;
   const funding = hackathon.phase === 1;
@@ -65,18 +66,25 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
 
         <div>
           {(hackathon.location !== null || hackathon.tags.length > 0) && (
-            <p className="label flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-faint">
-              {hackathon.location !== null && <span className="text-ink-soft">{hackathon.location}</span>}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              {/* A place is not a subject, so it is not dressed as one. The pin
+                  says which kind of fact it is without a word being spent. */}
+              {hackathon.location !== null && (
+                <span className="label flex items-center gap-1.5 text-ink-soft">
+                  <Pin />
+                  {hackathon.location}
+                </span>
+              )}
 
-              {/* Separated by a middle dot rather than boxed. Three small
-                  outlines competed with the row of figures underneath, which is
-                  the part being compared. */}
               {hackathon.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className="before:mr-2 before:content-['·']">
+                <span
+                  key={tag}
+                  className="label bg-paper-sunk px-2 py-1 text-ink-faint"
+                >
                   {tag}
                 </span>
               ))}
-            </p>
+            </div>
           )}
 
           <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-rule pt-4">
@@ -88,14 +96,7 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
                 <span className="label text-ink-faint">prize not readable</span>
               ) : (
                 <>
-                  {units(hackathon.prize)}{" "}
-                  <span className="label text-ink-faint">{worth.code}</span>
-                  {/* The dollar figure is a convenience, so it is set quieter
-                      than the amount it estimates and is simply absent when no
-                      honest one could be had. */}
-                  {worth.dollars !== null && (
-                    <span className="label ml-2 text-ink-faint">{dollars(worth.dollars)}</span>
-                  )}
+                  {prize.figure} <span className="label text-ink-faint">{prize.code}</span>
                 </>
               )}
             </p>
@@ -203,13 +204,19 @@ function Remaining({ closesAt, finished }: { closesAt: number | null; finished: 
   );
 }
 
-/** Seven decimals, with the fraction kept so a small prize never reads as none. */
-function units(amount: bigint): string {
-  const scale = BigInt(10_000_000);
-  const whole = amount / scale;
-  const fraction = (amount % scale).toString().padStart(7, "0").replace(/0+$/, "");
-
-  return fraction.length === 0
-    ? whole.toLocaleString("en-US")
-    : `${whole.toLocaleString("en-US")}.${fraction}`;
+/** A map pin, drawn rather than fetched, so a card ships no extra image. */
+function Pin() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      className="size-3 shrink-0"
+    >
+      <path d="M6 11S1.8 7.6 1.8 4.8a4.2 4.2 0 1 1 8.4 0C10.2 7.6 6 11 6 11Z" />
+      <circle cx="6" cy="4.7" r="1.4" />
+    </svg>
+  );
 }
