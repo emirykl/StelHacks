@@ -11,6 +11,7 @@ mod community;
 mod funding;
 mod judging;
 mod registration;
+mod settlement;
 mod setup;
 mod submission;
 

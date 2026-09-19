@@ -85,6 +85,8 @@ pub enum DataKey {
     CriterionTally(u32, Symbol),
     /// One track's finished ranking, in order.
     Ranking(Symbol),
+    /// A prize position that has already been paid.
+    Paid(Symbol, u32),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -450,6 +452,18 @@ pub fn load_ranking(env: &Env, track: &Symbol) -> Result<Vec<Placement>, Error> 
     touch_entry(env, &key);
 
     Ok(ranking)
+}
+
+pub fn is_paid(env: &Env, track: &Symbol, rank: u32) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Paid(track.clone(), rank))
+}
+
+pub fn mark_paid(env: &Env, track: &Symbol, rank: u32) {
+    let key = DataKey::Paid(track.clone(), rank);
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

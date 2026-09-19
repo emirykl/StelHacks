@@ -241,7 +241,52 @@ pub struct TrackRanked {
 /// The result is closed and the money can move.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResultsFinalized {}
+pub struct ResultsFinalized {
+    /// When the ranking closed, which is where any safety window counts from.
+    pub at: u64,
+}
+
+/// A prize reached a winner.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrizePaid {
+    #[topic]
+    pub to: Address,
+    pub track: Symbol,
+    pub rank: u32,
+    pub team: u32,
+    pub amount: i128,
+}
+
+/// Settlement was held, or released again.
+///
+/// The reason travels with the hold, because money stopping is the one thing a
+/// winner cannot investigate for themselves.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettlementHeld {
+    pub paused: bool,
+    pub reason: BytesN<32>,
+}
+
+pub fn prize_paid(env: &Env, to: &Address, track: &Symbol, rank: u32, team: u32, amount: i128) {
+    PrizePaid {
+        to: to.clone(),
+        track: track.clone(),
+        rank,
+        team,
+        amount,
+    }
+    .publish(env);
+}
+
+pub fn settlement_held(env: &Env, paused: bool, reason: &BytesN<32>) {
+    SettlementHeld {
+        paused,
+        reason: reason.clone(),
+    }
+    .publish(env);
+}
 
 pub fn track_ranked(env: &Env, track: &Symbol, ranked: u32) {
     TrackRanked {
@@ -251,8 +296,8 @@ pub fn track_ranked(env: &Env, track: &Symbol, ranked: u32) {
     .publish(env);
 }
 
-pub fn results_finalized(env: &Env) {
-    ResultsFinalized {}.publish(env);
+pub fn results_finalized(env: &Env, at: u64) {
+    ResultsFinalized { at }.publish(env);
 }
 
 pub fn ballot_root_published(env: &Env, root: &BytesN<32>) {

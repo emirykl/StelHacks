@@ -58,6 +58,9 @@ pub struct HackathonState {
     /// Whether settlement is being held by the pre declared authority. Scores
     /// are untouchable either way; this only stops money from moving.
     pub settlement_paused: bool,
+    /// When the ranking closed, which is where the safety window counts from.
+    /// Zero until then.
+    pub finalized_at: u64,
 }
 
 impl HackathonState {
@@ -67,6 +70,7 @@ impl HackathonState {
             phase: Phase::Draft,
             schedule,
             settlement_paused: false,
+            finalized_at: 0,
         }
     }
 
@@ -89,6 +93,7 @@ impl HackathonState {
             phase: next,
             schedule: self.schedule.clone(),
             settlement_paused: self.settlement_paused,
+            finalized_at: self.finalized_at,
         })
     }
 
@@ -119,6 +124,7 @@ impl HackathonState {
             phase: self.phase,
             schedule,
             settlement_paused: self.settlement_paused,
+            finalized_at: self.finalized_at,
         };
 
         Ok((state, usage.record(added)?))
@@ -143,6 +149,7 @@ mod test {
             phase,
             schedule: schedule(),
             settlement_paused: false,
+            finalized_at: 0,
         }
     }
 

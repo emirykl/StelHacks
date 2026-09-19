@@ -67,6 +67,7 @@ impl HackathonCore {
                 phase: state.phase,
                 schedule: constitution.schedule.clone(),
                 settlement_paused: state.settlement_paused,
+                finalized_at: state.finalized_at,
             },
         );
 
@@ -695,10 +696,134 @@ impl HackathonCore {
             events::track_ranked(&env, &track.id, ranking.len());
         }
 
-        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
-        events::results_finalized(&env);
+        let mut closed = state.advance(env.ledger().timestamp())?;
+        closed.finalized_at = env.ledger().timestamp();
+
+        storage::save_state(&env, &closed);
+        events::results_finalized(&env, closed.finalized_at);
 
         Ok(())
+    }
+
+    /// Pays one prize position to the captain who won it.
+    ///
+    /// Positions are paid one at a time on purpose. A Stellar account that
+    /// holds no trustline for the prize asset cannot receive it, and a single
+    /// call paying everyone would let one unprepared captain block every other
+    /// winner's money. Paid separately, that captain blocks only themselves,
+    /// and the rest are paid the moment the window opens.
+    ///
+    /// No signature is asked for. The ranking is settled, the amounts come from
+    /// the locked prize table, and the recipient comes from the ranking, so
+    /// there is nothing left for anyone to decide; making this the organizer's
+    /// call would only give them the power to sit on it.
+    pub fn settle_prize(env: Env, track: Symbol, rank: u32) -> Result<i128, Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+        if state.settlement_paused {
+            return Err(Error::SettlementPaused);
+        }
+        if storage::is_paid(&env, &track, rank) {
+            return Err(Error::PrizeAlreadyPaid);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        let tier = constitution
+            .prize_tiers
+            .iter()
+            .find(|tier| tier.track == track && tier.rank == rank)
+            .ok_or(Error::PrizeTiersInvalid)?;
+
+        let placement = storage::load_ranking(&env, &track)?
+            .iter()
+            .find(|placement| placement.rank == rank)
+            .ok_or(Error::ResultsNotFinalized)?;
+
+        let captain = storage::load_team(&env, placement.team)?.captain;
+
+        storage::mark_paid(&env, &track, rank);
+
+        let vault = storage::load_vault(&env)?;
+        VaultClient::new(&env, &vault).pay(&captain, &tier.amount);
+
+        events::prize_paid(&env, &captain, &track, rank, placement.team, tier.amount);
+
+        Ok(tier.amount)
+    }
+
+    /// Opens settlement once the safety window has run out.
+    ///
+    /// The window buys time to stop a payout after a bug is found between the
+    /// ranking and the money moving. It cannot change a score either way, and
+    /// it is capped, because a hold nobody can end is indistinguishable from
+    /// not paying at all.
+    pub fn open_settlement(env: Env) -> Result<(), Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Finalization {
+            return Err(Error::WrongPhase);
+        }
+
+        let hold = storage::load_constitution(&env)?
+            .discretion
+            .settlement
+            .hold_seconds();
+
+        if env.ledger().timestamp() < state.finalized_at + hold {
+            return Err(Error::SafetyWindowOpen);
+        }
+
+        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
+        events::phase_advanced(&env, Phase::Settlement);
+
+        Ok(())
+    }
+
+    /// Holds the money where it is, with a reason.
+    ///
+    /// Scores are untouchable either way. This stops payment and nothing else,
+    /// which is the only power worth having when a contract bug turns up after
+    /// the ranking is already correct.
+    pub fn pause_settlement(env: Env, reason: BytesN<32>) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        let mut state = storage::load_state(&env)?;
+        if state.phase != Phase::Finalization && state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+        if state.settlement_paused {
+            return Err(Error::SettlementPaused);
+        }
+
+        state.settlement_paused = true;
+        storage::save_state(&env, &state);
+        events::settlement_held(&env, true, &reason);
+
+        Ok(())
+    }
+
+    /// Lets the money move again.
+    pub fn resume_settlement(env: Env, reason: BytesN<32>) -> Result<(), Error> {
+        let organizers = storage::load_organizing_team(&env)?;
+        organizers.organizer.require_auth();
+
+        let mut state = storage::load_state(&env)?;
+        if !state.settlement_paused {
+            return Err(Error::SettlementNotPaused);
+        }
+
+        state.settlement_paused = false;
+        storage::save_state(&env, &state);
+        events::settlement_held(&env, false, &reason);
+
+        Ok(())
+    }
+
+    /// Whether a prize position has already been paid.
+    pub fn is_paid(env: Env, track: Symbol, rank: u32) -> bool {
+        storage::is_paid(&env, &track, rank)
     }
 
     /// One track's finished ranking, in order.
