@@ -109,11 +109,26 @@ type checked, it built, and it was wrong in a way only a screenshot could show.
 
 ## Not built yet
 
-`/account` connects a wallet and stops there. Connecting tells the page an
-address and proves nothing; the proof is a signature over a server issued
-challenge, and `wallet_challenges` and `wallet_links` are already in the schema
-waiting for it. That step needs a session, so it waits on Google sign in, which
-needs OAuth credentials.
+## Identity, and the two layers of it
+
+Google says who somebody is. A wallet says what they hold. They are separate on
+purpose and `/account` shows them as two sections rather than one: a Google
+account with no address attached can read every page and do nothing on chain,
+and an address with no Google account behind it still wins prizes perfectly
+well. Neither is a login for the other.
+
+Sessions are cookies, through `@supabase/ssr`, so a server component renders the
+signed in state rather than flashing signed out and correcting itself. Reads go
+through `lib/supabase/server.ts`, which calls `getUser` and not `getSession`: a
+session is read out of a cookie and a cookie is whatever the browser sent, while
+`getUser` asks the auth server whether the token is real. On a product that will
+decide who may run a hackathon, that is the difference that matters.
+
+The wallet half stops at connecting. Connecting tells the page an address and
+proves nothing; the proof is a signature over a server issued challenge, and
+`wallet_challenges` and `wallet_links` have been in the schema waiting for it
+since M12. Writing that link needs the service role, so where the verifier runs
+is still undecided.
 
 The surfaces that ask somebody to do something. The home page, the listing, the
 hackathon page and `/how-it-works` are the read only half and are here; the

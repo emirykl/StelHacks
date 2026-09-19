@@ -1,45 +1,25 @@
-"use client";
-
-import { useState } from "react";
-
-import { Button, Eyebrow, Measure } from "../components/primitives";
+import { Eyebrow, Measure } from "../components/primitives";
 import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../components/spec";
-import { connect, type Connection } from "../../lib/wallet";
+import { SignIn, SignOut } from "../components/session";
+import { Wallet } from "./wallet";
+import { authConfigured, currentUser, serverClient } from "../../lib/supabase/server";
 
 /**
- * Where somebody attaches an address to themselves.
+ * Your account, which is two separate things stacked.
  *
- * Connecting and proving are two different things and the page keeps them
- * apart. Connecting tells this page an address, which proves nothing: a page
- * can be handed any string. Proving is a signature over a challenge the server
- * issued, and only that is allowed to create the link every profile and
- * earnings total in the product reads.
- *
- * So this page can show you an address today and cannot claim it is yours. The
- * proof step waits on sign in, because a challenge has to be issued to
- * somebody.
+ * Google says who you are. A wallet says what you hold. The product keeps them
+ * apart on purpose: a Google account with no address attached can read every
+ * page and do nothing on chain, and an address with no Google account behind it
+ * still wins prizes perfectly well. Neither is a login for the other.
  */
 
-export default function Account() {
-  const [wallet, setWallet] = useState<Connection | null>(null);
-  const [refused, setRefused] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
+export const metadata = { title: "Account" };
 
-  async function pick() {
-    setAsking(true);
-    setRefused(null);
+/** Read fresh. A page that shows a stale session is showing somebody else's. */
+export const dynamic = "force-dynamic";
 
-    try {
-      setWallet(await connect());
-    } catch (error) {
-      /* Closing the picker is the ordinary way to change your mind, not a
-         failure worth a red message. Anything else is worth saying. */
-      const said = error instanceof Error ? error.message : String(error);
-      setRefused(said.includes("chosen") || said.includes("closed") ? null : said);
-    } finally {
-      setAsking(false);
-    }
-  }
+export default async function Account() {
+  const user = await currentUser();
 
   return (
     <main className="flex-1">
@@ -47,52 +27,86 @@ export default function Account() {
         <Measure wide className="py-16 sm:py-20">
           <Eyebrow>Your account</Eyebrow>
 
-          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">Wallet</h1>
+          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">
+            {user === null ? "Sign in" : "Account"}
+          </h1>
 
           <p className="mt-5 max-w-[38rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-            Applying, forming a team and submitting a project all need a
-            signature, so you need an address before you can do any of them.
-            Connect the wallet you already use, or go and open one.
+            {user === null
+              ? "Google is only your name here. Applying, forming a team and submitting a project are signed by your wallet, so you will need both."
+              : "Google is your name. Your wallet does the signing. Applying, forming a team and submitting all need an address, so attach one below."}
           </p>
         </Measure>
       </section>
 
       <section className="hatch">
         <Measure wide className="py-16">
-          <SpecLabel index="01">Connected</SpecLabel>
+          {user === null ? <SignedOut /> : <Identity user={user} />}
 
-          <div className="mt-8">
-            <SpecRows>
-              <SpecRow index="01" label="Address" mark={wallet !== null}>
-                {wallet === null ? (
-                  <span className="label text-ink-faint">nothing connected</span>
-                ) : (
-                  <SpecValue>{wallet.address}</SpecValue>
-                )}
-              </SpecRow>
-
-              <SpecRow index="02" label="Wallet">
-                {wallet === null ? (
-                  <span className="label text-ink-faint">—</span>
-                ) : (
-                  <SpecValue>{wallet.wallet}</SpecValue>
-                )}
-              </SpecRow>
-            </SpecRows>
-          </div>
-
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <Button onClick={() => void pick()} disabled={asking}>
-              {asking ? "Waiting for your wallet" : wallet === null ? "Connect a wallet" : "Use a different one"}
-            </Button>
-
-            <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
-              {refused ??
-                "Connecting only reads your address. Nothing is signed and nothing is sent."}
-            </p>
+          <div className="mt-16">
+            <Wallet />
           </div>
         </Measure>
       </section>
     </main>
+  );
+}
+
+function SignedOut() {
+  return (
+    <>
+      <SpecLabel index="01">Identity</SpecLabel>
+
+      <div className="mt-6 max-w-[34rem]">
+        {authConfigured() ? (
+          <SignIn />
+        ) : (
+          /* Said plainly rather than shown as a button that fails. A deployment
+             without the keys is a deployment where signing in is not a thing
+             that exists, and offering it anyway teaches somebody to distrust
+             the next button too. */
+          <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
+            Sign in is not configured on this deployment. Everything a signed in
+            person can verify can still be verified here without an account,
+            which is the part that matters.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+async function Identity({ user }: { user: { id: string; email?: string | undefined } }) {
+  const db = await serverClient();
+
+  /* Created by a trigger the moment the account exists, so this is a read
+     rather than an upsert. A page that had to create a profile would be a
+     second, weaker place where identity begins. */
+  const { data: profile } = (await db
+    ?.from("profiles")
+    .select("username, display_name")
+    .eq("id", user.id)
+    .maybeSingle()) ?? { data: null };
+
+  return (
+    <>
+      <SpecLabel index="01">Identity</SpecLabel>
+
+      <div className="mt-8">
+        <SpecRows>
+          <SpecRow index="01" label="Signed in as">
+            <SpecValue>{user.email ?? "no address on this account"}</SpecValue>
+          </SpecRow>
+
+          <SpecRow index="02" label="Username">
+            <SpecValue>{profile?.username ?? "not created yet"}</SpecValue>
+          </SpecRow>
+        </SpecRows>
+      </div>
+
+      <div className="mt-6">
+        <SignOut />
+      </div>
+    </>
   );
 }

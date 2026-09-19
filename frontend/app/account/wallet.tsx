@@ -1,0 +1,86 @@
+"use client";
+
+import { useState } from "react";
+
+import { Button } from "../components/primitives";
+import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../components/spec";
+import { connect, type Connection } from "../../lib/wallet";
+
+/**
+ * Attaching an address to yourself, in two steps that are not the same step.
+ *
+ * Connecting tells this page an address. It proves nothing: a page can be
+ * handed any string, and a wallet extension answering is not evidence about who
+ * is sitting in front of it. Proving is a signature over a challenge the server
+ * issued, and only that may create the `wallet_links` row every profile and
+ * earnings total in the product reads.
+ *
+ * So this shows an address and is careful never to call it yours.
+ */
+
+export function Wallet() {
+  const [wallet, setWallet] = useState<Connection | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  async function pick() {
+    setAsking(true);
+    setRefused(null);
+
+    try {
+      setWallet(await connect());
+    } catch (error) {
+      /* Closing the picker is the ordinary way to change your mind, not a
+         failure worth a message. Anything else is worth saying. */
+      const said = error instanceof Error ? error.message : String(error);
+      setRefused(said.includes("chosen") || said.includes("closed") ? null : said);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  return (
+    <>
+      <SpecLabel index="02">Wallet</SpecLabel>
+
+      <div className="mt-8">
+        <SpecRows>
+          <SpecRow index="01" label="Address" mark={wallet !== null}>
+            {wallet === null ? (
+              <span className="label text-ink-faint">nothing connected</span>
+            ) : (
+              <SpecValue>{wallet.address}</SpecValue>
+            )}
+          </SpecRow>
+
+          <SpecRow index="02" label="Wallet">
+            {wallet === null ? (
+              <span className="label text-ink-faint">—</span>
+            ) : (
+              <SpecValue>{wallet.wallet}</SpecValue>
+            )}
+          </SpecRow>
+
+          <SpecRow index="03" label="Proved">
+            <span className="label text-ink-faint">not yet</span>
+          </SpecRow>
+        </SpecRows>
+      </div>
+
+      <div className="mt-8 flex flex-wrap items-center gap-4">
+        <Button onClick={() => void pick()} disabled={asking}>
+          {asking
+            ? "Waiting for your wallet"
+            : wallet === null
+              ? "Connect a wallet"
+              : "Use a different one"}
+        </Button>
+
+        <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
+          {refused ??
+            "Connecting only reads your address. Nothing is signed and nothing is sent."}
+        </p>
+      </div>
+    </>
+  );
+}

@@ -1,4 +1,5 @@
-import { Badge, ButtonLink, Measure } from "./primitives";
+import { ButtonLink, Measure } from "./primitives";
+import { currentUser } from "../../lib/supabase/server";
 
 /**
  * The frame every page is read inside.
@@ -7,7 +8,9 @@ import { Badge, ButtonLink, Measure } from "./primitives";
  * has to remember to include is a header some page will eventually forget.
  */
 
-export function Header() {
+export async function Header() {
+  const user = await currentUser();
+
   return (
     <header className="sticky top-0 z-10 border-b border-rule bg-paper/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-[76rem] items-center justify-between px-6">
@@ -43,9 +46,11 @@ export function Header() {
           ))}
         </nav>
 
-        <ButtonLink href="/hackathons" size="sm">
-          Browse
-          <Badge>→</Badge>
+        {/* The one place the header changes. "Browse" used to sit here and
+            said the same thing as the Hackathons link beside it; whether
+            somebody is signed in does not. */}
+        <ButtonLink href="/account" size="sm" intent={user === null ? "primary" : "quiet"}>
+          {user === null ? "Sign in" : "Account"}
         </ButtonLink>
       </div>
     </header>
