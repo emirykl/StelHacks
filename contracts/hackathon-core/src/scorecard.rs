@@ -40,6 +40,30 @@ impl ScoreTally {
     }
 }
 
+/// One criterion's revealed scores for one project, as a count and a sum.
+///
+/// Kept alongside the weighted totals because the tie break chain can be asked
+/// to separate two projects on a single criterion, and the weighted total has
+/// already blended the criteria together by then.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct CriterionTally {
+    pub count: u32,
+    /// Sum of the raw zero to a hundred scores.
+    pub total: u64,
+}
+
+impl CriterionTally {
+    /// The mean raw score, or `None` when nobody scored it.
+    pub fn average(&self) -> Option<u32> {
+        if self.count == 0 {
+            return None;
+        }
+
+        Some((self.total / self.count as u64) as u32)
+    }
+}
+
 /// What one judge gave one criterion.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

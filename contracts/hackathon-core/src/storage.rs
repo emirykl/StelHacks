@@ -1,10 +1,10 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol, Vec};
 
 use crate::constitution::Constitution;
 use crate::errors::Error;
 use crate::organizers::OrganizingTeam;
 use crate::roster::{Registration, Team};
-use crate::scorecard::ScoreTally;
+use crate::scorecard::{CriterionTally, ScoreTally};
 use crate::state::HackathonState;
 use crate::submission::Submission;
 
@@ -80,6 +80,8 @@ pub enum DataKey {
     /// The largest vote count any project holds, which is the denominator the
     /// community score is measured against.
     TopVoteCount,
+    /// One criterion's revealed scores for one project.
+    CriterionTally(u32, Symbol),
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -346,6 +348,27 @@ pub fn load_score(env: &Env, team: u32, judge: &Address) -> Result<u32, Error> {
         .persistent()
         .get(&DataKey::Score(team, judge.clone()))
         .ok_or(Error::ScorecardNotFound)
+}
+
+pub fn bump_criterion_tally(env: &Env, team: u32, criterion: &Symbol, score: u32) {
+    let key = DataKey::CriterionTally(team, criterion.clone());
+    let tally = load_criterion_tally(env, team, criterion);
+
+    env.storage().persistent().set(
+        &key,
+        &CriterionTally {
+            count: tally.count + 1,
+            total: tally.total + score as u64,
+        },
+    );
+    touch_entry(env, &key);
+}
+
+pub fn load_criterion_tally(env: &Env, team: u32, criterion: &Symbol) -> CriterionTally {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CriterionTally(team, criterion.clone()))
+        .unwrap_or(CriterionTally { count: 0, total: 0 })
 }
 
 pub fn load_score_tally(env: &Env, team: u32) -> ScoreTally {

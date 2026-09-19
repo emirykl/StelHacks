@@ -8,7 +8,7 @@ use crate::merkle;
 use crate::organizers::OrganizingTeam;
 use crate::phase::Phase;
 use crate::roster::{Registration, Team};
-use crate::scorecard::{ScoreTally, Scorecard};
+use crate::scorecard::{CriterionTally, ScoreTally, Scorecard};
 use crate::state::HackathonState;
 use crate::storage;
 use crate::submission::Submission;
@@ -562,6 +562,14 @@ impl HackathonCore {
         let weighted = scorecard.weighted_total(&track)?;
 
         storage::save_score(&env, scorecard.team, &scorecard.judge, weighted);
+
+        // The per criterion tallies are what the tie break chain reads when it
+        // is asked to separate two projects on a single criterion, which the
+        // blended weighted total can no longer answer.
+        for entry in scorecard.scores.iter() {
+            storage::bump_criterion_tally(&env, scorecard.team, &entry.criterion, entry.score);
+        }
+
         events::score_revealed(&env, &scorecard.judge, scorecard.team, weighted);
 
         Ok(weighted)
@@ -698,6 +706,11 @@ impl HackathonCore {
     /// A project's revealed scorecards, as a count and a sum.
     pub fn score_tally(env: Env, team_id: u32) -> ScoreTally {
         storage::load_score_tally(&env, team_id)
+    }
+
+    /// One criterion's revealed scores for one project.
+    pub fn criterion_tally(env: Env, team_id: u32, criterion: Symbol) -> CriterionTally {
+        storage::load_criterion_tally(&env, team_id, &criterion)
     }
 
     /// Whether this judge stepped away from this project.
