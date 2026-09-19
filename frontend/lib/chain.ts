@@ -36,6 +36,8 @@ export interface HackathonSummary {
   tagline: string | null;
   phase: number | null;
   visibility: number | null;
+  /** The prize table's total, in the smallest unit. Absent if unreadable. */
+  prize: bigint | null;
 }
 
 export interface HackathonDetail extends HackathonSummary {
@@ -73,9 +75,81 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
 
   const byContract = new Map((chain.data ?? []).map((row) => [String(row.contract_id), row]));
 
-  return (written.data ?? []).map((row) =>
+  const summaries = (written.data ?? []).map((row) =>
     merge(row, byContract.get(String(row.contract_id)) ?? {}),
   );
+
+  /*
+    The prize is read from the contract rather than from our tables, because we
+    do not have it: the indexer records the digest and the phase, and the
+    amount lives in the constitution behind them. It is also the one number
+    that decides whether somebody gives up a weekend, so a card without it is a
+    card nobody can act on.
+
+    All of them at once, and a hackathon whose prize cannot be read keeps its
+    card rather than losing it. A slow node should cost a number, not a row.
+  */
+  const prizes = await Promise.all(
+    summaries.map((summary) => prizeOf(summary.contract_id).catch(() => null)),
+  );
+
+  return summaries
+    .map((summary, index) => ({ ...summary, prize: prizes[index] ?? null }))
+    .sort((a, b) => standing(a) - standing(b));
+}
+
+/**
+ * The order a reader wants, which is not the order they were created in.
+ *
+ * What is running comes first, because that is the only group anybody can still
+ * join. Then what has not opened yet, which is worth watching. Finished events
+ * come last and are kept rather than hidden: a platform that shows only live
+ * hackathons is a platform with no record, and the record is the product.
+ */
+function standing(hackathon: HackathonSummary): number {
+  if (hackathon.phase === null) {
+    return 1;
+  }
+
+  if (hackathon.phase >= 8) {
+    return 2;
+  }
+
+  return hackathon.phase >= 2 ? 0 : 1;
+}
+
+/** What a hackathon's prize table adds up to, straight from the contract. */
+async function prizeOf(contractId: string): Promise<bigint | null> {
+  const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
+  const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
+
+  if (rpcUrl === undefined || passphrase === undefined) {
+    return null;
+  }
+
+  const [{ Account, Contract, TransactionBuilder, BASE_FEE, scValToNative }, rpc] =
+    await Promise.all([
+      import("@stellar/stellar-sdk/base"),
+      import("@stellar/stellar-sdk/rpc"),
+    ]);
+
+  const server = new rpc.Server(rpcUrl);
+
+  const tx = new TransactionBuilder(
+    new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
+    { fee: BASE_FEE, networkPassphrase: passphrase },
+  )
+    .addOperation(new Contract(contractId).call("required_funding"))
+    .setTimeout(30)
+    .build();
+
+  const simulated = await server.simulateTransaction(tx);
+
+  if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
+    return null;
+  }
+
+  return BigInt(scValToNative(simulated.result.retval) as bigint);
 }
 
 export async function findHackathon(slug: string): Promise<HackathonDetail | null> {
@@ -121,6 +195,7 @@ function merge(
     description: (written["description"] as string | null) ?? null,
     phase: chain["phase"] === undefined ? null : Number(chain["phase"]),
     visibility: chain["visibility"] === undefined ? null : Number(chain["visibility"]),
+    prize: null,
     organizer: (chain["organizer"] as string | null) ?? null,
     constitution_hash: hex(chain["constitution_hash"]),
     prize_asset: (chain["prize_asset"] as string | null) ?? null,

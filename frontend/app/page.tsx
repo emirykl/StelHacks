@@ -1,4 +1,6 @@
 import { ButtonLink, Badge, Display, Eyebrow, Measure, Rule } from "./components/primitives";
+import { HackathonCard } from "./components/hackathon-card";
+import { listHackathons } from "../lib/chain";
 
 /**
  * The page somebody lands on knowing nothing.
@@ -8,13 +10,63 @@ import { ButtonLink, Badge, Display, Eyebrow, Measure, Rule } from "./components
  * its place by supporting that promise or is cut.
  */
 
-export default function Home() {
+/* Read fresh. A stage that changed an hour ago and still reads as open is a
+   lie, and this page is where most people meet one. */
+export const revalidate = 0;
+
+export default async function Home() {
+  const hackathons = await listHackathons();
+
   return (
     <main className="flex-1">
       <Hero />
+      <Happening hackathons={hackathons} />
       <Promise />
       <Audiences />
     </main>
+  );
+}
+
+/**
+ * The events themselves, high on the page.
+ *
+ * Somebody who has heard of this site already is not here to read the argument
+ * again; they are here to see what is on. So the hackathons sit directly under
+ * the hero, above the explanation, and the explanation is for the people who
+ * scroll past them.
+ */
+function Happening({ hackathons }: { hackathons: Awaited<ReturnType<typeof listHackathons>> }) {
+  if (hackathons.length === 0) {
+    return null;
+  }
+
+  /* Six at most. This is a shop window, not the shop, and the listing is one
+     click away in the header and again at the bottom of this section. */
+  const shown = hackathons.slice(0, 6);
+
+  return (
+    <section className="border-b border-rule">
+      <Measure wide className="py-20">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <Eyebrow>On now</Eyebrow>
+
+            <h2 className="mt-4 text-[clamp(1.75rem,3.5vw,2.5rem)]">Hackathons</h2>
+          </div>
+
+          <ButtonLink href="/hackathons" intent="quiet" size="sm">
+            See all
+            <Badge>→</Badge>
+          </ButtonLink>
+        </div>
+
+        <div className="mt-12 grid gap-px bg-rule sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((hackathon) => (
+            <HackathonCard key={hackathon.contract_id} hackathon={hackathon} />
+          ))}
+        </div>
+      </Measure>
+    </section>
   );
 }
 

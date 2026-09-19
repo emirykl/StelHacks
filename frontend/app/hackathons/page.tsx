@@ -1,8 +1,6 @@
-import Link from "next/link";
-
 import { Eyebrow, Measure, Rule } from "../components/primitives";
+import { HackathonCard } from "../components/hackathon-card";
 import { listHackathons, type HackathonSummary } from "../../lib/chain";
-import { phaseName } from "../../lib/phase";
 
 /**
  * Everything running, readable by anybody.
@@ -43,51 +41,15 @@ export default async function Hackathons() {
   );
 }
 
+/* The same card as the home page, so a hackathon looks like itself wherever it
+   turns up and there is one place to change how it reads. */
 function List({ hackathons }: { hackathons: HackathonSummary[] }) {
   return (
-    <ul className="divide-y divide-rule border-y border-rule">
+    <div className="grid gap-px bg-rule sm:grid-cols-2 lg:grid-cols-3">
       {hackathons.map((hackathon) => (
-        <li key={hackathon.contract_id}>
-          <Link
-            href={`/hackathons/${hackathon.slug}`}
-            className="group flex flex-col gap-3 py-7 transition-colors duration-150 ease-settle sm:flex-row sm:items-baseline sm:justify-between"
-          >
-            <div className="min-w-0">
-              <h2 className="text-[1.375rem] transition-colors group-hover:text-ink-soft">
-                {hackathon.name}
-              </h2>
-
-              {hackathon.tagline !== null && (
-                <p className="mt-1.5 text-[0.9375rem] text-ink-soft">{hackathon.tagline}</p>
-              )}
-            </div>
-
-            <Stage phase={hackathon.phase} />
-          </Link>
-        </li>
+        <HackathonCard key={hackathon.contract_id} hackathon={hackathon} />
       ))}
-    </ul>
-  );
-}
-
-/**
- * What stage an event is at, in the words the contract uses.
- *
- * Not translated into friendlier language. A participant who reads "Judging"
- * here and "Judging" on the contract can tell they are the same claim, which is
- * worth more than a softer word.
- */
-function Stage({ phase }: { phase: number | null }) {
-  const settled = phase === 8 || phase === 9;
-
-  return (
-    <span
-      className={`label shrink-0 px-3 py-1.5 ring-1 ring-inset ${
-        settled ? "text-ink-faint ring-rule" : "text-ink ring-rule-strong"
-      }`}
-    >
-      {phaseName(phase)}
-    </span>
+    </div>
   );
 }
 
