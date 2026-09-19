@@ -168,6 +168,9 @@ made once rather than argued at every event.
 
 ## 12. The prize goes to the captain, and there are no on chain shares
 
+**Superseded by decision 21.** Left here because the reasoning still explains
+why configurable shares were refused, which decision 21 keeps refusing.
+
 **Decided.** The whole prize is paid to the team captain, who settles up with
 their team off the platform.
 
@@ -316,6 +319,47 @@ first.
 comment was written to avoid. It was the last moment that was cheap: nothing
 was in production, and the only deployment was an uninitialized reference
 instance. From here a value is never reused for a different meaning.
+
+## 21. A prize is split equally and every member is paid directly
+
+**Supersedes decision 12.**
+
+**Decided.** A prize is divided equally between everybody on the team and the
+contract pays each of them. `settle_prize(track, rank, member)` moves one
+member's share. The captain takes the same share as anybody else; being captain
+means being able to admit people and nothing about the money. There are still
+no configurable shares.
+
+**Why.** Decision 12 named its own cost and then accepted it: a teammate the
+captain does not pay has no recourse on chain, and the proof page stops at the
+captain's address rather than showing where the money actually went. For a
+product whose entire claim is that the result is verifiable end to end, ending
+the trail one hop early is the wrong place to stop.
+
+What made that cost look unavoidable was the fear of shares that do not add up
+at the deadline. Equal shares remove it by construction: they always add up, and
+there is no configuration for a team to get wrong. So the recourse is gained
+without the failure mode coming back, which is why this reverses the outcome of
+decision 12 while keeping its reasoning about configurable shares intact.
+
+**One member at a time, and that is forced rather than chosen.** A Stellar
+account holding no trustline for the prize asset cannot receive it, and the
+transfer that fails takes the whole transaction with it. Paying a team in one
+call would let a single unprepared member freeze their teammates' money exactly
+as an unprepared winner used to freeze the other positions, which is the
+failure decision 15 exists to prevent. The same reasoning now applies inside a
+team as well as across positions.
+
+**The remainder is spread, not kept.** A prize that does not divide evenly
+leaves fewer units than there are members, and those go to the earliest members
+one each. No two members differ by more than one unit, and the vault empties
+exactly. Keeping the remainder back would strand money nobody could reach and
+leave a total that does not add up on the proof page.
+
+**Consequence.** `sweep_unclaimed` now only returns a position nobody won;
+`sweep_share` returns one member's unclaimed share. A position closes when its
+last share has gone, so `complete` refuses while any single member is still
+owed rather than only while a position is.
 
 ---
 

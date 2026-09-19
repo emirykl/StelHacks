@@ -657,3 +657,29 @@ pub fn rules_locked(env: &Env, hash: &BytesN<32>) {
     }
     .publish(env);
 }
+
+/// One member's share went back along the announced route.
+///
+/// Kept apart from `PrizeSwept`, which returns a position nobody won at all.
+/// The two look the same in the vault and mean very different things on the
+/// page: one says a prize found no winner, the other says a named winner never
+/// came for their part of it.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShareSwept {
+    #[topic]
+    pub track: Symbol,
+    pub rank: u32,
+    pub member: Address,
+    pub amount: i128,
+}
+
+pub fn share_swept(env: &Env, track: &Symbol, rank: u32, member: &Address, amount: i128) {
+    ShareSwept {
+        track: track.clone(),
+        rank,
+        member: member.clone(),
+        amount,
+    }
+    .publish(env);
+}

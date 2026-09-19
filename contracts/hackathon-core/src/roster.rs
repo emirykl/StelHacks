@@ -91,17 +91,21 @@ impl Registration {
 
 /// A team, as the contract sees it.
 ///
-/// There are no prize shares here on purpose. The whole prize goes to the
-/// captain, who settles up with their team off the platform. That keeps the
-/// contract out of arguments it cannot resolve, at the cost of one thing worth
-/// naming: a teammate the captain does not pay has no recourse on chain. The
-/// members are still recorded, so the receipt shows who built the project even
-/// though it cannot show the last hop of the money.
+/// A prize is split equally between everybody on the team, and the contract
+/// pays each of them directly. There are no configurable shares: equal shares
+/// always add up, so the whole class of failure where a team reaches the
+/// deadline with a split that does not total a hundred percent cannot happen.
+/// What it costs is the case where a team genuinely wanted an uneven split,
+/// and that is a conversation they can have with their own money afterwards.
+///
+/// The captain is a member like any other and takes the same share. What being
+/// captain means is being able to admit people, and nothing about the money.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Team {
     pub id: u32,
-    /// The address the prize is paid to.
+    /// Whoever founded the team and can admit people to it. They hold no claim
+    /// on the prize beyond the share every member takes.
     pub captain: Address,
     /// Everyone on the team, the captain included and always first.
     pub members: Vec<Address>,
@@ -128,6 +132,34 @@ impl Team {
         self.members.contains(who)
     }
 
+    /// What one member takes from a prize of `total`.
+    ///
+    /// Everybody gets the same, and a prize that does not divide evenly leaves
+    /// a remainder smaller than the team. Those units go to the earliest
+    /// members one each, so the split is exact to the last unit rather than
+    /// leaving a residue in the vault, and no two members ever differ by more
+    /// than one. At Stellar's seven decimal places the difference is a
+    /// millionth of a cent; it is handled at all because money that adds up to
+    /// slightly less than it should is the kind of thing that turns into a
+    /// question nobody can answer three months later.
+    ///
+    /// Nothing for somebody who is not on the team.
+    pub fn share_of(&self, total: i128, member: &Address) -> Option<i128> {
+        let size = self.size() as i128;
+        let base = total / size;
+        let remainder = total % size;
+
+        for (index, candidate) in self.members.iter().enumerate() {
+            if &candidate == member {
+                let extra = i128::from((index as i128) < remainder);
+
+                return Some(base + extra);
+            }
+        }
+
+        None
+    }
+
     /// Adds someone to the team, within the size the organizer announced.
     pub fn add_member(&self, member: Address, policy: &TeamPolicy) -> Result<Team, Error> {
         if self.has_member(&member) {
@@ -151,6 +183,8 @@ impl Team {
 
 #[cfg(test)]
 mod test {
+    extern crate std;
+
     use super::*;
     use soroban_sdk::testutils::Address as _;
 
@@ -158,6 +192,120 @@ mod test {
 
     fn reason(env: &Env) -> BytesN<32> {
         BytesN::from_array(env, &[3u8; 32])
+    }
+
+    /// A prize that divides evenly is the ordinary case and everybody takes the
+    /// same.
+    #[test]
+    fn an_even_prize_splits_into_equal_shares() {
+        let env = Env::default();
+        let captain = Address::generate(&env);
+        let team = Team::found(&env, 1, captain.clone());
+        let second = Address::generate(&env);
+        let team = team
+            .add_member(second.clone(), &TeamPolicy::small_teams())
+            .unwrap();
+
+        assert_eq!(team.share_of(5_000, &captain), Some(2_500));
+        assert_eq!(team.share_of(5_000, &second), Some(2_500));
+    }
+
+    /// The whole prize leaves the vault whatever the team size. A split that
+    /// quietly kept the remainder back would leave money nobody could reach and
+    /// a total that does not add up on the proof page.
+    #[test]
+    fn every_unit_of_an_odd_prize_reaches_somebody() {
+        let env = Env::default();
+        let captain = Address::generate(&env);
+        let mut team = Team::found(&env, 1, captain.clone());
+        let mut everyone = std::vec![captain];
+
+        for _ in 0..2 {
+            let member = Address::generate(&env);
+            team = team
+                .add_member(member.clone(), &TeamPolicy::small_teams())
+                .unwrap();
+            everyone.push(member);
+        }
+
+        let total: i128 = everyone
+            .iter()
+            .map(|member| team.share_of(5_000, member).unwrap())
+            .sum();
+
+        assert_eq!(total, 5_000);
+    }
+
+    /// The remainder is spread rather than handed to one person, so nobody is
+    /// more than a single unit better off than anybody else.
+    #[test]
+    fn no_two_members_differ_by_more_than_one_unit() {
+        let env = Env::default();
+        let captain = Address::generate(&env);
+        let mut team = Team::found(&env, 1, captain.clone());
+        let mut everyone = std::vec![captain];
+
+        for _ in 0..2 {
+            let member = Address::generate(&env);
+            team = team
+                .add_member(member.clone(), &TeamPolicy::small_teams())
+                .unwrap();
+            everyone.push(member);
+        }
+
+        let shares: std::vec::Vec<i128> = everyone
+            .iter()
+            .map(|member| team.share_of(5_000, member).unwrap())
+            .collect();
+
+        let highest = shares.iter().max().unwrap();
+        let lowest = shares.iter().min().unwrap();
+
+        assert_eq!(highest - lowest, 1);
+    }
+
+    /// A prize smaller than the team leaves some members with nothing, which is
+    /// the arithmetic being honest rather than a case to paper over.
+    #[test]
+    fn a_prize_smaller_than_the_team_still_adds_up() {
+        let env = Env::default();
+        let captain = Address::generate(&env);
+        let mut team = Team::found(&env, 1, captain.clone());
+        let mut everyone = std::vec![captain];
+
+        for _ in 0..2 {
+            let member = Address::generate(&env);
+            team = team
+                .add_member(member.clone(), &TeamPolicy::small_teams())
+                .unwrap();
+            everyone.push(member);
+        }
+
+        let shares: std::vec::Vec<i128> = everyone
+            .iter()
+            .map(|member| team.share_of(2, member).unwrap())
+            .collect();
+
+        assert_eq!(shares.iter().sum::<i128>(), 2);
+        assert_eq!(shares, std::vec![1, 1, 0]);
+    }
+
+    /// A team of one takes the lot, which is the solo entry case.
+    #[test]
+    fn a_solo_entry_takes_the_whole_prize() {
+        let env = Env::default();
+        let captain = Address::generate(&env);
+        let team = Team::found(&env, 1, captain.clone());
+
+        assert_eq!(team.share_of(5_000, &captain), Some(5_000));
+    }
+
+    #[test]
+    fn somebody_outside_the_team_has_no_share() {
+        let env = Env::default();
+        let team = Team::found(&env, 1, Address::generate(&env));
+
+        assert_eq!(team.share_of(5_000, &Address::generate(&env)), None);
     }
 
     #[test]

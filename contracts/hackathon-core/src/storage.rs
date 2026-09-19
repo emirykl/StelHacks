@@ -98,8 +98,13 @@ pub enum DataKey {
     CriterionTally(u32, Symbol),
     /// One track's finished ranking, in order.
     Ranking(Symbol),
-    /// A prize position that has already been paid.
+    /// A prize position that is settled in full and can be reached no further.
     Paid(Symbol, u32),
+    /// One member's share of one position, once it has left the vault.
+    Share(Symbol, u32, Address),
+    /// How many of a position's shares are settled, so a position can be closed
+    /// without walking the team on every payment.
+    ShareCount(Symbol, u32),
     /// A track's move to award nothing.
     NoAward(Symbol),
     /// One judge's signature on that move.
@@ -562,6 +567,38 @@ pub fn mark_paid(env: &Env, track: &Symbol, rank: u32) {
     let key = DataKey::Paid(track.clone(), rank);
     env.storage().persistent().set(&key, &true);
     touch_entry(env, &key);
+}
+
+pub fn is_share_settled(env: &Env, track: &Symbol, rank: u32, member: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Share(track.clone(), rank, member.clone()))
+}
+
+/// Records one member's share as settled and reports how many of the position's
+/// shares that makes.
+///
+/// The count is kept rather than derived because closing a position otherwise
+/// means loading the team and checking every member on every single payment,
+/// and the answer is one number that only ever moves in one direction.
+pub fn settle_share(env: &Env, track: &Symbol, rank: u32, member: &Address) -> u32 {
+    let key = DataKey::Share(track.clone(), rank, member.clone());
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
+
+    let counter = DataKey::ShareCount(track.clone(), rank);
+    let settled = settled_shares(env, track, rank) + 1;
+    env.storage().persistent().set(&counter, &settled);
+    touch_entry(env, &counter);
+
+    settled
+}
+
+pub fn settled_shares(env: &Env, track: &Symbol, rank: u32) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ShareCount(track.clone(), rank))
+        .unwrap_or(0u32)
 }
 
 pub fn save_no_award(env: &Env, track: &Symbol, case: &NoAwardCase) {

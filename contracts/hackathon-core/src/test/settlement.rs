@@ -43,6 +43,11 @@ impl Settled {
     /// opened and the ranking still to be closed. This is the last moment a
     /// disqualification can still change who wins.
     fn through_reveal() -> Settled {
+        Settled::through_reveal_with(1)
+    }
+
+    /// The same, with every team holding `size` people.
+    fn through_reveal_with(size: u32) -> Settled {
         let fixture = Fixture::funded_and_open();
         let env = fixture.env.clone();
         let schedule = fixture.client.state().schedule;
@@ -51,8 +56,8 @@ impl Settled {
             .set_timestamp(schedule.registration_opens_at + 3_600);
 
         let mut teams = Vec::new(&env);
-        teams.push_back(Self::enter(&fixture, 1));
-        teams.push_back(Self::enter(&fixture, 2));
+        teams.push_back(Self::enter(&fixture, 1, size));
+        teams.push_back(Self::enter(&fixture, 2, size));
 
         env.ledger()
             .set_timestamp(schedule.submission_closes_at + 1);
@@ -126,7 +131,13 @@ impl Settled {
 
     /// The same hackathon with the safety window run out and settlement open.
     fn open() -> Settled {
-        let settled = Settled::through_finalization();
+        Settled::open_with(1)
+    }
+
+    /// The same, with every team holding `size` people.
+    fn open_with(size: u32) -> Settled {
+        let settled = Settled::through_reveal_with(size);
+        settled.fixture.client.finalize_results();
         let hold = 24 * 60 * 60;
         let now = settled.fixture.client.state().finalized_at + hold;
 
@@ -136,13 +147,25 @@ impl Settled {
         settled
     }
 
-    fn enter(fixture: &Fixture, digest: u8) -> u32 {
+    /// One team of `size` people, entered in the payments track.
+    ///
+    /// The captain is the first of them and takes no larger a share for it.
+    fn enter(fixture: &Fixture, digest: u8, size: u32) -> u32 {
+        let organizer = fixture.organizer.clone();
+
         let captain = Address::generate(&fixture.env);
         fixture.client.apply(&captain);
-        let organizer = fixture.organizer.clone();
         fixture.client.approve_application(&organizer, &captain);
 
         let team = fixture.client.create_team(&captain);
+
+        for _ in 1..size {
+            let member = Address::generate(&fixture.env);
+            fixture.client.apply(&member);
+            fixture.client.approve_application(&organizer, &member);
+            fixture.client.add_member(&team, &member);
+        }
+
         fixture.client.submit_project(
             &captain,
             &team,
@@ -196,6 +219,26 @@ impl Settled {
 
     fn captain(&self, team: u32) -> Address {
         self.fixture.client.team_by_id(&team).captain
+    }
+
+    /// Whoever holds the share for a position.
+    ///
+    /// Every team in this harness is a solo entry, so the captain is the whole
+    /// team and one payment settles the position. The team splits are exercised
+    /// in `shared_prizes`, where the teams have more than one person in them.
+    fn winner(&self, track: &Symbol, rank: u32) -> Address {
+        self.captain(self.winner_team(track, rank))
+    }
+
+    /// The team that took a position.
+    fn winner_team(&self, track: &Symbol, rank: u32) -> u32 {
+        self.fixture
+            .client
+            .ranking(track)
+            .iter()
+            .find(|placement| placement.rank == rank)
+            .expect("the position was won")
+            .team
     }
 }
 
@@ -303,7 +346,7 @@ fn nothing_is_paid_while_the_safety_window_is_open() {
         settled
             .fixture
             .client
-            .try_settle_prize(&payments(), &1)
+            .try_settle_prize(&payments(), &1, &settled.winner(&payments(), 1))
             .err(),
         Some(Ok(Error::WrongPhase))
     );
@@ -324,7 +367,11 @@ fn the_winner_is_paid_from_the_vault() {
 
     assert_eq!(settled.token.balance(&captain), 0);
 
-    let paid = settled.fixture.client.settle_prize(&payments(), &1);
+    let paid =
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
     assert_eq!(paid, 5_000);
     assert_eq!(settled.token.balance(&captain), 5_000);
@@ -337,7 +384,10 @@ fn the_runner_up_is_paid_their_own_position() {
     let settled = Settled::open();
     let second = settled.captain(settled.teams.get(1).unwrap());
 
-    settled.fixture.client.settle_prize(&payments(), &2);
+    settled
+        .fixture
+        .client
+        .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
 
     assert_eq!(settled.token.balance(&second), 3_000);
 }
@@ -345,13 +395,16 @@ fn the_runner_up_is_paid_their_own_position() {
 #[test]
 fn a_position_cannot_be_paid_twice() {
     let settled = Settled::open();
-    settled.fixture.client.settle_prize(&payments(), &1);
+    settled
+        .fixture
+        .client
+        .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
     assert_eq!(
         settled
             .fixture
             .client
-            .try_settle_prize(&payments(), &1)
+            .try_settle_prize(&payments(), &1, &settled.winner(&payments(), 1))
             .err(),
         Some(Ok(Error::PrizeAlreadyPaid))
     );
@@ -365,7 +418,10 @@ fn paying_a_winner_needs_no_signature_from_anyone() {
     let captain = settled.captain(settled.teams.get(0).unwrap());
 
     settled.fixture.env.set_auths(&[]);
-    settled.fixture.client.settle_prize(&payments(), &1);
+    settled
+        .fixture
+        .client
+        .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
     assert_eq!(settled.token.balance(&captain), 5_000);
 }
@@ -381,13 +437,16 @@ fn a_hold_stops_the_money_and_lifting_it_lets_them_through() {
         settled
             .fixture
             .client
-            .try_settle_prize(&payments(), &1)
+            .try_settle_prize(&payments(), &1, &settled.winner(&payments(), 1))
             .err(),
         Some(Ok(Error::SettlementPaused))
     );
 
     settled.fixture.client.resume_settlement(&reason);
-    settled.fixture.client.settle_prize(&payments(), &1);
+    settled
+        .fixture
+        .client
+        .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
     assert_eq!(settled.token.balance(&captain), 5_000);
 }
@@ -412,7 +471,7 @@ fn a_position_the_prize_table_does_not_have_is_refused() {
         settled
             .fixture
             .client
-            .try_settle_prize(&payments(), &9)
+            .try_settle_prize(&payments(), &9, &settled.winner(&payments(), 1))
             .err(),
         Some(Ok(Error::NotFound))
     );
@@ -424,8 +483,14 @@ fn the_pool_falls_by_exactly_the_prize_that_was_paid() {
     let settled = Settled::open();
     let before = settled.vault.balance();
 
-    settled.fixture.client.settle_prize(&payments(), &1);
-    settled.fixture.client.settle_prize(&payments(), &2);
+    settled
+        .fixture
+        .client
+        .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+    settled
+        .fixture
+        .client
+        .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
 
     assert_eq!(settled.vault.balance(), before - 8_000);
 }
@@ -811,7 +876,10 @@ mod no_award {
         settled.fixture.client.open_settlement();
 
         let captain = settled.captain(settled.teams.get(0).unwrap());
-        settled.fixture.client.settle_prize(&payments(), &1);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
         assert_eq!(settled.token.balance(&captain), 5_000);
     }
@@ -831,8 +899,14 @@ mod closing {
     /// is closed by the sweep instead. That is the ordinary case rather than an
     /// edge one: a track nobody entered still has to end somewhere.
     fn settle_everything(settled: &Settled) {
-        settled.fixture.client.settle_prize(&payments(), &1);
-        settled.fixture.client.settle_prize(&payments(), &2);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
 
         let claim = settled
             .fixture
@@ -851,7 +925,10 @@ mod closing {
     #[test]
     fn a_hackathon_cannot_close_while_a_prize_is_still_owed() {
         let settled = Settled::open();
-        settled.fixture.client.settle_prize(&payments(), &1);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
         assert_eq!(
             settled.fixture.client.try_complete().err(),
@@ -864,8 +941,14 @@ mod closing {
         let settled = Settled::open();
 
         // The defi track had no entries, so its position falls to the sweep.
-        settled.fixture.client.settle_prize(&payments(), &1);
-        settled.fixture.client.settle_prize(&payments(), &2);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
 
         let claim = settled
             .fixture
@@ -921,7 +1004,10 @@ mod closing {
     #[test]
     fn a_prize_that_was_paid_cannot_also_be_swept() {
         let settled = Settled::open();
-        settled.fixture.client.settle_prize(&payments(), &1);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
 
         let claim = settled
             .fixture
@@ -949,8 +1035,14 @@ mod closing {
         let settled = Settled::open();
         assert_eq!(settled.vault.balance(), 10_000);
 
-        settled.fixture.client.settle_prize(&payments(), &1);
-        settled.fixture.client.settle_prize(&payments(), &2);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
 
         let claim = settled
             .fixture
@@ -1006,8 +1098,14 @@ mod conservation {
     /// Runs the settlement to its end: both payments positions paid, the
     /// unentered defi position swept once its claim period runs out.
     fn settle_everything(settled: &Settled) {
-        settled.fixture.client.settle_prize(&payments(), &1);
-        settled.fixture.client.settle_prize(&payments(), &2);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
 
         let claim = settled
             .fixture
@@ -1068,7 +1166,10 @@ mod conservation {
             let held = settled.token.balance(&captain);
 
             assert_eq!(
-                settled.fixture.client.settle_prize(&payments(), &rank),
+                settled
+                    .fixture
+                    .client
+                    .settle_prize(&payments(), &rank, &captain),
                 amount
             );
             assert_eq!(settled.vault.balance(), pool - amount);
@@ -1088,18 +1189,21 @@ mod conservation {
         assert!(settled
             .fixture
             .client
-            .try_settle_prize(&payments(), &1)
+            .try_settle_prize(&payments(), &1, &settled.winner(&payments(), 1))
             .is_err());
         assert_eq!(settled.vault.balance(), pool);
 
         let opened = Settled::open();
-        opened.fixture.client.settle_prize(&payments(), &1);
+        opened
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &opened.winner(&payments(), 1));
         let after_paying = opened.vault.balance();
 
         assert!(opened
             .fixture
             .client
-            .try_settle_prize(&payments(), &1)
+            .try_settle_prize(&payments(), &1, &opened.winner(&payments(), 1))
             .is_err());
         assert_eq!(
             opened.vault.balance(),
@@ -1119,7 +1223,13 @@ mod conservation {
         top_up(&settled, 2_500);
         assert_eq!(settled.vault.balance(), 12_500);
 
-        assert_eq!(settled.fixture.client.settle_prize(&payments(), &1), 5_000);
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .settle_prize(&payments(), &1, &settled.winner(&payments(), 1)),
+            5_000
+        );
         assert_eq!(settled.token.balance(&first), 5_000);
         assert_eq!(settled.vault.balance(), 7_500);
     }
@@ -1148,5 +1258,216 @@ mod conservation {
             2_500,
             "the surplus stays in the vault; no route reaches it"
         );
+    }
+}
+
+/// A prize reaching a whole team rather than stopping at its captain.
+///
+/// This is the difference between a receipt that shows who built the project
+/// and one that shows who was paid for it. The contract used to hand the lot to
+/// the captain and leave the rest to a promise made off the platform; now every
+/// member is paid directly and the page can show the last hop of the money.
+mod shared_prizes {
+    use super::*;
+
+    /// The three people who won the payments track.
+    fn winners(settled: &Settled) -> Vec<Address> {
+        let team = settled.winner_team(&payments(), 1);
+
+        settled.fixture.client.team_by_id(&team).members
+    }
+
+    /// Five thousand between three does not divide, which is the case worth
+    /// building the test around.
+    const FIRST_PRIZE: i128 = 5_000;
+
+    #[test]
+    fn every_member_takes_an_equal_share() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+
+        for index in 0..members.len() {
+            let member = members.get(index).unwrap();
+            let share = settled
+                .fixture
+                .client
+                .settle_prize(&payments(), &1, &member);
+
+            // Two of the three take one unit more, because five thousand does
+            // not divide by three and the remainder is spread rather than kept.
+            assert!(share == 1_667 || share == 1_666, "share was {share}");
+            assert_eq!(settled.token.balance(&member), share);
+        }
+    }
+
+    /// The whole prize leaves the vault. A split that quietly kept the
+    /// remainder back would strand money nobody could reach.
+    #[test]
+    fn the_shares_add_up_to_the_prize_exactly() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+        let before = settled.vault.balance();
+
+        let mut paid = 0i128;
+        for index in 0..members.len() {
+            paid +=
+                settled
+                    .fixture
+                    .client
+                    .settle_prize(&payments(), &1, &members.get(index).unwrap());
+        }
+
+        assert_eq!(paid, FIRST_PRIZE);
+        assert_eq!(settled.vault.balance(), before - FIRST_PRIZE);
+    }
+
+    /// The captain is a member like any other. Being able to admit people is
+    /// not a claim on the money.
+    #[test]
+    fn the_captain_takes_no_more_than_anybody_else() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+        let captain = settled.captain(settled.winner_team(&payments(), 1));
+
+        let mut shares = Vec::new(&settled.fixture.env);
+        for index in 0..members.len() {
+            shares.push_back(settled.fixture.client.settle_prize(
+                &payments(),
+                &1,
+                &members.get(index).unwrap(),
+            ));
+        }
+
+        assert_eq!(members.get(0).unwrap(), captain, "the captain enters first");
+
+        let highest = shares.iter().max().unwrap();
+        let lowest = shares.iter().min().unwrap();
+        assert_eq!(highest - lowest, 1, "nobody is more than a unit better off");
+    }
+
+    /// One member at a time, because a member whose account cannot receive the
+    /// asset takes the whole transaction down with them. Paid separately they
+    /// block only themselves; paid together they would freeze their teammates
+    /// exactly as an unprepared winner used to freeze the other positions.
+    #[test]
+    fn a_position_stays_open_until_the_last_share_has_gone() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &members.get(0).unwrap());
+        assert!(!settled.fixture.client.is_paid(&payments(), &1));
+
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &members.get(1).unwrap());
+        assert!(!settled.fixture.client.is_paid(&payments(), &1));
+
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &members.get(2).unwrap());
+        assert!(settled.fixture.client.is_paid(&payments(), &1));
+    }
+
+    #[test]
+    fn a_member_cannot_be_paid_their_share_twice() {
+        let settled = Settled::open_with(3);
+        let member = winners(&settled).get(0).unwrap();
+
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &member);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_settle_prize(&payments(), &1, &member)
+                .err(),
+            Some(Ok(Error::PrizeAlreadyPaid))
+        );
+    }
+
+    /// A share belongs to the team that won it. Somebody who merely names the
+    /// position gets nothing.
+    #[test]
+    fn somebody_outside_the_team_has_no_share_to_take() {
+        let settled = Settled::open_with(3);
+        let stranger = Address::generate(&settled.fixture.env);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_settle_prize(&payments(), &1, &stranger)
+                .err(),
+            Some(Ok(Error::NotTeamMember))
+        );
+    }
+
+    /// The hackathon cannot close while one member is still owed, which is the
+    /// same promise the product already made per position, now made per person.
+    #[test]
+    fn the_hackathon_cannot_close_while_a_share_is_still_owed() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &members.get(0).unwrap());
+
+        assert_eq!(
+            settled.fixture.client.try_complete().err(),
+            Some(Ok(Error::SettlementIncomplete))
+        );
+    }
+
+    /// A member who never comes for their share does not hold the event open
+    /// forever, and the ones who did come keep what they took.
+    #[test]
+    fn a_share_nobody_came_for_goes_back_without_touching_the_others() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+        let organizer = settled.fixture.organizer.clone();
+
+        let collected = members.get(0).unwrap();
+        let taken = settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &collected);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        let before = settled.token.balance(&organizer);
+        let mut swept = 0i128;
+        for index in 1..members.len() {
+            swept +=
+                settled
+                    .fixture
+                    .client
+                    .sweep_share(&payments(), &1, &members.get(index).unwrap());
+        }
+
+        assert_eq!(taken + swept, FIRST_PRIZE);
+        assert_eq!(settled.token.balance(&organizer), before + swept);
+        assert_eq!(
+            settled.token.balance(&collected),
+            taken,
+            "the member who came keeps what they took"
+        );
+        assert!(settled.fixture.client.is_paid(&payments(), &1));
     }
 }

@@ -1135,19 +1135,30 @@ impl HackathonCore {
         Ok(())
     }
 
-    /// Pays one prize position to the captain who won it.
+    /// Pays one team member their share of one prize position.
     ///
-    /// Positions are paid one at a time on purpose. A Stellar account that
-    /// holds no trustline for the prize asset cannot receive it, and a single
-    /// call paying everyone would let one unprepared captain block every other
-    /// winner's money. Paid separately, that captain blocks only themselves,
-    /// and the rest are paid the moment the window opens.
+    /// A prize is split equally across the team and each member is paid
+    /// directly, so the contract shows the last hop of the money rather than
+    /// stopping at the captain's address and leaving the rest to trust.
     ///
-    /// No signature is asked for. The ranking is settled, the amounts come from
-    /// the locked prize table, and the recipient comes from the ranking, so
-    /// there is nothing left for anyone to decide; making this the organizer's
-    /// call would only give them the power to sit on it.
-    pub fn settle_prize(env: Env, track: Symbol, rank: u32) -> Result<i128, Error> {
+    /// One member at a time, and that is not a convenience. A Stellar account
+    /// holding no trustline for the prize asset cannot receive it, and the
+    /// transfer that fails takes the whole transaction with it. Paying a team
+    /// in one call would therefore let a single unprepared member freeze their
+    /// teammates' money as surely as an unprepared winner used to freeze the
+    /// other positions. Paid one at a time, they block only themselves.
+    ///
+    /// No signature is asked for. The ranking is settled, the amounts come
+    /// from the locked prize table, the split is arithmetic and the recipients
+    /// come from the team, so there is nothing left for anybody to decide.
+    /// Making this the organizer's call would only give them the power to sit
+    /// on it.
+    pub fn settle_prize(
+        env: Env,
+        track: Symbol,
+        rank: u32,
+        member: Address,
+    ) -> Result<i128, Error> {
         let state = storage::load_state(&env)?;
         if state.phase != Phase::Settlement {
             return Err(Error::WrongPhase);
@@ -1155,32 +1166,79 @@ impl HackathonCore {
         if state.settlement_paused {
             return Err(Error::SettlementPaused);
         }
-        if storage::is_paid(&env, &track, rank) {
+
+        let (team, share) = Self::share_due(&env, &track, rank, &member)?;
+
+        Self::hand_over(&env, &track, rank, &member, &member, share, team.size())?;
+        events::prize_paid(&env, &member, &track, rank, team.id, share);
+
+        Ok(share)
+    }
+
+    /// What one member is owed from a position, refusing anything already
+    /// settled.
+    ///
+    /// Shared by the payout and the sweep because the two differ only in where
+    /// the money goes; everything about who is owed what is the same question
+    /// and deserves one answer.
+    fn share_due(
+        env: &Env,
+        track: &Symbol,
+        rank: u32,
+        member: &Address,
+    ) -> Result<(Team, i128), Error> {
+        if storage::is_paid(env, track, rank) {
+            return Err(Error::PrizeAlreadyPaid);
+        }
+        if storage::is_share_settled(env, track, rank, member) {
             return Err(Error::PrizeAlreadyPaid);
         }
 
-        let constitution = storage::load_constitution(&env)?;
-        let tier = constitution
+        let tier = storage::load_constitution(env)?
             .prize_tiers
             .iter()
-            .find(|tier| tier.track == track && tier.rank == rank)
+            .find(|tier| tier.track == *track && tier.rank == rank)
             .ok_or(Error::NotFound)?;
 
-        let placement = storage::load_ranking(&env, &track)?
+        let placement = storage::load_ranking(env, track)?
             .iter()
             .find(|placement| placement.rank == rank)
             .ok_or(Error::ResultsNotFinalized)?;
 
-        let captain = storage::load_team(&env, placement.team)?.captain;
+        let team = storage::load_team(env, placement.team)?;
+        let share = team
+            .share_of(tier.amount, member)
+            .ok_or(Error::NotTeamMember)?;
 
-        storage::mark_paid(&env, &track, rank);
+        Ok((team, share))
+    }
 
-        let vault = storage::load_vault(&env)?;
-        VaultClient::new(&env, &vault).pay(&captain, &tier.amount);
+    /// Moves one share out of the vault and closes the position once the last
+    /// one has gone.
+    ///
+    /// A share of nothing is recorded without a transfer. It happens when a
+    /// prize is smaller than the team, and the vault refuses to move zero, so
+    /// paying it would fail rather than settle. Leaving it unrecorded would
+    /// hold the position open forever and stop the hackathon from ever closing.
+    fn hand_over(
+        env: &Env,
+        track: &Symbol,
+        rank: u32,
+        member: &Address,
+        to: &Address,
+        share: i128,
+        size: u32,
+    ) -> Result<(), Error> {
+        if storage::settle_share(env, track, rank, member) == size {
+            storage::mark_paid(env, track, rank);
+        }
 
-        events::prize_paid(&env, &captain, &track, rank, placement.team, tier.amount);
+        if share > 0 {
+            let vault = storage::load_vault(env)?;
+            VaultClient::new(env, &vault).pay(to, &share);
+        }
 
-        Ok(tier.amount)
+        Ok(())
     }
 
     /// Opens settlement once the safety window has run out.
@@ -1254,43 +1312,78 @@ impl HackathonCore {
         Ok(())
     }
 
-    /// Returns a prize nobody came for.
+    /// Returns a position that never had a winner.
     ///
-    /// A winner who never turns up leaves their prize sitting in the vault
-    /// forever otherwise, and a vault that can never empty is a vault whose
-    /// balance stops meaning anything. The claim period is announced before the
-    /// lock and counts from the moment the money became payable, so a winner
-    /// always had the full window the rules promised them.
+    /// A track nobody entered, or one whose entries all fell short of the
+    /// quorum, still has a prize sitting against it, and a vault that can never
+    /// empty is a vault whose balance stops meaning anything. This is the whole
+    /// position at once because there is no team to split it between.
+    ///
+    /// A position that was won is out of reach here however long nobody
+    /// collects it. Its shares belong to named people, and each one is returned
+    /// on its own through `sweep_share`.
     pub fn sweep_unclaimed(env: Env, track: Symbol, rank: u32) -> Result<i128, Error> {
-        let state = storage::load_state(&env)?;
-        if state.phase != Phase::Settlement {
-            return Err(Error::WrongPhase);
-        }
-        if storage::is_paid(&env, &track, rank) {
+        let tier = Self::sweepable(&env, &track, rank)?;
+
+        if storage::load_ranking(&env, &track)?
+            .iter()
+            .any(|placement| placement.rank == rank)
+        {
             return Err(Error::PrizeAlreadyPaid);
         }
 
-        let constitution = storage::load_constitution(&env)?;
+        storage::mark_paid(&env, &track, rank);
+
+        let organizer = storage::load_organizing_team(&env)?.organizer;
+        VaultClient::new(&env, &storage::load_vault(&env)?).pay(&organizer, &tier);
+
+        events::prize_swept(&env, &track, rank, tier);
+
+        Ok(tier)
+    }
+
+    /// Returns one member's share, once they have had the window they were
+    /// promised and not used it.
+    ///
+    /// Only that member's share moves. A teammate who did collect keeps what
+    /// they collected, and a teammate who has not yet still has until the
+    /// period runs out for them too, because the period is the same for
+    /// everybody and counts from the moment the money became payable.
+    pub fn sweep_share(env: Env, track: Symbol, rank: u32, member: Address) -> Result<i128, Error> {
+        Self::sweepable(&env, &track, rank)?;
+
+        let (team, share) = Self::share_due(&env, &track, rank, &member)?;
+        let organizer = storage::load_organizing_team(&env)?.organizer;
+
+        Self::hand_over(&env, &track, rank, &member, &organizer, share, team.size())?;
+        events::share_swept(&env, &track, rank, &member, share);
+
+        Ok(share)
+    }
+
+    /// The conditions both sweeps share, and the amount the position carries.
+    fn sweepable(env: &Env, track: &Symbol, rank: u32) -> Result<i128, Error> {
+        let state = storage::load_state(env)?;
+        if state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+        if storage::is_paid(env, track, rank) {
+            return Err(Error::PrizeAlreadyPaid);
+        }
+
+        let constitution = storage::load_constitution(env)?;
         let claim_period = constitution.discretion.prize_claim_period;
 
         if env.ledger().timestamp() < state.settlement_opened_at + claim_period {
             return Err(Error::ClaimPeriodOpen);
         }
 
-        let tier = constitution
+        Ok(constitution
             .prize_tiers
             .iter()
-            .find(|tier| tier.track == track && tier.rank == rank)
-            .ok_or(Error::NotFound)?;
-
-        storage::mark_paid(&env, &track, rank);
-
-        let organizer = storage::load_organizing_team(&env)?.organizer;
-        VaultClient::new(&env, &storage::load_vault(&env)?).pay(&organizer, &tier.amount);
-
-        events::prize_swept(&env, &track, rank, tier.amount);
-
-        Ok(tier.amount)
+            .find(|tier| tier.track == *track && tier.rank == rank)
+            .ok_or(Error::NotFound)?
+            .amount)
     }
 
     /// Closes the hackathon for good.

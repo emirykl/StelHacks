@@ -121,7 +121,7 @@ fn a_hackathon_still_being_funded_accepts_no_part_of_the_event() {
     assert_eq!(
         fixture
             .client
-            .try_settle_prize(&symbol_short!("payments"), &1)
+            .try_settle_prize(&symbol_short!("payments"), &1, &stranger)
             .err(),
         Some(Ok(Error::WrongPhase))
     );
