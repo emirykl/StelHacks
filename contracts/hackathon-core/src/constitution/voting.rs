@@ -82,16 +82,6 @@ impl VotePolicy {
 
         Ok(())
     }
-
-    /// Whether the judges' scores still carry weight in the final ranking.
-    ///
-    /// A judge share of zero is allowed. Judges then keep scoring for the
-    /// written feedback and keep their say in disqualifications, but the
-    /// per project quorum stops being a condition for finalizing, since
-    /// scorecards no longer move the result.
-    pub fn judge_score_counts(&self) -> bool {
-        self.judge_bps > 0
-    }
 }
 
 #[cfg(test)]
@@ -104,7 +94,6 @@ mod test {
 
         assert_eq!(policy.validate(RegistrationGate::Open), Ok(()));
         assert!(!policy.community_vote_enabled());
-        assert!(policy.judge_score_counts());
     }
 
     #[test]
@@ -182,20 +171,12 @@ mod test {
     }
 
     #[test]
-    fn judges_can_keep_scoring_without_holding_any_weight() {
-        let policy = VotePolicy {
-            judge_bps: 4_000,
-            community_bps: 6_000,
-        };
-
-        assert!(policy.judge_score_counts());
-
+    fn a_hackathon_cannot_hand_the_whole_score_to_the_crowd() {
         let community_led = VotePolicy {
             judge_bps: 0,
             community_bps: 10_000,
         };
 
-        assert!(!community_led.judge_score_counts());
         assert_eq!(
             community_led.validate(RegistrationGate::Approved),
             Err(Error::VoteSplitInvalid)
