@@ -12,7 +12,8 @@ mod phase;
 
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, Criterion, Deadline, ExtensionPolicy, PrizeTier,
-    Schedule, Track, MAX_CRITERION_SCORE, WEIGHT_TOTAL_BPS,
+    RegistrationGate, Schedule, Track, VotePolicy, APPROVED_REGISTRATION_REQUIRED_ABOVE_BPS,
+    MAX_COMMUNITY_SHARE_BPS, MAX_CRITERION_SCORE, VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
 };
 pub use errors::Error;
 pub use phase::Phase;
