@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Runs the two long lived services together, so a working stack is one command per layer",
+  "description": "Runs the long lived services together, so a working stack is one command per layer",
   "scripts": {
     "dev": "node run.mjs",
     "dev:indexer": "npm start --prefix indexer --",
-    "dev:sealer": "npm start --prefix sealer"
+    "dev:sealer": "npm start --prefix sealer",
+    "dev:clock": "npm start --prefix clock"
   },
   "devDependencies": {
     "dotenv": "^16.4.7"

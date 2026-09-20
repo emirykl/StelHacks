@@ -1,20 +1,13 @@
 import { createServer } from "node:http";
 
-import { Keypair } from "@stellar/stellar-sdk";
-import { basicNodeSigner } from "@stellar/stellar-sdk/contract";
-import {
-  HackathonCore,
-  ballotLeaf,
-  scorecardLeaf,
-  toHex,
-  verifyBallot,
-  verifyScorecard,
-} from "@stelhacks/sdk";
+import { ballotLeaf, scorecardLeaf, toHex, verifyBallot, verifyScorecard } from "@stelhacks/sdk";
 
 import { settings } from "./config.js";
+import { core, sealer } from "./core.js";
 import { issue } from "./receipt.js";
 import { proofFor, seal } from "./seal.js";
 import { contractOf, isRecord, isScorecard } from "./validate.js";
+import { rounds } from "./rounds.js";
 import { keepBallot, keepScorecard, leaves, phaseOf } from "./store.js";
 
 /**
@@ -35,8 +28,6 @@ import { keepBallot, keepScorecard, leaves, phaseOf } from "./store.js";
  * later point, because a judge who has to wait to check their own inclusion is
  * a judge being asked to trust in the meantime.
  */
-
-const sealer = Keypair.fromSecret(settings.sealerSecret);
 
 /** The phase a hackathon has to be in for its sealed input to be collected. */
 const JUDGING = 4;
@@ -185,19 +176,12 @@ async function publish(raw: unknown) {
 
   const sealed = seal(held);
 
-  const core = new HackathonCore({
-    contractId: body.contract,
-    networkPassphrase: settings.networkPassphrase,
-    rpcUrl: settings.rpcUrl,
-    publicKey: sealer.publicKey(),
-    ...basicNodeSigner(sealer, settings.networkPassphrase),
-  });
-
+  const client = core(body.contract);
   const root = Buffer.from(sealed.root);
   const call =
     body.kind === "scorecards"
-      ? await core.publish_score_root({ root })
-      : await core.publish_ballot_root({ root });
+      ? await client.publish_score_root({ root })
+      : await client.publish_ballot_root({ root });
 
   await call.signAndSend();
 
@@ -312,3 +296,32 @@ const routes = createServer((request, response) => {
 routes.listen(settings.port, () => {
   console.log(`sealing for ${sealer.publicKey()} on :${settings.port}`);
 });
+
+/*
+  The half of the job nobody asks for.
+
+  Taking entries is a request and answering it is a route. Putting them on chain
+  is not: it happens when a window shuts and again when the phase allows the
+  entries to be opened, and neither moment arrives as an HTTP call. Before this
+  loop both were a person remembering, which meant a hackathon could be judged
+  properly and still reach its ranking with no scores on chain.
+
+  On the same process rather than a service of its own, because the sealed
+  entries are here and a second process doing this work would have to be handed
+  them.
+*/
+async function keep(): Promise<void> {
+  for (;;) {
+    try {
+      for (const said of await rounds()) {
+        console.error(said);
+      }
+    } catch (thrown) {
+      console.error(`could not walk the hackathons: ${thrown}`);
+    }
+
+    await new Promise((wake) => setTimeout(wake, settings.everyMs));
+  }
+}
+
+void keep();

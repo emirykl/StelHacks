@@ -37,4 +37,24 @@ export const settings = {
    * unrelated site do it through a visitor's browser as well.
    */
   allowedOrigin: process.env["SEALER_ALLOWED_ORIGIN"] ?? "http://localhost:3000",
+  /**
+   * How long between the rounds the service walks by itself.
+   *
+   * The same half minute the clock uses, and for the same reason: this is the
+   * longest a judging window can stay shut without its root being published,
+   * and the clock will not let the phase move on until it is. Two services
+   * lapping at the same rate keep that handover inside a minute.
+   *
+   * An empty setting is an absent one. `SEALER_EVERY_MS=""` is what an
+   * environment file copied from the example contains, and read literally it
+   * is a loop with no wait in it.
+   */
+  everyMs: every(),
 } as const;
+
+function every(): number {
+  const written = process.env["SEALER_EVERY_MS"];
+  const asked = written === undefined || written === "" ? Number.NaN : Number(written);
+
+  return Number.isFinite(asked) && asked > 0 ? asked : 30_000;
+}

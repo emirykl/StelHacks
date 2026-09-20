@@ -15,7 +15,9 @@ them:
    derived data and does not belong here.
 2. **No key here can move money or change a result.** The service role key
    reaches the indexer and the challenge verifier, and neither holds a Stellar
-   signing key with any authority in the contracts.
+   signing key with any authority in the contracts. The clock does hold one, and
+   it is not an exception: the only call it makes is open to the public, so its
+   address is a fee payer rather than a permission.
 
 ## Layout
 
@@ -24,7 +26,9 @@ them:
 | `supabase/migrations/` | The schema, as ordered migrations |
 | `supabase/tests/` | What each role can actually reach, checked over HTTP |
 | `supabase/config.toml` | Local and project configuration, secrets by reference only |
-| `indexer/` | Soroban events into Postgres. Not built yet |
+| `indexer/` | Soroban events into Postgres |
+| `sealer/` | Sealed scorecards and ballots, and the root that commits to them |
+| `clock/` | Sends the call a passed deadline needs, since a contract cannot |
 
 ## Working here
 
