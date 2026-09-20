@@ -96,3 +96,53 @@ export async function ownersOf(addresses: string[]): Promise<Map<string, Owner>>
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
+
+/**
+ * What a team is called and what its project looks like, for the podium.
+ *
+ * The name comes from the team and the mark from its project, which are two
+ * tables because they are two facts: a team can name itself before it has
+ * entered anything. Read together here because the podium wants both and asking
+ * twice would be two round trips for one row apiece.
+ */
+export interface Mark {
+  name: string | null;
+  logoUrl: string | null;
+}
+
+export async function teamMarks(contractId: string): Promise<Map<number, Mark>> {
+  const db = browserClient();
+
+  if (db === null) {
+    return new Map();
+  }
+
+  const [teams, projects] = await Promise.all([
+    db.from("teams").select("team_id, name").eq("contract_id", contractId),
+    db.from("projects").select("team_id, logo_url").eq("contract_id", contractId),
+  ]);
+
+  const marks = new Map<number, Mark>();
+
+  for (const row of teams.data ?? []) {
+    const record = row as Record<string, unknown>;
+
+    marks.set(Number(record["team_id"] ?? 0), {
+      name: text(record["name"]),
+      logoUrl: null,
+    });
+  }
+
+  for (const row of projects.data ?? []) {
+    const record = row as Record<string, unknown>;
+    const id = Number(record["team_id"] ?? 0);
+    const found = marks.get(id);
+
+    marks.set(id, {
+      name: found?.name ?? null,
+      logoUrl: text(record["logo_url"]),
+    });
+  }
+
+  return marks;
+}

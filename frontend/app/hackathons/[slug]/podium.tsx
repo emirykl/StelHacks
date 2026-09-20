@@ -1,6 +1,7 @@
 "use client";
 
 import type { Placement } from "../../../lib/results";
+import type { Mark } from "../../../lib/team-names";
 
 /**
  * The top three, standing where everybody already knows to look for them.
@@ -29,11 +30,11 @@ const BLOCKS = [
 
 export function Podium({
   places,
-  names,
+  marks,
 }: {
   places: Placement[];
-  /** What each team called itself, by team id. Falls back to the number. */
-  names: Map<number, string>;
+  /** What each team called itself and drew, by team id. */
+  marks: Map<number, Mark>;
 }) {
   const top = places.filter((place) => place.rank <= 3).sort((a, b) => a.rank - b.rank);
 
@@ -54,8 +55,25 @@ export function Podium({
           <li key={index} className="hidden w-28 sm:block" aria-hidden />
         ) : (
           <li key={place.rank} className="flex w-28 flex-col items-center sm:w-36">
-            <p className="mb-2 w-full truncate text-center text-[0.9375rem] font-medium text-ink">
-              {names.get(place.team) ?? `Team ${place.team}`}
+            {/* The project's own mark above its name. A podium of three
+                rectangles is three rectangles; the thing somebody recognises a
+                project by is the picture they chose for it. Round, as it is
+                everywhere else the project appears, and the hatch when there is
+                none so the three keep the same shape. */}
+            <div className="mb-3 size-12 overflow-hidden rounded-full border border-rule bg-paper">
+              {marks.get(place.team)?.logoUrl == null ? (
+                <div className="hatch size-full" aria-hidden />
+              ) : (
+                <img
+                  src={marks.get(place.team)!.logoUrl!}
+                  alt=""
+                  className="size-full object-cover"
+                />
+              )}
+            </div>
+
+            <p className="mb-1 w-full truncate text-center text-[0.9375rem] font-medium text-ink">
+              {marks.get(place.team)?.name ?? `Team ${place.team}`}
             </p>
 
             <p className="tabular mb-3 text-[0.8125rem] text-ink-soft">

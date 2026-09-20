@@ -11,6 +11,7 @@ import {
   discover,
   listTransfers,
   missingFields,
+  quote,
   readTransfer,
   register,
   settled,
@@ -72,6 +73,12 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
   */
   const token = useRef<string | null>(null);
 
+  /* What is actually there, and what it is worth locally. Both read rather than
+     described, because "your prize" is a phrase and "10 USDC, about 4,800 TRY"
+     is the thing somebody is deciding about. */
+  const [held, setHeld] = useState<string | null>(null);
+  const [worth, setWorth] = useState<{ amount: string; rate: string } | null>(null);
+
   /* Why the panel cannot offer anything, when it cannot. Held rather than
      returned early, because a winner reading a page that simply omits the way
      to their money has no way to tell that from a page that has not loaded. */
@@ -110,6 +117,40 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
      something the anchor has never heard of is a promise it cannot keep. */
   const dealt =
     anchor !== null && code !== null && anchor.currencies.some((one) => one.code === code);
+
+  useEffect(() => {
+    if (anchor === null || address === null || asset.kind !== "issued") {
+      return;
+    }
+
+    let alive = true;
+
+    void balanceOf(assetContract, address).then(async (balance) => {
+      if (!alive || balance === null) {
+        return;
+      }
+
+      setHeld(balance);
+
+      /* Indicative, and said as such wherever it is drawn. A firm quote is held
+         for two minutes and would go stale while somebody reads it; the anchor's
+         own figure at payout is the one that counts. */
+      const local = await quote(
+        anchor,
+        `stellar:${asset.code}:${asset.issuer}`,
+        "iso4217:TRY",
+        balance,
+      );
+
+      if (alive) {
+        setWorth(local);
+      }
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [anchor, address, asset, assetContract]);
 
   const resume = useCallback(async () => {
     if (anchor === null || address === null || code === null || token.current === null) {
@@ -273,10 +314,36 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
       <h3 className="text-[1.25rem] text-ink">Cash out</h3>
 
+      {/* The numbers first, because they are what somebody is deciding about,
+          and the arrangement after, because that is what they are agreeing to.
+          "Your prize" is a phrase; "10 USDC leaves, about 4,800 TRY arrives" is
+          the thing. */}
+      {held !== null && (
+        <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink">
+          You hold <span className="tabular font-medium">{held}</span> {codeOf(asset)}.
+          {worth !== null && (
+            <>
+              {" "}
+              Today that is worth about{" "}
+              <span className="tabular font-medium">{money(worth.amount)} TRY</span>.
+            </>
+          )}
+        </p>
+      )}
+
       <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
         {anchor.hosted === undefined
-          ? `${anchor.domain} exchanges this back for money and pays it to your bank. They decide who may withdraw; this page only sends them the asset.`
-          : `${anchor.domain} exchanges this back for money. They handle the identity checks and the payout on their own site, which opens in a new tab. This page never sees your documents.`}
+          ? `${anchor.domain} takes it back and pays the money to a bank account. They decide who may withdraw; this page only sends them the asset.`
+          : `${anchor.domain} takes it back and pays the money out. They handle the identity checks on their own site, which opens in a new tab; this page never sees your documents.`}
+      </p>
+
+      {/* The one thing people get wrong about this, said before they press it.
+          A balance does not become lira: it leaves, and lira arrives somewhere
+          else that is not on this network at all. */}
+      <p className="mt-3 text-[0.8125rem] leading-relaxed text-ink-faint">
+        The {codeOf(asset)} leaves your wallet. Lira never arrives on Stellar —
+        it reaches a bank. Keeping the {codeOf(asset)} instead is a fine answer;
+        it is yours either way.
       </p>
 
       <div className="mt-6">
@@ -485,4 +552,18 @@ function Unavailable({ children }: { children: React.ReactNode }) {
       <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">{children}</p>
     </section>
   );
+}
+
+/** The code an asset is known by, or a word that stands in for one. */
+function codeOf(asset: PrizeAsset): string {
+  return asset.kind === "issued" ? asset.code : asset.kind === "native" ? "XLM" : "the asset";
+}
+
+/** Lira, grouped, because five figures unbroken is a number nobody reads. */
+function money(amount: string): string {
+  const [whole = "0", fraction] = amount.split(".");
+
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${
+    fraction === undefined ? "" : `.${fraction.slice(0, 2)}`
+  }`;
 }

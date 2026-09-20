@@ -10,7 +10,7 @@ import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/resul
 import { rulesFor } from "../../../lib/rules";
 import { CashOut } from "./cash-out";
 import { Podium } from "./podium";
-import { teamNames } from "../../../lib/team-names";
+import { teamMarks, type Mark } from "../../../lib/team-names";
 import { accept, assetOf, holds, type PrizeAsset } from "../../../lib/trustline";
 
 /**
@@ -53,7 +53,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
 
   /* What the teams call themselves. A podium labelled "Team 1" names the row in
      a database rather than the people who won. */
-  const [names, setNames] = useState<Map<number, string>>(new Map());
+  const [names, setNames] = useState<Map<number, Mark>>(new Map());
   const [ready, setReady] = useState<boolean | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -74,7 +74,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
 
       setResults(found);
       setPayable(new Set((rules?.tiers ?? []).map((tier) => `${tier.track}-${tier.rank}`)));
-      setNames(await teamNames(contractId));
+      setNames(await teamMarks(contractId));
 
       if (rules?.prizeAsset != null) {
         const which = await assetOf(rules.prizeAsset);
@@ -242,7 +242,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
         <div className="mt-10 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="rounded-[1.25rem] bg-paper px-8 py-10 ring-1 ring-rule">
             {results.map((result) => (
-              <Podium key={result.track} places={result.places} names={names} />
+              <Podium key={result.track} places={result.places} marks={names} />
             ))}
           </div>
 
@@ -265,7 +265,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
                     <SpecRow
                       key={place.rank}
                       index={ordinal(place.rank)}
-                      label={names.get(place.team) ?? `team ${place.team}`}
+                      label={names.get(place.team)?.name ?? `team ${place.team}`}
                       mark
                     >
                       <div className="space-y-2">
