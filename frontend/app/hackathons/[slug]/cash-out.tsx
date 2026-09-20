@@ -72,8 +72,15 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
   */
   const token = useRef<string | null>(null);
 
+  /* Why the panel cannot offer anything, when it cannot. Held rather than
+     returned early, because a winner reading a page that simply omits the way
+     to their money has no way to tell that from a page that has not loaded. */
+  const [unavailable, setUnavailable] = useState<string | null>(null);
+
   useEffect(() => {
     if (ANCHOR_DOMAIN === undefined) {
+      setUnavailable("This deployment has no anchor configured.");
+
       return;
     }
 
@@ -81,10 +88,14 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
 
     void discover(ANCHOR_DOMAIN)
       .then((found) => alive && setAnchor(found))
-      .catch(() => {
-        /* Left silent. An anchor that cannot be reached is not the winner's
-           problem to read about: the prize is theirs on chain either way, and
-           this panel simply does not appear. */
+      .catch((thrown: unknown) => {
+        if (alive) {
+          setUnavailable(
+            `${ANCHOR_DOMAIN} could not be reached: ${
+              thrown instanceof Error ? thrown.message : "no answer"
+            }`,
+          );
+        }
       });
 
     return () => {
@@ -214,8 +225,34 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
     );
   }
 
-  if (address === null || anchor === null || !dealt) {
+  /*
+    Said rather than omitted.
+
+    Every one of these used to render nothing at all, which is the same page a
+    winner sees when the prize was never paid — so somebody whose anchor was
+    down, or whose wallet was on the wrong account, was left comparing an empty
+    space against an empty space. The prize is theirs on chain in every case
+    below; what is missing is only the way to spend it from here.
+  */
+  if (address === null) {
+    return <Unavailable>Connect the wallet the prize was paid to.</Unavailable>;
+  }
+
+  if (unavailable !== null) {
+    return <Unavailable>{unavailable}</Unavailable>;
+  }
+
+  if (anchor === null) {
     return null;
+  }
+
+  if (code === null || !dealt) {
+    return (
+      <Unavailable>
+        {anchor.domain} does not exchange {code ?? "this asset"}, so it cannot be
+        cashed out here. It is still yours on chain.
+      </Unavailable>
+    );
   }
 
   return (
@@ -424,3 +461,14 @@ const finished: Record<string, string> = {
   expired: "This expired before it was finished",
   error: "They could not complete this",
 };
+
+/** Why there is no button, in the frame the button would have been in. */
+function Unavailable({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="mt-6 max-w-[46rem] rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
+      <h3 className="text-[1.25rem] text-ink">Cash out</h3>
+
+      <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">{children}</p>
+    </section>
+  );
+}
