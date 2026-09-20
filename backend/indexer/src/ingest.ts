@@ -60,9 +60,22 @@ async function ask(contract: string, startLedger: number) {
       throw thrown;
     }
 
-    const edge = (await server.getHealth()).oldestLedger;
+    const node = await server.getHealth();
 
-    console.warn(`${contract}: cursor fell behind the window, resuming at ${edge}`);
+    /*
+      Refused for being ahead, not behind.
+
+      A contract that has caught up asks for the ledger after the last one, and
+      for a moment that ledger does not exist yet — the same error as a cursor
+      that is far too old. Told apart by asking which side of the window it fell
+      off, because resuming a caught up contract at the window's bottom edge
+      drags it back a hundred thousand ledgers, which is what this did.
+    */
+    if (startLedger > node.latestLedger) {
+      return { page: { events: [], cursor: "" }, from: startLedger };
+    }
+
+    console.warn(`${contract}: cursor fell behind the window, resuming at ${node.oldestLedger}`);
 
     /*
       The ledger it actually started at, not the one it was asked for.
@@ -73,8 +86,12 @@ async function ask(contract: string, startLedger: number) {
       window again on the next lap, and the contract never moved.
     */
     return {
-      page: await server.getEvents({ startLedger: edge, filters, limit: settings.pageSize }),
-      from: edge,
+      page: await server.getEvents({
+        startLedger: node.oldestLedger,
+        filters,
+        limit: settings.pageSize,
+      }),
+      from: node.oldestLedger,
     };
   }
 }
