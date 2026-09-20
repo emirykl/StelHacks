@@ -270,7 +270,7 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
   }
 
   return (
-    <section className="mt-6 max-w-[46rem] rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
+    <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
       <h3 className="text-[1.25rem] text-ink">Cash out</h3>
 
       <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
@@ -479,7 +479,7 @@ const finished: Record<string, string> = {
 /** Why there is no button, in the frame the button would have been in. */
 function Unavailable({ children }: { children: React.ReactNode }) {
   return (
-    <section className="mt-6 max-w-[46rem] rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
+    <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
       <h3 className="text-[1.25rem] text-ink">Cash out</h3>
 
       <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">{children}</p>

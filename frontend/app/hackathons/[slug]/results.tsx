@@ -9,6 +9,8 @@ import { arg, send, type Sent } from "../../../lib/send";
 import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/results";
 import { rulesFor } from "../../../lib/rules";
 import { CashOut } from "./cash-out";
+import { Podium } from "./podium";
+import { teamNames } from "../../../lib/team-names";
 import { accept, assetOf, holds, type PrizeAsset } from "../../../lib/trustline";
 
 /**
@@ -48,6 +50,10 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
      warning at all. */
   const [asset, setAsset] = useState<PrizeAsset | null>(null);
   const [prizeAsset, setPrizeAsset] = useState<string | null>(null);
+
+  /* What the teams call themselves. A podium labelled "Team 1" names the row in
+     a database rather than the people who won. */
+  const [names, setNames] = useState<Map<number, string>>(new Map());
   const [ready, setReady] = useState<boolean | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -68,6 +74,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
 
       setResults(found);
       setPayable(new Set((rules?.tiers ?? []).map((tier) => `${tier.track}-${tier.rank}`)));
+      setNames(await teamNames(contractId));
 
       if (rules?.prizeAsset != null) {
         const which = await assetOf(rules.prizeAsset);
@@ -220,15 +227,31 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
           </section>
         )}
 
-        {/* Under the warning and above the board, because it belongs to the
-            same person and follows the same money: accept the asset, be paid,
-            take it out. It draws only once this wallet has actually been paid
-            here — an offer to cash out nothing is an offer to nobody. */}
-        {asset !== null && paidHere && prizeAsset !== null && (
-          <CashOut asset={asset} token={prizeAsset} />
-        )}
+        {/*
+          Who won on the left, what the winner can do about it on the right.
 
-        <div className="mt-10 grid gap-6">
+          They are two different readings of the same fact and they were stacked,
+          so the way to the money sat above the result it came from and a reader
+          met a button before they knew what it was for. Side by side, the
+          sentence runs left to right: this team won, and here is their prize.
+
+          The rail collapses under the podium on a narrow screen rather than
+          squeezing beside it, because a podium three abreast has a width it
+          cannot go below and still be read.
+        */}
+        <div className="mt-10 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="rounded-[1.25rem] bg-paper px-8 py-10 ring-1 ring-rule">
+            {results.map((result) => (
+              <Podium key={result.track} places={result.places} names={names} />
+            ))}
+          </div>
+
+          {asset !== null && paidHere && prizeAsset !== null && (
+            <CashOut asset={asset} token={prizeAsset} />
+          )}
+        </div>
+
+        <div className="mt-6 grid gap-6">
           {results.map((result) => (
             <section
               key={result.track}
@@ -242,7 +265,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
                     <SpecRow
                       key={place.rank}
                       index={ordinal(place.rank)}
-                      label={`team ${place.team}`}
+                      label={names.get(place.team) ?? `team ${place.team}`}
                       mark
                     >
                       <div className="space-y-2">
