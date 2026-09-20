@@ -5,13 +5,14 @@
  * no signature at all: it verifies a Merkle proof at the reveal, so what lives
  * here is a convention between the judge, this site and the collection service.
  *
- * Two things bound that service, and both are in this file. The signature shows
- * the card was the judge's, so the service cannot add one. The receipt, and the
- * inclusion proof it can later be checked against, shows the card was counted,
- * so the service cannot drop one.
+ * Sub Rosa tlock keeps the scores unreadable until the judging deadline. Two
+ * more things bound the service after that: the signature shows the card was
+ * the judge's, and the receipt plus later inclusion proof shows it was counted.
  */
 
 import { toHex } from "./hex";
+import { rootFrom } from "./roots";
+import { sealUntil } from "./sealed-input";
 
 const sealerUrl = process.env["NEXT_PUBLIC_SEALER_URL"];
 
@@ -93,16 +94,29 @@ export function payloadFor(leaf: Uint8Array): string {
 export async function submitScorecard(
   contract: string,
   scorecard: Scorecard,
+  leaf: Uint8Array,
   signature: string,
+  revealAt: number,
 ): Promise<Receipt> {
   if (sealerUrl === undefined) {
     throw new Error("no collection service is configured for this deployment");
   }
 
+  const sealed = await sealUntil(
+    { kind: "stelhacks.scorecard.v1", scorecard },
+    revealAt,
+  );
   const answer = await fetch(`${sealerUrl}/scorecard`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contract, scorecard, signature }),
+    body: JSON.stringify({
+      contract,
+      team: scorecard.team,
+      judge: scorecard.judge,
+      leaf: toHex(leaf),
+      signature,
+      sealed,
+    }),
   });
 
   const said = (await answer.json()) as Receipt & { error?: string };
@@ -145,6 +159,39 @@ function explain(said: string, status: number): string {
   }
 
   return said;
+}
+
+/**
+ * The root the service would publish, for whoever the rules say may publish it.
+ *
+ * Normally nobody asks: the service holds the cards, the constitution names the
+ * service, and it puts the root on chain itself. This is for the events frozen
+ * before that was true, whose rules name the organizer instead — the service
+ * cannot sign for them and the organizer cannot compute the root, so one of
+ * them has to hand the other half over.
+ *
+ * Null rather than an error when there is nothing held. A hackathon whose
+ * judges never handed a card in has no root to publish and is not in trouble;
+ * it is waiting.
+ */
+export async function rootHeldFor(contract: string): Promise<string | null> {
+  if (sealerUrl === undefined) {
+    return null;
+  }
+
+  try {
+    const answer = await fetch(`${sealerUrl}/root?contract=${contract}&kind=scorecards`);
+
+    if (!answer.ok) {
+      return null;
+    }
+
+    const { root } = (await answer.json()) as { root?: string };
+
+    return typeof root === "string" && /^[0-9a-f]{64}$/.test(root) ? root : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -191,7 +238,7 @@ export async function inclusionOf(contract: string, leaf: string): Promise<Inclu
   }
 
   const { root } = (await answer.json()) as { root: string; proof: string[] };
-  const onChain = await publishedRoot(contract);
+  const onChain = await rootFrom(contract, "score_root");
 
   if (onChain === null) {
     /* The tree exists but nothing has been committed to it yet, so there is
@@ -202,42 +249,4 @@ export async function inclusionOf(contract: string, leaf: string): Promise<Inclu
   return onChain === root
     ? { at: "included", root }
     : { at: "disagrees", serviceRoot: root, chainRoot: onChain };
-}
-
-/** The score root the contract holds, or nothing if none was published. */
-async function publishedRoot(contract: string): Promise<string | null> {
-  const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
-  const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
-
-  if (rpcUrl === undefined || passphrase === undefined) {
-    return null;
-  }
-
-  const [{ Account, Contract, TransactionBuilder, BASE_FEE, scValToNative }, rpc] =
-    await Promise.all([
-      import("@stellar/stellar-sdk/base"),
-      import("@stellar/stellar-sdk/rpc"),
-    ]);
-
-  const server = new rpc.Server(rpcUrl);
-
-  try {
-    const tx = new TransactionBuilder(
-      new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
-      { fee: BASE_FEE, networkPassphrase: passphrase },
-    )
-      .addOperation(new Contract(contract).call("score_root"))
-      .setTimeout(30)
-      .build();
-
-    const simulated = await server.simulateTransaction(tx);
-
-    if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
-      return null;
-    }
-
-    return toHex(scValToNative(simulated.result.retval) as Uint8Array);
-  } catch {
-    return null;
-  }
 }

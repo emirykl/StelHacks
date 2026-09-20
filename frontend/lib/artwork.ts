@@ -1,3 +1,4 @@
+import { shrink, type Bounds } from "./image";
 import { browserClient } from "./supabase/client";
 
 /**
@@ -32,6 +33,20 @@ export const SHAPES = {
 
 export type Shape = keyof typeof SHAPES;
 
+/**
+ * The largest a stored picture ever needs to be, which is not the shape above.
+ *
+ * A banner is drawn four to one and the crop is the header's, done in CSS from
+ * whatever it is given. Bounding the stored file to that ratio instead would
+ * mean a wide photograph came back four hundred pixels tall and blurred on a
+ * retina screen, so the height here is generous and only the width is really
+ * doing the work.
+ */
+const WITHIN: Record<Shape, Bounds> = {
+  logo: { width: 512, height: 512 },
+  banner: { width: 1600, height: 1200 },
+};
+
 export interface Uploaded {
   url: string | null;
   /** Said in the person's terms, or absent when the picture went up. */
@@ -56,14 +71,17 @@ export async function uploadArtwork(file: File, userId: string, shape: Shape): P
     return { url: null, message: "Storage is not configured on this deployment." };
   }
 
+  const picture = await shrink(file, WITHIN[shape]);
+
   /* A new name every time rather than one file replaced in place. The URL is
      public and therefore cached by every CDN between here and the reader, and a
      replaced file would leave the old picture showing for as long as that cache
-     lives. */
-  const name = `${userId}/${shape}-${Date.now()}.${extension(file.type)}`;
+     lives. It is taken from the re-encoded file rather than the chosen one,
+     because what goes up is usually no longer the type that was picked. */
+  const name = `${userId}/${shape}-${Date.now()}.${extension(picture.type)}`;
 
-  const { error } = await db.storage.from("hackathon-art").upload(name, file, {
-    contentType: file.type,
+  const { error } = await db.storage.from("hackathon-art").upload(name, picture, {
+    contentType: picture.type,
     cacheControl: "31536000",
   });
 

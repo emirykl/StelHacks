@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { ButtonLink, Measure, Rule } from "../components/primitives";
+import { Measure, Rule } from "../components/primitives";
+import { CommitButton } from "../components/commit-button";
 import { HackathonCard } from "../components/hackathon-card";
 import { Filters } from "./filters";
 import {
@@ -64,16 +65,26 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
 
   return (
     <main className="flex-1">
+      {/*
+        A band rather than a hero, and the difference is what it costs.
+
+        This page is a list, and somebody who navigated to it has already
+        decided they want the list. At a full hero's height the first card sat
+        below the fold on a laptop, so the page opened on a title nobody needed
+        and a cat: everything it was for took a scroll to reach. Every measure
+        here is half what it was, which is enough to bring a row of cards up
+        into the window without turning the title into a toolbar.
+      */}
       <section className="border-b border-rule">
-        <Measure wide className="py-16 sm:py-20">
+        <Measure wide className="py-7 sm:py-8">
           <div className="flex items-center justify-between gap-12">
             <div className="min-w-0">
               {/* The eyebrow above this said "Every event", which is what a
                   listing already is. A line of small capitals earns its place by
                   telling a reader something the heading under it does not. */}
-              <h1 className="text-[clamp(2.5rem,5.5vw,4rem)]">Hackathons</h1>
+              <h1 className="text-[clamp(2rem,4vw,3rem)]">Hackathons</h1>
 
-              <p className="mt-6 max-w-[40rem] text-[1.25rem] leading-relaxed text-ink-soft">
+              <p className="mt-3 max-w-[40rem] text-[1.0625rem] leading-relaxed text-ink-soft">
                 Every hackathon listed here has its rules and its prize written
                 on chain before anybody registers.
               </p>
@@ -82,10 +93,14 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
                   offered the application, from the landing page and the footer,
                   and a create button that leads to a refusal would be the site
                   inviting a press it has already decided to reject. */}
+              {/* The same button the header signs in with, rather than the flat
+                  capsule filters and form steps use. Starting a hackathon is a
+                  press somebody means, and it was the one call to action in the
+                  product drawn as a control. */}
               {mayCreate && (
-                <ButtonLink href="/create" className="mt-10">
-                  Create a hackathon
-                </ButtonLink>
+                <div className="mt-5">
+                  <CommitButton href="/create">Create a hackathon</CommitButton>
+                </div>
               )}
             </div>
 
@@ -110,8 +125,12 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
               The frame keeps its footprint and the picture is scaled up inside
               it. Nothing around this moves; only the cat gets larger, and the
               empty margins go past the edge and are clipped.
+
+              Its width is now the thing holding the band open rather than the
+              text beside it, which is why it came down with everything else. A
+              decoration is not allowed to set the height of the page.
             */}
-            <div className="hidden aspect-[4/3] w-[20rem] shrink-0 overflow-hidden lg:block xl:w-[23rem]">
+            <div className="hidden aspect-[4/3] w-[11rem] shrink-0 overflow-hidden lg:block xl:w-[13rem]">
               <img
                 src="/gif/cat.gif"
                 alt=""
@@ -132,7 +151,11 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
           total={total}
         />
 
-        <div className="py-10">
+        {/* Tighter above than below. The filters belong to the cards under
+            them, and the space that separated the two was reading as a gap
+            between two sections rather than as one control bar over its own
+            results. */}
+        <div className="pt-5 pb-10">
           {hackathons.length === 0 ? (
             <Empty narrowed={filter.stage !== undefined || filter.tag !== undefined} />
           ) : (

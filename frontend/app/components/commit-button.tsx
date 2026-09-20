@@ -6,20 +6,8 @@ import type { ReactNode } from "react";
 /**
  * The button for a press somebody has to mean.
  *
- * There are three of those in this product and only three: signing in,
- * entering a hackathon, and locking a hackathon's rules. Everything else is a
- * link, a filter or a step in a flow, and all of those use the flat capsule in
- * `primitives.tsx`.
- *
- * The third was added last and is the one that most deserved it: locking hashes
- * the rules and freezes them, and afterwards the only thing anybody can do is
- * cancel the event.
- *
- * That restraint is the whole point of using it at all. A turning rim light is
- * decoration, and decoration spent everywhere stops
- * being noticed and starts being cost: this one carries a WebGL context, a
- * shader and an animation frame apiece. Spent on the two presses that matter,
- * it says which two those are without a word.
+ * Shared by the header, landing calls to action, registration and rule locking.
+ * Ordinary filters and form steps use the flat capsule in `primitives.tsx`.
  *
  * The palette lives here rather than at each call site, for the same reason
  * the capsule's does: the moment there are two ways to configure this, some
@@ -34,7 +22,7 @@ import type { ReactNode } from "react";
    string "var(--color-ink)" silently renders black. One spelling for all four
    is worth more than the indirection. */
 const INK = "#171310";
-const SIGNAL = "#f0c630";
+const SIGNAL = "#ffd91a";
 
 /*
   The permanent edge, and the reason it is light.
@@ -58,18 +46,24 @@ export function CommitButton({
   disabled = false,
   type = "button",
   onClick,
+  className,
+  prominent = false,
 }: {
   children: ReactNode;
   /** Present when the press navigates, which keeps it a real link. */
   href?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   disabled?: boolean;
   type?: "button" | "submit";
   onClick?: React.MouseEventHandler<HTMLElement>;
+  className?: string;
+  /** A broader rim light for the landing's large calls to action. */
+  prominent?: boolean;
 }) {
   return (
     <SpecularButton
       size={size}
+      className={className}
       /* Larger than the button is tall, which the component clamps to a pill.
          Every other button in this system is a capsule and this one is not
          allowed to be the exception that makes the header look assembled. */
@@ -89,9 +83,9 @@ export function CommitButton({
          capsule — where the rim turns through half a circle in a few pixels —
          the glow piled up outside the edge and read as a blister growing off
          the side of the button whenever the light swept past. */
-      intensity={1.2}
-      thickness={1.4}
-      shineSize={26}
+      intensity={prominent ? 1.8 : 1.2}
+      thickness={prominent ? 1.8 : 1.4}
+      shineSize={prominent ? 38 : 26}
       shineFade={34}
       blur={0}
       /*

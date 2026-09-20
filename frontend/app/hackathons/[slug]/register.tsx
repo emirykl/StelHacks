@@ -11,7 +11,9 @@ import { UNFUNDED, arg, fund, onTestnet, send, type Sent } from "../../../lib/se
 import { browserClient } from "../../../lib/supabase/client";
 import { standingOf, type Standing } from "../../../lib/participate";
 import { challengeFor } from "../../../lib/organizer";
+import { isLinked, linkWallet } from "../../../lib/link";
 import { proveAddressHex } from "../../../lib/wallet";
+import { howLong } from "../../../lib/schedule";
 
 /**
  * The way in, as one control that knows where you are.
@@ -36,10 +38,22 @@ import { proveAddressHex } from "../../../lib/wallet";
 export function Register({
   contractId,
   slug,
+  registrationOpensAt,
   registrationClosesAt,
 }: {
   contractId: string;
   slug: string | null;
+  /**
+   * When applying becomes possible, from the frozen rules.
+   *
+   * The other end of the same window, and the one that was missing. A
+   * hackathon is published before its doors open — that is the point of
+   * publishing — so this button sat there offering to sign an `apply` the
+   * contract refuses with `DeadlineNotReached`, and the refusal came back as
+   * "this stage's deadline has not passed yet", which reads like a bug. What
+   * somebody standing here needs is the date.
+   */
+  registrationOpensAt: number | null;
   /**
    * When applying stops being possible, from the frozen rules.
    *
@@ -61,6 +75,19 @@ export function Register({
   const [teamName, setTeamName] = useState("");
   const [result, setResult] = useState<Sent | null>(null);
   const [funding, setFunding] = useState(false);
+
+  /*
+    Whether this wallet has been proved to belong to the account signed in.
+
+    Null until it has been asked. The contract does not care and never will —
+    a prize is paid to a key — but every list an organizer reads gets from an
+    address to a name through `wallet_links`, so an entrant with no row there
+    turns up in the queue as "Unnamed builder" next to their own address. The
+    proof was only ever offered on the account page, which is not where anybody
+    is standing when they enter a hackathon.
+  */
+  const [named, setNamed] = useState<boolean | null>(null);
+  const [proving, setProving] = useState(false);
 
   const address = wallet?.address ?? null;
 
@@ -96,6 +123,48 @@ export function Register({
     void reread();
   }, [reread]);
 
+  useEffect(() => {
+    let alive = true;
+
+    if (address === null) {
+      setNamed(null);
+
+      return;
+    }
+
+    void isLinked(address).then((linked) => alive && setNamed(linked));
+
+    return () => {
+      alive = false;
+    };
+  }, [address]);
+
+  /**
+   * Put a name on the address that just entered.
+   *
+   * One message signature, no fee and nothing on chain. It is attempted the
+   * moment an application lands rather than offered on a page nobody visits:
+   * this is the one instant where the person has just decided to be part of an
+   * event and being known by their name is the thing they want. Refusing costs
+   * them nothing — the application stands either way — and the offer comes
+   * back as a button they can press whenever they change their mind.
+   */
+  async function putAName(): Promise<void> {
+    if (address === null || account !== true || named === true) {
+      return;
+    }
+
+    setProving(true);
+
+    const outcome = await linkWallet(address);
+
+    setProving(false);
+
+    if (outcome === "linked") {
+      setNamed(true);
+    }
+  }
+
   async function run(work: () => Promise<Sent>) {
     setBusy(true);
     setResult(null);
@@ -109,6 +178,12 @@ export function Register({
 
     if (outcome.ok) {
       await reread();
+
+      /* After the chain call rather than before it. Entering is the thing
+         being done here; attaching a name to the address that did it is a
+         courtesy, and a courtesy does not get to stand in front of the
+         signature somebody actually came to make. */
+      await putAName();
     }
   }
 
@@ -230,6 +305,12 @@ export function Register({
     <div className="grid gap-3">
       <Next
         standing={known && address === null ? null : standing}
+        opensIn={
+          registrationOpensAt === null ||
+          registrationOpensAt <= Math.floor(Date.now() / 1000)
+            ? null
+            : howLong(registrationOpensAt - Math.floor(Date.now() / 1000))
+        }
         shut={
           registrationClosesAt !== null &&
           registrationClosesAt <= Math.floor(Date.now() / 1000)
@@ -243,6 +324,26 @@ export function Register({
         onFind={() => router.push("?tab=find-team")}
         onSubmit={() => ready() && router.push(`/hackathons/${slug}/submit`)}
       />
+
+      {/* Only once somebody is actually in. An address reading a hackathon page
+          is owed nothing about how it is filed, and asking a stranger to sign
+          something before they have entered is asking the wrong question at the
+          wrong moment. */}
+      {named === false && account === true && standing !== null &&
+        standing.application !== "none" && (
+          <div className="grid gap-1.5">
+            <p className="max-w-[22rem] text-[0.875rem] leading-relaxed text-ink-soft">
+              Organizers see your address, not your name. One signature fixes
+              that, costs nothing and touches nothing on chain.
+            </p>
+
+            <div>
+              <Button size="sm" disabled={proving} onClick={() => void putAName()}>
+                {proving ? "Signing" : "Show my name"}
+              </Button>
+            </div>
+          </div>
+        )}
 
       {result !== null && (
         <div className="grid gap-2">
@@ -340,6 +441,7 @@ export function Register({
  */
 function Next({
   standing,
+  opensIn,
   shut,
   busy,
   onApply,
@@ -348,6 +450,8 @@ function Next({
   onSubmit,
 }: {
   standing: Standing | null;
+  /** How long until the sign up window opens, or null once it has. */
+  opensIn: string | null;
   /** Whether the sign up window has closed. */
   shut: boolean;
   busy: boolean;
@@ -358,6 +462,14 @@ function Next({
 }) {
   if (busy) {
     return <CommitButton disabled>Signing</CommitButton>;
+  }
+
+  /* Applying has not started. Said rather than offered, for exactly the reason
+     the closed case below is: the contract refuses `apply` on either side of
+     the window, so the button could only ever have cost a signature to be told
+     so. Amber rather than grey, because this door is going to open. */
+  if (opensIn !== null && (standing === null || standing.application === "none")) {
+    return <Waiting>Sign-ups open in {opensIn}</Waiting>;
   }
 
   /* Applying is over, and nobody applied in time. Said rather than offered: the

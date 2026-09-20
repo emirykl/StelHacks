@@ -81,12 +81,23 @@ export function Opening({ contractId }: { contractId: string }) {
     );
   }
 
-  const code = PRIZE_ASSETS.find((asset) => asset.contract === running.prizeAsset)?.code ?? "";
+  /*
+    The prize asset comes from the rules here, not from the state.
+
+    `runningOf` leaves `prizeAsset` null on purpose — it asks the contract seven
+    cheap questions and the asset is not one of them — and this page was reading
+    that null as "a token we do not recognise". So every figure on the summary
+    was printed as a bare number with no ticker beside it, and the ramp that
+    offers to buy the shortfall never appeared at all. The document this page is
+    about to freeze names the asset, and it has already been read.
+  */
+  const prizeAsset = running.prizeAsset ?? rules?.prizeAsset ?? null;
+  const code = PRIZE_ASSETS.find((asset) => asset.contract === prizeAsset)?.code ?? "";
 
   return (
     <Setup
       contractId={contractId}
-      running={{ ...running, phase: running.phase }}
+      running={{ ...running, phase: running.phase, prizeAsset }}
       rules={rules}
       code={code}
       address={wallet.address}

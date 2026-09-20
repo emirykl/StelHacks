@@ -1,5 +1,8 @@
 import { ButtonLink, Measure } from "../../components/primitives";
+import { TokenMark } from "../../components/token";
+import { Organizing } from "./organizing";
 import { Register } from "./register";
+import { Scoring } from "./scoring";
 import { windowsOf, type Window } from "../../../lib/rules";
 import { prizeLabel, worthOf } from "../../../lib/money";
 import { phaseName } from "../../../lib/phase";
@@ -87,7 +90,10 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
                    number with a label rather than as one amount of money. */
                 <p className="tabular flex items-baseline gap-2 text-[2rem] font-bold leading-none">
                   <span className="text-verified">{prize.figure}</span>
-                  <span className="text-ink">{prize.code}</span>
+                  <span className="inline-flex items-center gap-2 text-ink">
+                    <TokenMark code={prize.code} className="size-5" />
+                    {prize.code}
+                  </span>
                 </p>
               )}
             </Panel>
@@ -151,9 +157,12 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               <Action
                 phase={hackathon.phase}
                 contractId={hackathon.contract_id}
+                organizer={hackathon.organizer}
                 slug={hackathon.slug}
+                registrationOpensAt={hackathon.rules?.schedule.registrationOpens ?? null}
                 registrationClosesAt={hackathon.rules?.schedule.registrationCloses ?? null}
                 communityVote={(hackathon.rules?.communityBps ?? 0) > 0}
+                judges={hackathon.rules?.judgeAddresses ?? []}
               />
             </Panel>
           </div>
@@ -383,26 +392,85 @@ function stamp(at: number): string {
  * you are approved and you cannot register once registration has shut. Two
  * buttons where one of them always fails is how a reader learns to distrust
  * both.
+ *
+ * During judging that one step depends on who is reading, and only the wallet
+ * can say: a judge gets the console, everybody else gets the ballot or the
+ * ordinary way in. So the whole thing is handed to `Scoring`, which swaps it
+ * for scoring when the connected key turns out to be named in the rules.
  */
 function Action({
   phase,
   contractId,
+  organizer,
   slug,
+  registrationOpensAt,
   registrationClosesAt,
   communityVote,
+  judges,
 }: {
   phase: number | null;
   contractId: string;
+  /** The address the chain recorded as running this event. */
+  organizer: string | null;
   slug: string | null;
+  /** When applying becomes possible, from the frozen rules. */
+  registrationOpensAt: number | null;
   /** When applying stops being possible, from the frozen rules. */
   registrationClosesAt: number | null;
   /** Whether the rules give the crowd a share of the score at all. */
   communityVote: boolean;
+  /** Every address the frozen rules name as a judge. */
+  judges: string[];
 }) {
   if (phase === null) {
     return null;
   }
 
+  const otherwise = everybodyElse({
+    phase,
+    contractId,
+    slug,
+    registrationOpensAt,
+    registrationClosesAt,
+    communityVote,
+  });
+
+  const scoring =
+    phase === 4 ? (
+      <Scoring contractId={contractId} judges={judges}>
+        {otherwise}
+      </Scoring>
+    ) : (
+      otherwise
+    );
+
+  /* Outside the phase check the judge's door sits in, because there is no phase
+     at which the organizer is an entrant. Whatever this offers everybody else —
+     "not open yet", a ballot, the projects — the person running the event wants
+     the controls. */
+  return (
+    <Organizing contractId={contractId} organizer={organizer}>
+      {scoring}
+    </Organizing>
+  );
+}
+
+/** The banner's offer to a reader the rules do not name. */
+function everybodyElse({
+  phase,
+  contractId,
+  slug,
+  registrationOpensAt,
+  registrationClosesAt,
+  communityVote,
+}: {
+  phase: number;
+  contractId: string;
+  slug: string | null;
+  registrationOpensAt: number | null;
+  registrationClosesAt: number | null;
+  communityVote: boolean;
+}) {
   /* Judging, and the crowd has a say in it. This outranks the rest because it
      is the only step with a deadline the reader cannot come back to: applying
      is over by now, and the projects will still be there afterwards. */
@@ -434,6 +502,7 @@ function Action({
     <Register
       contractId={contractId}
       slug={slug}
+      registrationOpensAt={registrationOpensAt}
       registrationClosesAt={registrationClosesAt}
     />
   );

@@ -163,58 +163,78 @@ export async function listHackathons(filter: Filter = {}): Promise<HackathonSumm
     Narrowed and ordered before the chain is asked anything, so a filtered page
     pays for the cards it shows rather than for every hackathon that exists.
   */
-  const summaries = all
+  const candidates = all
     .filter((hackathon) => matches(hackathon, filter))
-    .sort((a, b) => standing(a) - standing(b))
-    .slice(0, filter.limit ?? PAGE);
+    .sort((a, b) => standing(a) - standing(b));
 
   /*
-    The prize is read from the contract rather than from our tables, because we
-    do not have it: the indexer records the digest and the phase, and the
-    amount lives in the constitution behind them. It is also the one number
-    that decides whether somebody gives up a weekend, so a card without it is a
-    card nobody can act on.
+    Read a page at a time until a page's worth survives.
 
-    All of them at once, and a hackathon whose prize cannot be read keeps its
-    card rather than losing it. A slow node should cost a number, not a row.
+    Two things have to happen here and they fight each other. The prize and the
+    deadlines come from the contract, one call per hackathon, so the page has to
+    stop asking at some point. And a hackathon on a superseded constitution is
+    dropped — but only the chain knows which those are, so the drop happens
+    after the asking.
+
+    Slicing once, before the reads, made those two into a bug rather than a
+    trade: twelve slots went to old events that were then all thrown away, and
+    the hackathon somebody had just created sat in thirteenth place and never
+    got a slot at all. The listing showed one card while fifteen existed.
+
+    So the window moves instead. Each pass reads one page in parallel, keeps
+    what survives, and stops as soon as there are enough — which on a database
+    with nothing superseded left is exactly one pass, the cost this always
+    meant to pay.
   */
-  const rules = await Promise.all(
-    summaries.map((summary) => rulesOf(summary.contract_id).catch(() => null)),
-  );
+  const wanted = filter.limit ?? PAGE;
+  const cards: HackathonSummary[] = [];
 
-  /*
-    Hackathons running on superseded code are dropped rather than drawn.
+  for (let from = 0; from < candidates.length && cards.length < wanted; from += wanted) {
+    const batch = candidates.slice(from, from + wanted);
 
-    The contracts have no upgrade path, so an event created before the platform
-    fee joined the constitution stays on the old shape forever. Its card would
-    render, because the decoder defends every field, and that is exactly the
-    problem: it would look like every other card while being an event this build
-    cannot fully read, quote a fee for, or settle one.
+    /*
+      The prize is read from the contract rather than from our tables, because
+      we do not have it: the indexer records the digest and the phase, and the
+      amount lives in the constitution behind them. It is also the one number
+      that decides whether somebody gives up a weekend, so a card without it is
+      a card nobody can act on.
 
-    Dropped after the chain read rather than before it, which means a page can
-    come back shorter than `PAGE`. That is the honest cost of the version living
-    in the contract instead of in `hackathon_state`, and it is the same trade the
-    prize already makes two comments above. It also fixes itself: once nothing
-    old is left, nothing is dropped.
-  */
-  return summaries.flatMap((summary, index) => {
-    const document = rules[index];
+      All of them at once, and a hackathon whose prize cannot be read keeps its
+      card rather than losing it. A slow node should cost a number, not a row.
+    */
+    const rules = await Promise.all(
+      batch.map((summary) => rulesOf(summary.contract_id).catch(() => null)),
+    );
 
-    if (document !== null && document.version < CONSTITUTION_VERSION) {
-      return [];
-    }
+    batch.forEach((summary, index) => {
+      const document = rules[index];
 
-    return [
-      {
+      /*
+        Hackathons running on superseded code are dropped rather than drawn.
+
+        The contracts have no upgrade path, so an event created before the
+        platform fee joined the constitution stays on the old shape forever.
+        Its card would render, because the decoder defends every field, and
+        that is exactly the problem: it would look like every other card while
+        being an event this build cannot fully read, quote a fee for, or settle
+        one.
+      */
+      if (document !== null && document.version < CONSTITUTION_VERSION) {
+        return;
+      }
+
+      cards.push({
         ...summary,
         prize: document?.prize ?? null,
         closesAt: document?.closesAt ?? null,
         registrationOpensAt: document?.registrationOpensAt ?? null,
         registrationClosesAt: document?.registrationClosesAt ?? null,
         asset: document?.asset ?? null,
-      },
-    ];
-  });
+      });
+    });
+  }
+
+  return cards.slice(0, wanted);
 }
 
 /** Whether one hackathon survives what the reader asked for. */
@@ -228,8 +248,16 @@ function matches(hackathon: HackathonSummary, filter: Filter): boolean {
     }
   }
 
-  if (filter.tag !== undefined && filter.tag.length > 0 && !hackathon.tags.includes(filter.tag)) {
-    return false;
+  /* Compared without case, because the column is not. Tags are lowercased on
+     the way in now, but rows written before that are stored as they were typed,
+     and a chip that matched only one spelling hid every hackathon that used the
+     other. */
+  if (filter.tag !== undefined && filter.tag.length > 0) {
+    const wanted = filter.tag.toLowerCase();
+
+    if (!hackathon.tags.some((tag) => tag.toLowerCase() === wanted)) {
+      return false;
+    }
   }
 
   if (filter.q !== undefined && filter.q.trim().length > 0) {
@@ -289,6 +317,8 @@ export async function presentationOf(contractId: string): Promise<{
   name: string;
   slug: string;
   tagline: string | null;
+  /** The long one the public page opens with, when it has been written. */
+  description: string | null;
   logo: string | null;
   banner: string | null;
   location: string | null;
@@ -302,7 +332,7 @@ export async function presentationOf(contractId: string): Promise<{
 
   const { data } = await db
     .from("hackathons")
-    .select("name, slug, tagline, logo_url, banner_url, location, tags, created_at")
+    .select("name, slug, tagline, description, logo_url, banner_url, location, tags, created_at")
     .eq("contract_id", contractId)
     .maybeSingle();
 
@@ -312,6 +342,7 @@ export async function presentationOf(contractId: string): Promise<{
         name: String(data.name),
         slug: String(data.slug),
         tagline: data.tagline === null ? null : String(data.tagline),
+        description: data.description === null ? null : String(data.description),
         logo: data.logo_url === null ? null : String(data.logo_url),
         banner: data.banner_url === null ? null : String(data.banner_url),
         location: data.location === null ? null : String(data.location),
@@ -328,11 +359,16 @@ export async function tagsInUse(): Promise<string[]> {
 
   const { data } = await db.from("hackathons").select("tags");
 
+  /* One entry per topic, whatever case it was stored in. "Payments" and
+     "payments" are one subject, and listing both put the same word in the row
+     twice with the hackathons using it split between the two chips. The
+     lowercase form is what goes in the URL; the filter row capitalises it for
+     display and the match ignores case at both ends. */
   const seen = new Set<string>();
 
   for (const row of data ?? []) {
     for (const tag of (row.tags as string[] | null) ?? []) {
-      seen.add(tag);
+      seen.add(tag.toLowerCase());
     }
   }
 

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Mark } from "../../components/marks";
 import { Measure } from "../../components/primitives";
 import { SpecHeading, SpecLabel } from "../../components/spec";
-import { hackersOf, type Hacker } from "../../../lib/hackers";
+import { hackersOf, linksOf, type Hacker } from "../../../lib/hackers";
 
 /**
  * Who got in, as the contract recorded it.
@@ -118,21 +118,6 @@ function One({ hacker }: { hacker: Hacker }) {
       )}
     </li>
   );
-}
-
-/** The places a hacker can be found, in the order the profile page lists them. */
-function linksOf(hacker: Hacker) {
-  return [
-    hacker.github === null
-      ? null
-      : { key: "github" as const, title: "GitHub", href: `https://github.com/${hacker.github}` },
-    hacker.x === null
-      ? null
-      : { key: "x" as const, title: "X", href: `https://x.com/${hacker.x}` },
-    hacker.linkedin === null
-      ? null
-      : { key: "linkedin" as const, title: "LinkedIn", href: hacker.linkedin },
-  ].filter((link) => link !== null);
 }
 
 /**

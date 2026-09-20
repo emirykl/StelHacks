@@ -10,6 +10,8 @@ import { phaseOf } from "../../../lib/running";
 import { phaseName } from "../../../lib/phase";
 import { rulesFor, type Rules } from "../../../lib/rules";
 import { rubricOf, type Rubric } from "../../../lib/rubric";
+import { titleOf } from "../../../lib/words";
+import type { Card } from "../../../lib/project";
 import {
   inclusionOf,
   leafOf,
@@ -17,8 +19,8 @@ import {
   sealingConfigured,
   submitScorecard,
   type Inclusion,
-  type Receipt,
 } from "../../../lib/judge";
+import { rememberCard, sealedCardsOf, type SealedCard } from "../../../lib/judged";
 import { proveAddress } from "../../../lib/wallet";
 import { toHex } from "../../../lib/hex";
 
@@ -31,15 +33,11 @@ import { toHex } from "../../../lib/hex";
  * this page: the signature, so it cannot invent a card, and the receipt, so it
  * cannot quietly drop one.
  *
- * The receipt is the judge's, not ours. It is shown in full and worth keeping,
- * because it is what a judge produces if their card turns out to be missing
- * from the tree.
+ * The receipt is the judge's, not ours, and it is what they produce if their
+ * card turns out to be missing from the tree. It is kept whole and kept folded:
+ * the screen after sealing answers whether the card went in, and the proof is a
+ * word away for the day somebody needs it.
  */
-
-interface Held {
-  receipt: Receipt;
-  leaf: string;
-}
 
 export function JudgeConsole({ contractId }: { contractId: string }) {
   const { wallet, known } = useWallet();
@@ -47,12 +45,17 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
   const [rubric, setRubric] = useState<Rubric[] | null>(null);
   const [phase, setPhase] = useState<number | null>(null);
   const [rules, setRules] = useState<Rules | null>(null);
-  const [held, setHeld] = useState<Record<number, Held>>({});
+  /* How each project presents itself. The contract pins a digest and a link,
+     and a judge asked to mark "team 3" against four criteria is being asked to
+     mark a number. The name, the mark and the line under them are written on
+     our side and come from the same place the public gallery draws them. */
+  const [cards, setCards] = useState<Record<number, Card>>({});
+  const [held, setHeld] = useState<Record<number, SealedCard>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [found, tracks, at, frozen] = await Promise.all([
+    const [found, tracks, at, frozen, drawn] = await Promise.all([
       entriesOf(contractId, false),
       rubricOf(contractId),
       phaseOf(contractId),
@@ -60,17 +63,36 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
          should be told when their turn is, not that the hackathon "is not
          there". */
       rulesFor(contractId).catch(() => null),
+      fetch(`/api/cards?contract=${contractId}`)
+        .then((answer) => answer.json() as Promise<{ cards: Record<number, Card> }>)
+        .then((said) => said.cards)
+        /* Artwork and titles are ours rather than the chain's, so losing them
+           costs the page its looks and not its work: the entries, the rubric
+           and the deadline all still arrived. */
+        .catch(() => ({}) as Record<number, Card>),
     ]);
 
     setEntries(found);
     setRubric(tracks);
     setPhase(at);
     setRules(frozen);
+    setCards(drawn);
   }, [contractId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /* What this judge already handed in, read back from their own browser. A
+     sealed card cannot be asked about — that is what sealing it means — so a
+     page with nowhere to look showed an empty form for work already done.
+     Cleared when the wallet goes, because the next key to connect is a
+     different judge and these are not their marks. */
+  const address = wallet?.address ?? null;
+
+  useEffect(() => {
+    setHeld(address === null ? {} : sealedCardsOf(contractId, address));
+  }, [contractId, address]);
 
   /*
     The wallet is not waited on.
@@ -125,6 +147,7 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
   }
 
   const scoreable = entries.filter((entry) => !entry.invalid);
+  const sealed = scoreable.filter((entry) => held[entry.team] !== undefined).length;
 
   return (
     <div className="space-y-8">
@@ -133,8 +156,20 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
           refused. */}
       <div className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule sm:p-8">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          {/* Counted rather than listed as work outstanding. A judge who has
+              handed in every card was still being told how many there were to
+              score, which is the same sentence they were shown before they
+              started. */}
           <p className="text-[1.25rem] font-semibold text-ink">
-            {scoreable.length === 1 ? "One project to score" : `${scoreable.length} projects to score`}
+            {sealed === 0
+              ? scoreable.length === 1
+                ? "One project to score"
+                : `${scoreable.length} projects to score`
+              : sealed === scoreable.length
+                ? scoreable.length === 1
+                  ? "Your card is in"
+                  : "Every card is in"
+                : `${sealed} of ${scoreable.length} scored`}
           </p>
 
           <p className="label text-ink-faint">{phaseName(phase)}</p>
@@ -155,13 +190,15 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
         </p>
       ) : (
         scoreable.map((entry) => (
-          <Card
+          <Scoresheet
             key={entry.team}
             entry={entry}
+            card={cards[entry.team]}
             criteria={rubric.find((track) => track.track === entry.track)?.criteria ?? []}
-            judge={wallet?.address ?? null}
-            ready={known}
+            judge={address}
+            ready={known && rules !== null}
             contractId={contractId}
+            revealAt={rules?.schedule.judgingCloses ?? null}
             held={held[entry.team]}
             busy={busy === entry.team}
             onBusy={(going) => setBusy(going ? entry.team : null)}
@@ -213,12 +250,22 @@ function Moment({ at }: { at: number }) {
   );
 }
 
-function Card({
+/**
+ * One project, and the marks it is being given.
+ *
+ * The project on the left and the rubric on the right, because that is the
+ * order the work happens in: a judge looks at what was built and then decides
+ * what it was worth. It used to be a track name, a team number and a link,
+ * which asked somebody to score an entry they could not see.
+ */
+function Scoresheet({
   entry,
+  card,
   criteria,
   judge,
   ready,
   contractId,
+  revealAt,
   held,
   busy,
   onBusy,
@@ -226,24 +273,42 @@ function Card({
   onRefused,
 }: {
   entry: Entry;
+  /** How the project presents itself, absent when nobody wrote anything. */
+  card: Card | undefined;
   criteria: { id: string; weightBps: number }[];
   judge: string | null;
   ready: boolean;
   contractId: string;
-  held: Held | undefined;
+  revealAt: number | null;
+  held: SealedCard | undefined;
   busy: boolean;
   onBusy: (going: boolean) => void;
-  onHeld: (next: Held) => void;
+  onHeld: (next: SealedCard) => void;
   onRefused: (why: string | null) => void;
 }) {
   const [scores, setScores] = useState<Record<string, string>>({});
-  const [included, setIncluded] = useState<Inclusion | null>(null);
-  const [checking, setChecking] = useState(false);
 
-  const filled = criteria.every((criterion) => (scores[criterion.id] ?? "").length > 0);
+  const filled =
+    criteria.length > 0 &&
+    criteria.every((criterion) => (scores[criterion.id] ?? "").length > 0);
+
+  /* What the card adds up to so far. The weights total ten thousand basis
+     points by the contract's own rule, so the marks total a hundred and the
+     running figure needs no scaling to be read. */
+  const given = criteria.reduce(
+    (sum, criterion) => sum + (Number(scores[criterion.id] ?? 0) || 0),
+    0,
+  );
+
+  /* What the sealed card came to. Read from what was kept rather than from the
+     form, because after a reload the form is empty and the card is not. */
+  const marked = criteria.reduce(
+    (sum, criterion) => sum + (held?.marks?.[criterion.id] ?? 0),
+    0,
+  );
 
   async function submit() {
-    if (judge === null) {
+    if (judge === null || revealAt === null) {
       return;
     }
 
@@ -256,7 +321,12 @@ function Card({
         team: entry.team,
         scores: criteria.map((criterion) => ({
           criterion: criterion.id,
-          score: Math.max(0, Math.min(100, Number(scores[criterion.id] ?? 0))),
+          /* The form marks out of the criterion's own weight, because that is
+             how a rubric is read: forty percent is forty of the hundred. The
+             contract keeps every criterion on its own nought to a hundred
+             scale and applies the weight itself, so the two are reconciled
+             here, at the last moment before the leaf is hashed. */
+          score: rawOf(Number(scores[criterion.id] ?? 0) || 0, worthOf(criterion)),
         })),
       };
 
@@ -266,9 +336,24 @@ function Card({
          itself is handed to the wallet, so what a judge approves is a digest
          rather than a form they would have to reread. */
       const signature = await proveAddress(judge, payloadFor(leaf));
-      const receipt = await submitScorecard(contractId, scorecard, hexFrom(signature));
+      const receipt = await submitScorecard(
+        contractId,
+        scorecard,
+        leaf,
+        hexFrom(signature),
+        revealAt,
+      );
 
-      onHeld({ receipt, leaf: toHex(leaf) });
+      /* The marks kept alongside the receipt, on the rubric's own scale rather
+         than the contract's. They are what this judge typed, and typing them
+         is the one thing reopening the page used to undo. */
+      const marks = Object.fromEntries(
+        criteria.map((criterion) => [criterion.id, Number(scores[criterion.id] ?? 0) || 0]),
+      );
+      const sealed = { receipt, leaf: toHex(leaf), marks };
+
+      rememberCard(contractId, judge, entry.team, sealed);
+      onHeld(sealed);
     } catch (error) {
       /* A browser that cannot reach the service at all says only "Failed to
          fetch", which tells a judge nothing about what to do. */
@@ -284,133 +369,370 @@ function Card({
     }
   }
 
-  async function check() {
-    if (held === undefined) {
-      return;
-    }
+  /* The same card the create form and the organizer's panel are built from,
+     split down the middle: what was built on the left, what it is being given
+     on the right. */
+  return (
+    <section className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule sm:p-8">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-12">
+        <div>
+          <SpecLabel index={String(entry.team)}>{titleOf(entry.track)}</SpecLabel>
 
+          <div className="relative mt-4 aspect-[16/7] overflow-hidden rounded-[0.75rem] bg-paper-sunk">
+            {card?.bannerUrl == null ? (
+              <div className="hatch size-full" aria-hidden />
+            ) : (
+              <img src={card.bannerUrl} alt="" className="size-full object-cover" />
+            )}
+          </div>
+
+          <div className="relative z-10 -mt-7 mb-3 ml-1 size-12 overflow-hidden rounded-full border border-rule bg-paper">
+            {card?.logoUrl == null ? (
+              <div className="hatch size-full" aria-hidden />
+            ) : (
+              <img src={card.logoUrl} alt="" className="size-full object-cover" />
+            )}
+          </div>
+
+          {/* The name, at the size a name is read at. A judge scoring six
+              projects in a sitting needs to know which one is in front of
+              them without reading a team number off a label. */}
+          <h2 className="text-[1.375rem] font-semibold leading-tight text-ink">
+            {card?.title ?? `Team ${entry.team}`}
+          </h2>
+
+          {card?.summary != null && (
+            <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
+              {card.summary}
+            </p>
+          )}
+
+          {card?.teamName != null && (
+            <p className="mt-2 text-[0.8125rem] text-ink-faint">by {card.teamName}</p>
+          )}
+
+          {/* Everything the team pinned, in one row. The entry's own link is
+              the chain's and is always there; the rest are ours and appear
+              only when the team filled them in. */}
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+            <Visit href={entry.uri}>The entry</Visit>
+
+            {card?.repositoryUrl != null && (
+              <Visit href={card.repositoryUrl}>Code</Visit>
+            )}
+
+            {card?.liveUrl != null && <Visit href={card.liveUrl}>Live</Visit>}
+
+            {card?.demoVideoUrl != null && <Visit href={card.demoVideoUrl}>Demo</Visit>}
+          </div>
+        </div>
+
+        {held === undefined ? (
+          <div>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <SpecLabel>Your marks</SpecLabel>
+
+              {/* What the card comes to, kept in view while it is filled in.
+                  The weights add up to a hundred, so this is the project's
+                  score out of a hundred and not an arbitrary sum. */}
+              <p className="tabular text-[0.875rem] text-ink-faint">
+                {figure(given)} / 100
+              </p>
+            </div>
+
+            {criteria.length === 0 ? (
+              <p className="mt-4 text-[0.9375rem] leading-relaxed text-ink-soft">
+                The frozen rules name no criteria for this category, so there is
+                nothing to mark against.
+              </p>
+            ) : (
+              <div className="mt-3 border-t border-rule">
+                {criteria.map((criterion) => {
+                  const worth = worthOf(criterion);
+
+                  return (
+                    <label
+                      key={criterion.id}
+                      className="flex items-center justify-between gap-4 border-b border-rule py-3.5"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[1rem] leading-tight text-ink">
+                          {titleOf(criterion.id)}
+                        </span>
+
+                        {/* The weight said as points rather than as a
+                            percentage, because points is what is being typed
+                            into the box beside it. */}
+                        <span className="label mt-1 block text-ink-faint">
+                          worth {figure(worth)} of the 100
+                        </span>
+                      </span>
+
+                      <span className="flex shrink-0 items-center gap-2">
+                        <input
+                          value={scores[criterion.id] ?? ""}
+                          onChange={(event) =>
+                            setScores({
+                              ...scores,
+                              [criterion.id]: within(event.target.value, worth),
+                            })
+                          }
+                          inputMode="decimal"
+                          placeholder="0"
+                          aria-label={`${titleOf(criterion.id)}, out of ${figure(worth)}`}
+                          className="tabular h-10 w-20 rounded-[0.5rem] bg-paper-sunk px-3 text-right text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
+                        />
+
+                        <span className="label w-12 text-ink-faint">
+                          of {figure(worth)}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center gap-4">
+              <Button
+                disabled={busy || !filled || judge === null}
+                onClick={() => void submit()}
+              >
+                {busy ? "Signing" : "Seal this card"}
+              </Button>
+
+              {/* Only the button waits on the wallet, and it says why rather
+                  than sitting there greyed out for a reason nobody can see. */}
+              {judge === null && (
+                <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
+                  {ready
+                    ? "Connect the wallet the rules name as a judge. A card signed by any other key is refused."
+                    : "Checking your wallet"}
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* What a judge came here to find out: that the card went in, and what
+             was on it. It used to be three runs of hexadecimal and a button to
+             ask a service about a fourth — all of it true, none of it an
+             answer — and after a reload it was an empty form. */
+          <div>
+            <p className="label flex items-center gap-2 text-verified">
+              <span aria-hidden className="size-1.5 rounded-full bg-verified" />
+              Card sealed
+            </p>
+
+            <div className="mt-3 border-t border-rule">
+              {criteria.map((criterion) => (
+                <div
+                  key={criterion.id}
+                  className="flex items-baseline justify-between gap-4 border-b border-rule py-3"
+                >
+                  <span className="min-w-0 text-[1rem] text-ink">
+                    {titleOf(criterion.id)}
+                  </span>
+
+                  <span className="tabular shrink-0 text-[1rem] text-ink">
+                    {figure(held.marks?.[criterion.id] ?? 0)}
+                    <span className="label ml-2 text-ink-faint">
+                      of {figure(worthOf(criterion))}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="tabular mt-4 text-[2rem] font-bold leading-none text-ink">
+              {figure(marked)}
+              <span className="ml-1 text-[1rem] font-normal text-ink-faint">/ 100</span>
+            </p>
+
+            <p className="mt-3 max-w-[34rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+              Signed and handed in. It stays sealed until the reveal.
+            </p>
+
+            <Kept contractId={contractId} held={held} />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The judge's recourse, folded away.
+ *
+ * Every line of it is worth keeping — the leaf is what their card hashes to,
+ * the signature is what the service cannot forge, and the inclusion check is
+ * how they find out whether the card reached the tree. None of it is what
+ * somebody wants in front of them the moment they finish scoring, and putting
+ * it there meant the one fact they were waiting for arrived buried in ninety
+ * characters of hexadecimal.
+ *
+ * So it is behind a word rather than gone. A receipt nobody can act on proves
+ * nothing, which is why the check came with it instead of being dropped.
+ */
+function Kept({ contractId, held }: { contractId: string; held: SealedCard }) {
+  const [shown, setShown] = useState(false);
+  const [included, setIncluded] = useState<Inclusion | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function check() {
     setChecking(true);
     setIncluded(await inclusionOf(contractId, held.leaf));
     setChecking(false);
   }
 
-  /* The same card the create form and the organizer's panel are built from.
-     This was a hairline down the left with a spec label at the top, which is
-     the language the chain's own readouts use; what a judge is doing here is
-     filling something in. */
+  if (!shown) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShown(true)}
+        className="mt-5 text-[0.875rem] text-ink-faint underline-offset-4 transition-colors hover:text-ink-soft hover:underline"
+      >
+        Show the receipt
+      </button>
+    );
+  }
+
+  /* One block on the clipboard rather than three runs to select by hand. What
+     a judge does with a receipt is keep it somewhere else. */
+  const written = `leaf: ${held.leaf}\nsealer: ${held.receipt.sealer}\nsignature: ${held.receipt.signature}`;
+
   return (
-    <section className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule sm:p-8">
-      <SpecLabel index={String(entry.team)}>{entry.track}</SpecLabel>
+    <div className="mt-5 border-t border-rule pt-4">
+      <SpecRows>
+        <SpecRow index="1" label="Leaf" mark>
+          <SpecValue>{held.leaf}</SpecValue>
+        </SpecRow>
 
-      <p className="mt-2 tabular text-[0.9375rem] break-all text-ink-soft">{entry.uri}</p>
+        <SpecRow index="2" label="Receipt from">
+          <SpecValue>{held.receipt.sealer}</SpecValue>
+        </SpecRow>
 
-      {held === undefined ? (
-        <>
-          <div className="mt-6 max-w-[30rem] space-y-3">
-            {criteria.map((criterion) => (
-              <label key={criterion.id} className="flex items-center gap-4">
-                <span className="label w-40 text-ink-faint">
-                  {criterion.id} · {criterion.weightBps / 100}%
-                </span>
+        <SpecRow index="3" label="Signature">
+          <SpecValue>{held.receipt.signature}</SpecValue>
+        </SpecRow>
 
-                <input
-                  value={scores[criterion.id] ?? ""}
-                  onChange={(event) =>
-                    setScores({
-                      ...scores,
-                      [criterion.id]: event.target.value.replace(/[^0-9]/g, "").slice(0, 3),
-                    })
-                  }
-                  inputMode="numeric"
-                  placeholder="0"
-                  className="tabular h-10 w-20 bg-paper px-3 text-center text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
-                />
+        <SpecRow index="4" label="Included" mark={included?.at === "omitted"}>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`label ${tone(included)}`}>
+                {checking ? "asking" : verdict(included)}
+              </span>
 
-                <span className="label text-ink-faint">of 100</span>
-              </label>
-            ))}
-          </div>
+              <Button size="sm" intent="quiet" disabled={checking} onClick={() => void check()}>
+                {checking ? "Checking" : "Check"}
+              </Button>
+            </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-4">
-            <Button
-              disabled={busy || !filled || judge === null}
-              onClick={() => void submit()}
-            >
-              {busy ? "Signing" : "Seal this card"}
-            </Button>
+            {included?.at === "disagrees" && (
+              <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
+                The service proved your card against a tree whose root is not
+                the one on chain. Keep this receipt.
+              </p>
+            )}
 
-            {/* Only the button waits on the wallet, and it says why rather
-                than sitting there greyed out for a reason nobody can see. */}
-            {judge === null && (
-              <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
-                {ready
-                  ? "Connect the wallet the rules name as a judge. A card signed by any other key is refused."
-                  : "Checking your wallet"}
+            {included?.at === "omitted" && (
+              <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
+                Cards are held for this hackathon and yours is not among them.
+                This is what the receipt is for.
               </p>
             )}
           </div>
-        </>
-      ) : (
-        <div className="mt-6">
-          <SpecRows>
-            <SpecRow index="1" label="Leaf" mark>
-              <SpecValue>{held.leaf}</SpecValue>
-            </SpecRow>
+        </SpecRow>
+      </SpecRows>
 
-            <SpecRow index="2" label="Receipt from">
-              <SpecValue>{held.receipt.sealer}</SpecValue>
-            </SpecRow>
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard.writeText(written).then(() => setCopied(true));
+          }}
+          className="text-[0.875rem] text-ink-faint underline-offset-4 transition-colors hover:text-ink-soft hover:underline"
+        >
+          {copied ? "Copied" : "Copy the receipt"}
+        </button>
 
-            <SpecRow index="3" label="Signature">
-              <SpecValue>{held.receipt.signature}</SpecValue>
-            </SpecRow>
+        <button
+          type="button"
+          onClick={() => setShown(false)}
+          className="text-[0.875rem] text-ink-faint underline-offset-4 transition-colors hover:text-ink-soft hover:underline"
+        >
+          Hide
+        </button>
+      </div>
 
-            <SpecRow index="4" label="Included" mark={included?.at === "omitted"}>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className={`label ${tone(included)}`}>
-                    {checking ? "asking" : verdict(included)}
-                  </span>
-
-                  <Button
-                    size="sm"
-                    intent="quiet"
-                    disabled={checking}
-                    onClick={() => void check()}
-                  >
-                    {checking ? "Checking" : "Check"}
-                  </Button>
-                </div>
-
-                {included?.at === "disagrees" && (
-                  <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
-                    The service proved your card against a tree whose root is not
-                    the one on chain. Keep this receipt.
-                  </p>
-                )}
-
-                {included?.at === "omitted" && (
-                  <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
-                    Cards are held for this hackathon and yours is not among
-                    them. This is what the receipt is for.
-                  </p>
-                )}
-              </div>
-            </SpecRow>
-          </SpecRows>
-
-          {/* Said plainly because it is the judge's only recourse. The proof
-              shows the card was included; the receipt is what they hold if it
-              turns out not to have been. */}
-          <p className="mt-4 max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-faint">
-            Keep this receipt. Once the root is published you can prove your card
-            was in the tree, and if it was not, this is what says it should have
-            been.
-          </p>
-        </div>
-      )}
-    </section>
+      <p className="mt-4 max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-faint">
+        Once the root is published this proves your card was in the tree, and if
+        it was not, this is what says it should have been.
+      </p>
+    </div>
   );
+}
+
+/** Somewhere the team pinned something, opened where it will not lose the form. */
+function Visit({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="label text-ink-soft underline decoration-rule underline-offset-4 transition-colors hover:text-ink"
+    >
+      {children}
+    </a>
+  );
+}
+
+/** What one criterion is worth on a hundred point card. */
+function worthOf(criterion: { weightBps: number }): number {
+  return criterion.weightBps / 100;
+}
+
+/**
+ * A mark out of the criterion's weight, as the contract wants it.
+ *
+ * Every criterion is nought to a hundred on chain and the weight is applied
+ * there, so a thirty seven out of forty is a ninety two and a half out of a
+ * hundred. The contract takes whole numbers, which puts the finest mark this
+ * form can express at a hundredth of the criterion's weight — four tenths of a
+ * point on a forty point criterion. Rounding here is the interface rounding,
+ * which is the only place in this product allowed to.
+ */
+function rawOf(points: number, worth: number): number {
+  if (worth <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round((points / worth) * 100)));
+}
+
+/**
+ * What was typed, kept inside the criterion.
+ *
+ * A mark above the weight is not a stricter judge, it is a card the rubric
+ * cannot hold, so it is clamped as it is typed rather than refused at the end.
+ * A decimal point is allowed through because a criterion worth forty is not
+ * marked in whole numbers by everybody.
+ */
+function within(typed: string, worth: number): string {
+  const kept = typed.replace(/[^0-9.]/g, "").replace(/(\.[^.]*)\./g, "$1");
+
+  if (kept.length === 0) {
+    return "";
+  }
+
+  const value = Number(kept);
+
+  return Number.isFinite(value) && value > worth ? figure(worth) : kept.slice(0, 5);
+}
+
+/** A number as a rubric writes it: no trailing zero where it says nothing. */
+function figure(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
 }
 
 /**

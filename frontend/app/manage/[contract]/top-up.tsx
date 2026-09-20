@@ -16,6 +16,8 @@ import {
   type Transfer,
 } from "../../../lib/anchor";
 import { accept, assetOf, balanceOf, holds, type PrizeAsset } from "../../../lib/trustline";
+import { units } from "../../../lib/money";
+import { amountOf } from "../../../lib/prizes";
 
 /**
  * Buying the prize before locking it away.
@@ -40,9 +42,23 @@ type Stage =
   | { at: "waiting"; transfer: Transfer }
   | { at: "failed"; why: string };
 
-export function TopUp({ assetContract, needed }: { assetContract: string; needed: string }) {
+export function TopUp({ assetContract, needed }: { assetContract: string; needed: bigint }) {
   const { wallet } = useWallet();
   const address = wallet?.address ?? null;
+
+  /*
+    Two spellings of the shortfall, and mixing them up hid this whole card's
+    only reason to be absent.
+
+    It used to take the figure already formatted for reading — "15,750" — and
+    both compare it against the wallet's balance and hand it to the anchor.
+    `Number("15,750")` is NaN, so the check for a wallet that already holds
+    enough could never be true and the ramp was offered to an organizer sitting
+    on five times what they needed. The anchor would have been asked to issue
+    "15,750" of something, too.
+  */
+  const plain = amountOf(needed);
+  const shown = units(needed);
 
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [asset, setAsset] = useState<PrizeAsset | null>(null);
@@ -152,7 +168,7 @@ export function TopUp({ assetContract, needed }: { assetContract: string; needed
       token.current ??= await authenticate(anchor, address);
       await register(anchor, token.current, address);
 
-      const transfer = await startDeposit(anchor, token.current, asset.code, address, needed);
+      const transfer = await startDeposit(anchor, token.current, asset.code, address, plain);
 
       setStage({ at: "waiting", transfer });
     } catch (thrown) {
@@ -168,7 +184,7 @@ export function TopUp({ assetContract, needed }: { assetContract: string; needed
     address === null ||
     anchor === null ||
     asset?.kind !== "issued" ||
-    (held !== null && Number(held) >= Number(needed))
+    (held !== null && Number(held) >= Number(plain))
   ) {
     return null;
   }
@@ -178,7 +194,7 @@ export function TopUp({ assetContract, needed }: { assetContract: string; needed
       <h3 className="text-[1.3125rem] text-ink">Buy the prize with lira</h3>
 
       <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
-        The vault needs <span className="tabular">{needed}</span> {asset.code} and this
+        The vault needs <span className="tabular">{shown}</span> {asset.code} and this
         wallet holds <span className="tabular">{held ?? "0"}</span>. {anchor.domain}{" "}
         issues it against a bank transfer, and it is the same {asset.code} a winner
         will hand back to them.

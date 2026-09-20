@@ -11,6 +11,7 @@ import { ResultsBoard } from "./results";
 import { Tabs } from "./tabs";
 import { tabFrom } from "./tab";
 import { countHackers } from "../../../lib/hackers";
+import { countSubmissions } from "../../../lib/submissions";
 import { findHackathon, type HackathonDetail } from "../../../lib/chain";
 
 /**
@@ -46,7 +47,10 @@ export default async function Hackathon({
   }
 
   const at = tabFrom(asked["tab"]);
-  const hackers = await countHackers(hackathon.contract_id);
+  const [projects, hackers] = await Promise.all([
+    countSubmissions(hackathon.contract_id),
+    countHackers(hackathon.contract_id),
+  ]);
 
   return (
     <main className="flex-1">
@@ -54,7 +58,7 @@ export default async function Hackathon({
 
       <Masthead hackathon={hackathon} />
 
-      <Tabs at={at} counts={{ hackers }} />
+      <Tabs at={at} counts={{ projects, hackers }} />
 
       {at === "details" && <Details hackathon={hackathon} />}
 
@@ -102,5 +106,4 @@ async function Projects({ hackathon }: { hackathon: HackathonDetail }) {
     </>
   );
 }
-
 

@@ -9,9 +9,12 @@ import { ImagePicker } from "./image-picker";
 import { useWallet } from "../components/wallet-context";
 import { deploy, send, type Sent } from "../../lib/send";
 import { PRIZE_ASSETS } from "../../lib/money";
+import { feeBpsForPrize } from "../../lib/organizing";
 import { proveAddressHex } from "../../lib/wallet";
 import { rulesFor } from "../../lib/rules";
+import { symbolOf, titleOf } from "../../lib/words";
 import {
+  OPEN_TO_SPONSORS,
   WEIGHT_TOTAL_BPS,
   configureArgs,
   createArgs,
@@ -46,10 +49,24 @@ import {
  * anyway, so the form deploys one: the address is a consequence of pressing the
  * button, not a prerequisite for it.
  */
-const CORE_WASM = "bcea11748fa535ea311ca7d0548274f4828143b70f9f85294b3b6c32749c9c78";
+/*
+  The core wasm this build deploys, from `docs/deployments.md`.
+
+  It has to be the build that understands the constitution this file writes. The
+  document is at version six and the contract checks that field before reading
+  anything else, so deploying the version five wasm would leave an organizer
+  watching a deploy succeed and the very next call refuse, with nothing on
+  screen to connect the two.
+
+  Changing the contract therefore means uploading the new wasm and changing this
+  line, in that order. Until the upload lands the deploy fails outright, which
+  is the failure worth having: it names the missing step instead of appearing
+  three calls later as a rejected document.
+*/
+const CORE_WASM = "4bf32e95b0758cc6af291bf4e91f86dba1bad8c7e81926479f6404af73c7ec1c";
 
 export function Wizard({
-  feeBps,
+  feeBps: grantedFeeBps,
   userId,
   editing = null,
 }: {
@@ -78,8 +95,15 @@ export function Wizard({
      a time can be decided by that crowd without it being a popularity contest
      between strangers. */
   const [communityBps, setCommunityBps] = useState(0);
+  /* Public is the discoverable default. The organizer must deliberately close
+     the gallery, and the choice is then frozen into the constitution. */
+  const [visibility, setVisibility] = useState<0 | 1 | 2>(0);
   const [dates, setDates] = useState(defaultDates);
   const [settlementDelay, setSettlementDelay] = useState(86_400);
+  /* A week across two moves. Enough for the thing that actually happens — a
+     build window slipping once because half the field asked — without turning
+     a published schedule into a suggestion. */
+  const [allowance, setAllowance] = useState(2);
   /*
     Reviewed by default, and that is the cautious end rather than the common
     one. An organizer who meant an open event and left this alone signs once per
@@ -87,6 +111,12 @@ export function Wizard({
     admitted to rules they never agreed to, and cannot take it back.
   */
   const [openRegistration, setOpenRegistration] = useState(false);
+  /* Open by default. A hackathon nobody can help fund is the outcome of
+     nobody thinking about this field, and there is no way back from it once
+     the rules freeze. Taking money costs a participant nothing: the prize
+     table only ever grows, and every contribution lands on a position that
+     was announced before they entered. */
+  const [sponsorship, setSponsorship] = useState<"closed" | "money" | "categories">("money");
 
   /* What a submission has to carry. The default is the one most events mean:
      show the code, everything else offered and nothing else demanded. */
@@ -132,6 +162,7 @@ export function Wizard({
   */
   const [rate, setRate] = useState<number | null>(null);
   const [rateFailed, setRateFailed] = useState(false);
+  const [draftFeeBps, setDraftFeeBps] = useState<number | null>(null);
 
   useEffect(() => {
     if (assetCode !== "XLM") {
@@ -178,6 +209,22 @@ export function Wizard({
   const priceOfOne = inTokens ? 1 : quote;
 
   /*
+    The approval tier is only the starting rate. Once the prize table crosses
+    five thousand dollars the standard five percent is the minimum, including
+    for an organizer originally approved for a smaller community event.
+
+    Existing drafts keep the rate already written into their constitution. The
+    fields there are token amounts rather than dollars, so reapplying a dollar
+    threshold here would compare unlike units and could silently change a fee
+    merely because somebody opened the edit form.
+  */
+  const statedPrizeDollars = useMemo(() => totalPrize(tracks), [tracks]);
+  const feeBps =
+    editing === null
+      ? feeBpsForPrize(grantedFeeBps, statedPrizeDollars)
+      : (draftFeeBps ?? grantedFeeBps);
+
+  /*
     The prize table as the contract will hold it.
 
     Everything typed above this line is in whichever unit the mode asks for.
@@ -190,6 +237,15 @@ export function Wizard({
     () =>
       tracks.map((track) => ({
         ...track,
+        /* The one place a name becomes the contract's identifier. What is held
+           in the form is what somebody typed; what is hashed into the
+           constitution is its symbol, and everything that shows one back turns
+           it into words again. */
+        id: symbolOf(track.id),
+        criteria: track.criteria.map((criterion) => ({
+          ...criterion,
+          id: symbolOf(criterion.id),
+        })),
         prizes: track.prizes.map((prize) => ({
           ...prize,
           amount: inAsset(prize.amount, priceOfOne),
@@ -273,16 +329,24 @@ export function Wizard({
           judgingCloses: momentAt(rules.schedule.judgingCloses),
         });
         setSettlementDelay(rules.settlementDelay);
+        setDraftFeeBps(rules.platformFeeBps);
+        setAllowance(closestAllowance(rules.extensions));
         setRequires(rules.requires);
         setOpenRegistration(rules.openRegistration);
         setCommunityBps(rules.communityBps);
+        setVisibility(asVisibility(rules.visibility));
 
         setTracks(
           rules.tracks.map((track) => ({
-            id: track.id,
+            /* Back into the words it was written as, for the same reason the
+               criteria below are: reopening a draft should show "Smart
+               Contracts" rather than the symbol it was frozen as. */
+            id: titleOf(track.id),
             noAwardAllowed: track.noAwardAllowed,
             criteria: track.criteria.map((criterion) => ({
-              id: criterion.id,
+              /* Back into the words it was written as, so reopening a draft
+                 shows "Clean Code" rather than the symbol it was frozen as. */
+              id: titleOf(criterion.id),
               weightBps: criterion.weightBps,
             })),
             /* Ranked, because the contract stores the tiers as a flat list
@@ -373,6 +437,12 @@ export function Wizard({
           setSettlementDelay(was.settlementDelay);
         }
 
+        const kept = was.allowance;
+
+        if (typeof kept === "number" && EXTENSION_ALLOWANCES[kept] !== undefined) {
+          setAllowance(kept);
+        }
+
         if (was.requires !== undefined) {
           setRequires(was.requires);
         }
@@ -383,6 +453,10 @@ export function Wizard({
 
         if (typeof was.communityBps === "number") {
           setCommunityBps(was.communityBps);
+        }
+
+        if (typeof was.visibility === "number") {
+          setVisibility(asVisibility(was.visibility));
         }
       }
     } catch {
@@ -409,9 +483,11 @@ export function Wizard({
           judges,
           dates,
           settlementDelay,
+          allowance,
           requires,
           openRegistration,
           communityBps,
+          visibility,
           name,
           tagline,
           location,
@@ -436,6 +512,7 @@ export function Wizard({
     requires,
     openRegistration,
     communityBps,
+    visibility,
     name,
     tagline,
     location,
@@ -448,6 +525,13 @@ export function Wizard({
      this long has an off screen reason for being unsubmittable more often than
      not. */
   const outOfOrder = disordered(dates, editing === null);
+
+  /* Two names that reduce to one symbol are one track as far as the contract
+     is concerned, and the prize table built from them would carry the same
+     position twice. Caught here rather than at the lock, where the refusal
+     arrives after a deployment and a signature. */
+  const collides = new Set(priced.map((track) => track.id)).size !== priced.length;
+  const visibilityConflictsWithVote = visibility === 2 && communityBps > 0;
 
   const ready =
     platformFee !== null &&
@@ -462,6 +546,8 @@ export function Wizard({
        fault in this form rather than a setting in theirs. */
     wrongNetwork === null &&
     outOfOrder === null &&
+    !collides &&
+    !visibilityConflictsWithVote &&
     priced.every(complete) &&
     /* A crowd decided event asks for no judges, so there is nothing here to
        wait for: the organizer's own address stands in below. */
@@ -502,6 +588,7 @@ export function Wizard({
       })(),
       judgeQuorum: 1,
       communityBps,
+      visibility,
       schedule: {
         registrationOpensAt: opensAt,
         registrationClosesAt: secondsAt(dates.registrationCloses),
@@ -518,7 +605,21 @@ export function Wizard({
       multiTeamAllowed: false,
       maxTeamSize: 5,
       settlementDelay,
+      extensions: {
+        times: EXTENSION_ALLOWANCES[allowance]!.times,
+        seconds: EXTENSION_ALLOWANCES[allowance]!.seconds,
+      },
       platformFee,
+      /* Whether anybody else may put money into these prizes. Frozen with the
+         rest, so this is the last moment it can be decided at all. */
+      sponsorship: {
+        ...OPEN_TO_SPONSORS,
+        topUps: sponsorship !== "closed",
+        /* Two rather than one, because a sponsor who is welcome at all is
+           rarely the only one, and the allowance cannot be raised afterwards
+           any more than it can be lowered. */
+        maxNewTracks: sponsorship === "categories" ? 2 : 0,
+      },
     };
 
     /*
@@ -1084,6 +1185,72 @@ export function Wizard({
           </div>
 
           <div className="border-b border-rule py-4">
+            <p className="label text-[0.875rem] text-ink">Who can see submitted projects</p>
+
+            <div className="mt-4 grid gap-1">
+              <Admission
+                label="Public — anyone, even without an account"
+                chosen={visibility === 0}
+                onChoose={() => setVisibility(0)}
+              />
+
+              <Admission
+                label="Participants — approved participants, organizers and judges"
+                chosen={visibility === 1}
+                onChoose={() => setVisibility(1)}
+              />
+
+              <Admission
+                label="Restricted — only organizers and judges"
+                chosen={visibility === 2}
+                onChoose={() => setVisibility(2)}
+              />
+            </div>
+
+            <p className="mt-4 text-[0.875rem] leading-relaxed text-ink-faint">
+              {visibility === 0
+                ? "The gallery helps the hackathon advertise itself and can be opened without signing in."
+                : visibility === 1
+                  ? "A reader must sign in, link the approved Stellar wallet and belong to this event."
+                  : "Participants cannot open project write-ups. After signing in and linking their named wallet, the organizer and judges still can."}
+            </p>
+
+            {visibilityConflictsWithVote && (
+              <p className="mt-3 text-[0.875rem] leading-relaxed text-broken">
+                A community vote needs participants to read the projects. Choose Public or Participants,
+                or turn the community share off.
+              </p>
+            )}
+          </div>
+
+          {/* Beside who gets in, because it is the same kind of decision: a
+              door that is open or shut before anybody arrives and cannot be
+              touched afterwards. */}
+          <div className="border-b border-rule py-4">
+            <p className="label text-[0.875rem] text-ink">Can other people add to the prize</p>
+
+            <div className="mt-4 grid gap-1">
+              <Admission
+                label="Yes, anyone can add to a prize"
+                chosen={sponsorship === "money"}
+                onChoose={() => setSponsorship("money")}
+              />
+
+              <Admission
+                label="Yes, and they can ask for a category of their own"
+                chosen={sponsorship === "categories"}
+                onChoose={() => setSponsorship("categories")}
+              />
+
+              <Admission
+                label="No, only what you fund"
+                chosen={sponsorship === "closed"}
+                onChoose={() => setSponsorship("closed")}
+              />
+            </div>
+          </div>
+
+          <div className="border-b border-rule py-4">
             <p className="label text-[0.875rem] text-ink">What a submission carries</p>
 
             <div className="mt-4 grid gap-1">
@@ -1244,11 +1411,18 @@ export function Wizard({
             reading it; the count went out of date the first time the contract
             changed, and the reassurance was answering a question nobody at this
             point is still asking. */}
-        {(wrongNetwork !== null || (platformFee === null && wallet !== null)) && (
+        {(wrongNetwork !== null ||
+          collides ||
+          visibilityConflictsWithVote ||
+          (platformFee === null && wallet !== null)) && (
           <p className="max-w-[32rem] text-[0.9375rem] leading-relaxed text-ink-soft">
             {wrongNetwork !== null
               ? "Your wallet is on another network, so nothing here can be signed until you switch it."
-              : "This deployment is set to charge a fee but has no collector address configured, so nothing can be created until it does."}
+              : collides
+                ? "Two of your tracks come down to the same name on chain. Capitals and spaces are not part of it, so \"Smart Contracts\" and \"smart contracts\" are one track — give them different words."
+                : visibilityConflictsWithVote
+                  ? "Restricted projects cannot be used with a community vote, because participants would be asked to vote on work they cannot read."
+                : "This deployment is set to charge a fee but has no collector address configured, so nothing can be created until it does."}
           </p>
         )}
 
@@ -1297,13 +1471,30 @@ function TrackForm({
     <div className="border-l-2 border-rule pl-6">
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0 flex-1 max-w-[24rem]">
+          {/* Typed as words, the way criteria already are.
+
+              This used to lowercase and underscore every keystroke, so
+              somebody typing "Smart Contracts" watched it turn into
+              "smart_contracts" under their hands and every page afterwards
+              printed it that way. What the contract needs is a symbol and
+              what a person writes is a name; `symbolOf` turns one into the
+              other at the moment the constitution is built, and `titleOf`
+              turns it back wherever it is shown. */}
           <Field
             label={`Track ${index + 1} name`}
             value={track.id}
-            onChange={(id) => onChange({ ...track, id: id.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
-            placeholder="payments"
-            note="One word, lowercase. It appears on every project entered here."
-            mono
+            onChange={(id) => onChange({ ...track, id: id.slice(0, 40) })}
+            placeholder="Smart Contracts"
+            /* The symbol shown rather than promised. A `Symbol` holds no
+               capitals and no spaces, so "DeFi" is stored as `defi` and comes
+               back as "Defi" — small, but it is the sort of thing somebody
+               should find out here rather than on their own event page after
+               the rules are frozen. */
+            note={
+              symbolOf(track.id).length > 0
+                ? `It appears on every project entered here. The chain will call it ${symbolOf(track.id)}.`
+                : "It appears on every project entered here. Capitals and spaces are yours; the chain keeps one lowercase word."
+            }
           />
         </div>
 
@@ -1429,19 +1620,22 @@ function TrackForm({
           <div className="mt-3 space-y-2">
             {track.criteria.map((criterion, at) => (
               <div key={at} className="flex items-center gap-3">
+                {/* Taken as written. The field used to rewrite every keystroke
+                    into the contract's shape, so somebody typing "Clean Code"
+                    watched it become `clean_code` under their hands. The
+                    conversion happens once, where the constitution is built,
+                    and what is shown back everywhere else is the phrase. */}
                 <input
                   value={criterion.id}
                   onChange={(event) =>
                     onChange({
                       ...track,
                       criteria: track.criteria.map((c, i) =>
-                        i === at
-                          ? { ...c, id: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") }
-                          : c,
+                        i === at ? { ...c, id: event.target.value.slice(0, 40) } : c,
                       ),
                     })
                   }
-                  placeholder="impact"
+                  placeholder="Impact"
                   className="h-10 flex-1 bg-paper px-3 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
                 />
 
@@ -1759,6 +1953,53 @@ interface Dates {
  * out on stage does too. It is not the default, since an event that has just
  * ranked is the worst moment to discover the ranking was wrong.
  */
+/**
+ * How far the schedule may slip, as choices rather than as a number to type.
+ *
+ * This is a promise to everybody who enters rather than a convenience for the
+ * person running the event: it is hashed into the rules before anybody applies,
+ * so a team knows up front that the build deadline can move by at most this
+ * much. That is why the generous end is not the default. An event whose
+ * announced dates can each slide a month has announced very little.
+ *
+ * The count and the budget travel together because the contract spends both,
+ * and it refuses a document that allows moves worth no time at all.
+ */
+const EXTENSION_ALLOWANCES = [
+  { times: 0, seconds: 0, label: "Not at all. The announced dates are final" },
+  { times: 1, seconds: 2 * 86_400, label: "Once, by up to two days" },
+  { times: 2, seconds: 7 * 86_400, label: "Twice, by up to a week in total" },
+  { times: 3, seconds: 30 * 86_400, label: "Three times, by up to a month in total" },
+] as const;
+
+/**
+ * Which of the offered allowances a stored document is closest to.
+ *
+ * The rules hold two arbitrary numbers and this form offers four pairs, so a
+ * hackathon configured by something other than this page — or by an older
+ * version of it — has to land somewhere. The nearest budget wins, and a
+ * document that allows no movement lands on the choice that says so.
+ */
+function closestAllowance(held: { times: number; seconds: number }): number {
+  if (held.times === 0 || held.seconds === 0) {
+    return 0;
+  }
+
+  let nearest = 1;
+
+  EXTENSION_ALLOWANCES.forEach((choice, index) => {
+    const nearer =
+      Math.abs(choice.seconds - held.seconds) <
+      Math.abs(EXTENSION_ALLOWANCES[nearest]!.seconds - held.seconds);
+
+    if (index > 0 && nearer) {
+      nearest = index;
+    }
+  });
+
+  return nearest;
+}
+
 const SETTLEMENT_DELAYS = [
   { seconds: 0, label: "Straight away" },
   { seconds: 3_600, label: "An hour after the ranking" },
@@ -1853,15 +2094,24 @@ interface Kept {
   judges: string[];
   dates: Dates;
   settlementDelay: number;
+  /** An index into `EXTENSION_ALLOWANCES`, not the values themselves. */
+  allowance: number;
   requires: SubmissionFields;
   openRegistration: boolean;
   communityBps: number;
+  /** A `ProjectVisibility` discriminant: public, participants or restricted. */
+  visibility: 0 | 1 | 2;
   name: string;
   tagline: string;
   location: string;
   tags: string;
   logo: string;
   banner: string;
+}
+
+/** Unknown or older draft values fail closed rather than opening a gallery. */
+function asVisibility(value: number): 0 | 1 | 2 {
+  return value === 0 || value === 1 || value === 2 ? value : 2;
 }
 
 /** Restores one string field, and only if what was on disk is one. */
@@ -1976,9 +2226,12 @@ function blankTrack(): Track {
 
 function complete(track: Track): boolean {
   return (
-    track.id.length > 0 &&
+    /* Both names measured as the symbols they will become. A track or a
+       criterion called "!!" is a phrase with nothing in it once the contract
+       has it. */
+    symbolOf(track.id).length > 0 &&
     track.prizes.every((prize) => toSmallestUnit(prize.amount) > BigInt(0)) &&
-    track.criteria.every((criterion) => criterion.id.length > 0) &&
+    track.criteria.every((criterion) => symbolOf(criterion.id).length > 0) &&
     track.criteria.reduce((sum, c) => sum + c.weightBps, 0) === WEIGHT_TOTAL_BPS
   );
 }

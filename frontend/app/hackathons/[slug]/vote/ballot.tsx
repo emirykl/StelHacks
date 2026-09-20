@@ -9,6 +9,7 @@ import { sealingConfigured } from "../../../../lib/judge";
 import type { Card } from "../../../../lib/project";
 import { proveAddress } from "../../../../lib/wallet";
 import { toHex } from "../../../../lib/hex";
+import { titleOf } from "../../../../lib/words";
 import {
   leafOf,
   mayVote,
@@ -44,11 +45,13 @@ export function Ballot({
   entries,
   power,
   maxChoices,
+  revealAt,
 }: {
   contractId: string;
   entries: Standing[];
   power: number;
   maxChoices: number;
+  revealAt: number | null;
 }) {
   const { wallet } = useWallet();
   const address = wallet?.address;
@@ -111,7 +114,7 @@ export function Ballot({
   }
 
   async function seal() {
-    if (address === undefined || !complete) {
+    if (address === undefined || !complete || revealAt === null) {
       return;
     }
 
@@ -131,7 +134,14 @@ export function Ballot({
       /* The wallet signs the leaf's hexadecimal text, so what a voter approves
          is a digest rather than a form they would have to reread. */
       const signature = await proveAddress(address, payloadFor(leaf));
-      const receipt = await submitBallot(contractId, address, choices, hexFrom(signature));
+      const receipt = await submitBallot(
+        contractId,
+        address,
+        choices,
+        leaf,
+        hexFrom(signature),
+        revealAt,
+      );
 
       setSealed({ leaf: toHex(leaf), receipt: receipt.signature });
     } catch (error) {
@@ -259,7 +269,7 @@ export function Ballot({
                     </p>
                   ) : null}
 
-                  <p className="mt-1 text-[0.8125rem] text-ink-faint">{entry.track}</p>
+                  <p className="mt-1 text-[0.8125rem] text-ink-faint">{titleOf(entry.track)}</p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -300,7 +310,11 @@ export function Ballot({
       {refused !== null ? <p className="mt-6 text-[0.9375rem] text-danger">{refused}</p> : null}
 
       <div className="mt-8 flex flex-wrap items-center gap-4">
-        <Button type="button" onClick={() => void seal()} disabled={!complete || busy}>
+        <Button
+          type="button"
+          onClick={() => void seal()}
+          disabled={!complete || busy || revealAt === null}
+        >
           {busy ? "Sealing…" : "Seal and send"}
         </Button>
 

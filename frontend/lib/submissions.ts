@@ -11,6 +11,8 @@
  * and still be shown to be the words that were pinned.
  */
 
+import { db } from "./chain";
+
 const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
 const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 
@@ -23,6 +25,20 @@ export interface Entry {
   members: string[];
   /** Set once the organizer has struck it out during screening. */
   invalid: boolean;
+}
+
+/** How many teams have actually submitted on chain, including struck entries. */
+export async function countSubmissions(contractId: string): Promise<number> {
+  if (db === null) {
+    return 0;
+  }
+
+  const { count } = await db
+    .from("submissions")
+    .select("team_id", { count: "exact", head: true })
+    .eq("contract_id", contractId);
+
+  return count ?? 0;
 }
 
 export async function entriesOf(

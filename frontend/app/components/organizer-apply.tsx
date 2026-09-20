@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ApplicationForm } from "../organize/form";
 import { ButtonLink } from "./primitives";
+import { CommitButton } from "./commit-button";
 import { Modal, ModalClose } from "./modal";
 import { myStanding } from "../organize/actions";
 import type { Standing } from "../../lib/organizing";
@@ -27,8 +28,10 @@ import type { Standing } from "../../lib/organizing";
 export function ApplyTrigger({
   className,
   children,
+  appearance = "plain",
 }: {
   className?: string;
+  appearance?: "plain" | "specular";
   /** Drawn by the caller, because the landing card and the footer link are not the same object. */
   children: ReactNode;
 }) {
@@ -58,9 +61,15 @@ export function ApplyTrigger({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={className}>
-        {children}
-      </button>
+      {appearance === "specular" ? (
+        <CommitButton size="lg" prominent onClick={() => setOpen(true)} className={className}>
+          {children}
+        </CommitButton>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} className={className}>
+          {children}
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Run a hackathon">
         <ModalClose onClose={() => setOpen(false)} />

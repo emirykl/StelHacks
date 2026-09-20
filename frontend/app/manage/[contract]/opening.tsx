@@ -41,27 +41,32 @@ type StepId = "freeze" | "pot" | "money" | "open";
  * "Lock the rules", "bind the vault" and "publish" are the contract's words and
  * were on screen as though they were everybody's. Somebody running their first
  * hackathon does not know what a vault is and should not have to.
+ *
+ * Each blurb is under half a line. They were a sentence each, and a sentence
+ * each is a paragraph nobody reads beside a button they have already decided to
+ * press: the title carries the move and the blurb only has to carry the one
+ * thing the title leaves out.
  */
 const STEPS: { id: StepId; title: string; blurb: string }[] = [
   {
     id: "freeze",
     title: "Freeze the rules",
-    blurb: "Hashed and written to the chain.",
+    blurb: "Hashed onto the chain.",
   },
   {
     id: "pot",
     title: "Create the prize pot",
-    blurb: "A separate contract, with no owner and no way to withdraw.",
+    blurb: "No owner, no withdrawals.",
   },
   {
     id: "money",
     title: "Move the prize money in",
-    blurb: "From your wallet into the pot.",
+    blurb: "From your wallet.",
   },
   {
     id: "open",
     title: "Open for sign-ups",
-    blurb: "It goes live and people can join.",
+    blurb: "People can join.",
   },
 ];
 
@@ -175,9 +180,7 @@ export function Opening({
           list of things to go and do rather than as what one button is about to
           do. Numbered for the same reason. */}
       <div>
-        <h3 className="text-[1.25rem] font-semibold text-ink">
-          What happens when you press it
-        </h3>
+        <h3 className="text-[1.25rem] font-bold text-ink">What one press does</h3>
 
         <div className="mt-5 grid gap-4">
           {STEPS.map((step, at) => (
@@ -186,25 +189,27 @@ export function Opening({
               number={at + 1}
               step={step}
               standing={standingOf(step.id)}
+              /* Staggered, so the four arrive in the order they will run in.
+                 A tenth of a second apart is enough to be read as an order and
+                 short enough that the whole list is there before somebody has
+                 finished reading the heading above it. */
+              after={at * 0.09}
             />
           ))}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-5">
+      {/* Wrapped, because the grid around it would otherwise stretch a button
+          that says one short thing across the whole column. */}
+      <div className="flex">
         <CommitButton disabled={busy} onClick={() => void open()}>
           {busy ? "Signing" : failed !== null ? "Try again" : "Open the hackathon"}
         </CommitButton>
-
-        <p className="max-w-[32rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-          One signature. Nothing is public until it lands.
-        </p>
       </div>
 
       {why !== null && (
         <p className="text-[0.9375rem] leading-relaxed text-broken">
-          Stopped at this step: {why}. Whatever was already done is done, so
-          pressing again carries on from there.
+          Stopped: {why}. Pressing again carries on from where it stopped.
         </p>
       )}
     </div>
@@ -216,13 +221,16 @@ function Move({
   number,
   step,
   standing,
+  after,
 }: {
   number: number;
   step: { id: StepId; title: string; blurb: string };
   standing: Standing;
+  /** Seconds to wait before this line arrives, so the four arrive in order. */
+  after: number;
 }) {
   return (
-    <div className="flex items-start gap-4">
+    <div className="rise flex items-start gap-4" style={{ animationDelay: `${after}s` }}>
       {/* The number is the marker until the move is done, and the tick replaces
           it afterwards. Two separate things, a number and a state, would take
           two columns to say what one shape says here. */}
@@ -243,7 +251,7 @@ function Move({
 
       <div className="min-w-0">
         <p
-          className={`text-[1rem] font-semibold ${
+          className={`text-[1rem] font-bold ${
             standing === "waiting" ? "text-ink-soft" : "text-ink"
           }`}
         >
@@ -287,32 +295,40 @@ function Reading({
           cannot fund the vault cannot do anything below, and finding that out
           at the deposit is finding it out too late to be useful. */}
       {running.prizeAsset !== null && short > BigInt(0) && (
-        <TopUp assetContract={running.prizeAsset} needed={units(short)} />
+        <TopUp assetContract={running.prizeAsset} needed={short} />
       )}
 
     <section className="rounded-[1.25rem] bg-paper p-7 ring-1 ring-rule sm:p-9">
-      {/* One sentence where there were three. What an organizer needs at this
+      {/* Half a line where there were three. What an organizer needs at this
           moment is the fact that it is permanent, not a paragraph explaining
           permanence to them. */}
-      <h3 className="text-[1.25rem] font-semibold text-ink">Check this, then freeze it</h3>
+      <h3 className="text-[1.25rem] font-bold text-ink">Check this, then freeze it</h3>
 
       <p className="mt-2 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-        None of it can change afterwards. Cancelling is the only way out.
+        Only cancelling undoes it.
       </p>
 
       <dl className="mt-7 grid gap-x-10 gap-y-4 border-t border-rule pt-6 sm:grid-cols-2">
-        <Line name="Prize money">
+        <Line name="Prizes">
           {units(rules.total)} {code}
         </Line>
 
-        <Line name="You will deposit">
+        {/* The cut is said as a rate and as an amount on its own line, because
+            they answer different questions. "750" tells an organizer what
+            leaves their wallet; "5%" tells them whether that is the deal they
+            agreed to, and a rate buried mid-sentence beside the total was being
+            read as neither. */}
+        <Line
+          name="You deposit"
+          note={
+            fee > BigInt(0)
+              ? `Prizes plus ${units(fee)}${code.length > 0 ? ` ${code}` : ""} platform fee${
+                  rules.platformFeeBps > 0 ? ` (${percent(rules.platformFeeBps)})` : ""
+                }`
+              : null
+          }
+        >
           {units(running.required)} {code}
-          {fee > BigInt(0) && (
-            <span className="text-ink-soft">
-              {" "}
-              — the prizes plus {units(fee)} platform fee
-            </span>
-          )}
         </Line>
 
         <Line name="Categories">
@@ -337,12 +353,12 @@ function Reading({
           <Moment at={rules.schedule.judgingCloses} />
         </Line>
 
-        <Line name="Winners can be paid">
+        <Line name="Payout">
           {rules.settlementDelay === 0
-            ? "As soon as the ranking is done"
+            ? "Right after ranking"
             : rules.settlementDelay >= 86_400
-              ? `${Math.round(rules.settlementDelay / 86_400)} day(s) after the ranking`
-              : `${Math.round(rules.settlementDelay / 3_600)} hour(s) after the ranking`}
+              ? `${Math.round(rules.settlementDelay / 86_400)}d after ranking`
+              : `${Math.round(rules.settlementDelay / 3_600)}h after ranking`}
         </Line>
       </dl>
     </section>
@@ -350,13 +366,42 @@ function Reading({
   );
 }
 
-function Line({ name, children }: { name: string; children: React.ReactNode }) {
+function Line({
+  name,
+  note,
+  children,
+}: {
+  name: string;
+  /** What the figure above is made of, when it is made of more than one thing. */
+  note?: string | null;
+  children: React.ReactNode;
+}) {
   return (
     <div className="grid gap-1">
-      <dt className="label text-[0.8125rem] text-ink-faint">{name}</dt>
-      <dd className="text-[1rem] text-ink">{children}</dd>
+      {/* Spelled out rather than reaching for `.label`, because this one is
+          bigger and heavier than a label anywhere else on the site: it is
+          naming a term that is about to become permanent, and it has to be
+          scannable by somebody checking eight of them one last time. */}
+      <dt className="text-[0.875rem] font-bold tracking-[0.045em] text-ink-soft uppercase">
+        {name}
+      </dt>
+      {/* The note lives inside the `dd` rather than beside it: a `dl` may hold
+          only terms and descriptions, and the breakdown is part of the figure
+          it sits under. */}
+      <dd className="text-[1.0625rem] text-ink">
+        {children}
+
+        {note !== undefined && note !== null && (
+          <span className="mt-0.5 block text-[0.875rem] text-ink-faint">{note}</span>
+        )}
+      </dd>
     </div>
   );
+}
+
+/** Basis points as somebody says them, without a trailing zero. */
+function percent(bps: number): string {
+  return `${String(Number((bps / 100).toFixed(2)))}%`;
 }
 
 /**

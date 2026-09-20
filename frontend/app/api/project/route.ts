@@ -131,22 +131,53 @@ export async function POST(request: Request) {
     });
   }
 
-  let written = await save(row);
+  let candidate: Record<string, unknown> = { ...row };
+  let failure = "the project could not be saved";
 
-  /* Written again without the newest column when the database has not been
-     migrated yet. PostgREST refuses the whole row over one column it does not
-     know, and a team's description, artwork and deck should not be lost to a
-     field they left empty on a schema that is one deploy behind. */
-  if (!written.ok && row.contract_address === null) {
-    const { contract_address: _dropped, ...older } = row;
-    written = await save(older);
+  /* Presentation columns were added over several migrations. PostgREST rejects
+     the whole row if even one of them is not in its schema cache, which used to
+     make a valid title and description disappear together with that optional
+     field. Drop only a column the database explicitly says it does not know,
+     then preserve everything the deployed schema can store. */
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const written = await save(candidate);
+
+    if (written.ok) {
+      return NextResponse.json({ ok: true });
+    }
+
+    failure = (await written.text()).slice(0, 500);
+    const missing = missingOptionalColumn(failure);
+
+    if (missing === null || !(missing in candidate)) {
+      break;
+    }
+
+    const { [missing]: _dropped, ...older } = candidate;
+    candidate = older;
   }
 
-  if (!written.ok) {
-    return NextResponse.json({ error: (await written.text()).slice(0, 200) }, { status: 502 });
+  return NextResponse.json({ error: failure.slice(0, 200) }, { status: 502 });
+}
+
+const OPTIONAL_PRESENTATION_COLUMNS = new Set([
+  "banner_url",
+  "pitch_deck_url",
+  "contract_address",
+]);
+
+function missingOptionalColumn(message: string): string | null {
+  for (const column of OPTIONAL_PRESENTATION_COLUMNS) {
+    if (
+      message.includes(`'${column}' column`) ||
+      message.includes(`projects.${column}`) ||
+      message.includes(`column \"${column}\"`)
+    ) {
+      return column;
+    }
   }
 
-  return NextResponse.json({ ok: true });
+  return null;
 }
 
 function text(value: unknown): string | null {

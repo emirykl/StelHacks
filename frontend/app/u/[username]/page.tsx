@@ -6,7 +6,7 @@ import { Joined } from "../../account/joined";
 import { Mark, type Where } from "../../components/marks";
 import { currentUser } from "../../../lib/supabase/server";
 import { nameOf, profileNamed, type Profile } from "../../../lib/profile";
-import { placeOf } from "../../../lib/countries";
+import { flagOf, placeOf } from "../../../lib/countries";
 
 /**
  * Somebody, at an address you can send to a person.
@@ -73,8 +73,19 @@ export default async function PublicProfile({ params }: PageProps<"/u/[username]
                         ·
                       </span>
 
+                      {/* The flag stands in for the pin when there is a
+                          country, because it says the same thing and says which
+                          country as well. A profile that shared only a city
+                          keeps the pin: there is no flag to draw, and the line
+                          would otherwise start with a bare word. */}
                       <span className="inline-flex items-center gap-1.5">
-                        <Pin />
+                        {profile.country === null ? (
+                          <Pin />
+                        ) : (
+                          <span aria-hidden className="text-[1.125rem] leading-none">
+                            {flagOf(profile.country)}
+                          </span>
+                        )}
                         {place}
                       </span>
                     </>

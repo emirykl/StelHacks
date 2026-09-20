@@ -17,8 +17,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * What was agreed with an organizer, recorded when the application is answered.
  *
- * The tier names a rate rather than holding one, and that rate reaches an event
- * exactly once: the create page reads it here and writes it into the
+ * The tier names a base rate rather than holding one. The create page combines
+ * it with the final prize total, then writes the resulting rate into the
  * constitution, which is hashed and frozen along with everything else. Nothing
  * consults this file again afterwards, settlement included.
  *
@@ -33,7 +33,7 @@ export const TIERS: { id: Tier; name: string; note: string }[] = [
   {
     id: "community",
     name: "Community",
-    note: "No cut. Student and community events, roughly under five thousand in prizes.",
+    note: "No cut through five thousand dollars in prizes; five percent above it.",
   },
   {
     id: "standard",
@@ -43,7 +43,7 @@ export const TIERS: { id: Tier; name: string; note: string }[] = [
   {
     id: "annual",
     name: "Annual",
-    note: "Flat yearly fee, no cut. For anybody running several events a year.",
+    note: "Flat yearly plan; the five-thousand-dollar prize threshold still applies.",
   },
 ];
 
@@ -52,7 +52,7 @@ export function isTier(value: string): value is Tier {
 }
 
 /**
- * What each tier costs, in basis points of the prize table.
+ * Each tier's starting rate, in basis points of the prize table.
  *
  * The rate is looked up here and written into the constitution at creation, and
  * from the lock onwards the contract reads it from the frozen document rather
@@ -60,16 +60,36 @@ export function isTier(value: string): value is Tier {
  * changes what the next event is quoted and cannot touch an event that already
  * locked, us included.
  *
- * Annual is zero because the money was already paid, once, off chain. The tier
- * on the grant is the record of that, and an annual organizer whose year lapses
- * is moved back to standard by changing their grant rather than by anything
- * reaching into an event in flight.
+ * Community and annual begin at zero. The creation form applies the common
+ * five-thousand-dollar threshold after this lookup, so neither base waiver can
+ * accidentally make a larger event free.
  */
 export const FEE_BPS: Record<Tier, number> = {
   community: 0,
   standard: 500,
   annual: 0,
 };
+
+/** Five thousand dollars, expressed in the same seven-decimal units as form amounts. */
+export const FEE_THRESHOLD_DOLLAR_UNITS = BigInt(5_000) * BigInt(10_000_000);
+
+/** The minimum platform rate for an event whose announced prizes exceed the free limit. */
+export const ABOVE_THRESHOLD_FEE_BPS = 500;
+
+/**
+ * Apply the prize-size rule on top of the organizer's granted rate.
+ *
+ * A community grant must not turn a larger event into a free event simply
+ * because the estimate supplied during approval was smaller. The amount typed
+ * into the creation form is the final source for that boundary. Existing paid
+ * plans may already carry a higher rate, so the threshold is a floor rather
+ * than a replacement.
+ */
+export function feeBpsForPrize(grantedBps: number, prizeDollars: bigint): number {
+  return prizeDollars > FEE_THRESHOLD_DOLLAR_UNITS
+    ? Math.max(grantedBps, ABOVE_THRESHOLD_FEE_BPS)
+    : grantedBps;
+}
 
 /** Which tier the reader was granted, or none if they were not granted one. */
 export async function tierOf(db: SupabaseClient, userId: string): Promise<Tier | null> {

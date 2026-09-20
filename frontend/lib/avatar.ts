@@ -1,3 +1,4 @@
+import { shrink } from "./image";
 import { browserClient } from "./supabase/client";
 
 /**
@@ -46,10 +47,15 @@ export async function uploadAvatar(file: File, userId: string): Promise<Uploaded
      public and therefore cached by every CDN between here and the reader, and
      a replaced file would leave the old picture showing for as long as that
      cache lives. */
-  const name = `${userId}/${Date.now()}.${extension(file.type)}`;
+  /* An avatar is drawn at 96 pixels at its largest and stored at 512, which
+     leaves room for a screen with more pixels than the one it was chosen on.
+     A GIF comes back untouched, because converting it would drop everything
+     but its first frame. */
+  const picture = await shrink(file, { width: 512, height: 512 });
+  const name = `${userId}/${Date.now()}.${extension(picture.type)}`;
 
-  const { error } = await db.storage.from("avatars").upload(name, file, {
-    contentType: file.type,
+  const { error } = await db.storage.from("avatars").upload(name, picture, {
+    contentType: picture.type,
     cacheControl: "31536000",
   });
 

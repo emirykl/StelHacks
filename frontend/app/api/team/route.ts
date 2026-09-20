@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { currentUser } from "../../../lib/supabase/server";
+import { rememberLink } from "../../../lib/authority";
 import { signedByOrganizer } from "../../../lib/organizer";
 
 /**
@@ -88,6 +89,13 @@ export async function POST(request: Request) {
   if (!proved) {
     return NextResponse.json({ error: "not the captain" }, { status: 403 });
   }
+
+  /* The signature just checked is exactly what `wallet_links` records: this
+     address, held by the person at this account, proved to a server. Filing it
+     here means a captain is never asked to prove the same key twice, and means
+     their name reaches every list that reads that table — which is the one
+     place a name can come from, since the chain knows only the address. */
+  await rememberLink(captain, user.id);
 
   const written = await fetch(`${url}/rest/v1/teams?on_conflict=contract_id,team_id`, {
     method: "POST",

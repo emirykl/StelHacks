@@ -1,7 +1,11 @@
 import Link from "next/link";
 
+import styles from "./hackathon-card.module.css";
+import { TokenMark } from "./token";
 import { prizeLabel, worthOf } from "../../lib/money";
+import { contributionsOf } from "../../lib/sponsor";
 import type { HackathonSummary } from "../../lib/chain";
+import { howLong } from "../../lib/schedule";
 
 /**
  * One hackathon, as somebody deciding between several of them reads it.
@@ -23,8 +27,19 @@ import type { HackathonSummary } from "../../lib/chain";
  */
 
 export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
-  const worth = await worthOf(hackathon.asset, hackathon.prize);
-  const prize = prizeLabel(worth, hackathon.prize);
+  /* The constitution's total is only the starting pool. Every top-up is stored
+     by the contract, so the number on the card includes those contributions
+     instead of continuing to advertise the amount from opening day. */
+  const contributions =
+    hackathon.prize === null
+      ? []
+      : await contributionsOf(hackathon.contract_id).catch(() => []);
+  const currentPrize =
+    hackathon.prize === null
+      ? null
+      : contributions.reduce((sum, one) => sum + one.amount, hackathon.prize);
+  const worth = await worthOf(hackathon.asset, currentPrize);
+  const prize = prizeLabel(worth, currentPrize);
   const finished = hackathon.phase !== null && hackathon.phase >= 8;
 
   /*
@@ -49,16 +64,32 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
     hackathon.registrationClosesAt !== null && hackathon.registrationClosesAt <= now;
   const running = hackathon.phase === 2 && !shut;
 
+  /* The window the contract takes contributions in: published, and not yet
+     ranked. Outside it `sponsor_tier` refuses, so offering the trip would be
+     offering a dead end. */
+  const sponsorable = hackathon.phase !== null && hackathon.phase >= 2 && hackathon.phase <= 5;
+
   return (
     /* Hovering sharpens the frame rather than raising the card. The hairline
        goes to full ink and a second one is drawn just inside it, so the edge
        gains weight without gaining a pixel of size: an inset ring cannot push
        its neighbours the way a border that thickens would, and a grid of these
        has to stay still while one of them answers. */
-    <Link
-      href={`/hackathons/${hackathon.slug}`}
-      className="group flex h-full flex-col overflow-hidden border border-rule bg-paper transition-[border-color,box-shadow] duration-150 ease-settle hover:border-ink hover:ring-1 hover:ring-inset hover:ring-ink"
-    >
+    <article className="group relative flex h-full flex-col overflow-hidden border border-rule bg-paper transition-[border-color,box-shadow] duration-150 ease-settle hover:border-ink hover:ring-1 hover:ring-inset hover:ring-ink">
+      {/* The whole card is the link, drawn as an overlay rather than as the
+          element that wraps everything.
+
+          A second destination had to sit on this card and an anchor cannot
+          contain another one: nesting them is invalid, and browsers recover by
+          closing the outer one early, which silently breaks whichever half of
+          the card lands after the split. An overlay keeps the entire surface
+          clickable and leaves the sponsor link free to sit above it. */}
+      <Link
+        href={`/hackathons/${hackathon.slug}`}
+        className="absolute inset-0 z-10"
+        aria-label={hackathon.name}
+      />
+
       <Picture
         hackathon={hackathon}
         running={running}
@@ -130,29 +161,81 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
             </div>
           )}
 
-          {/* The money, named. It was one figure with a ticker beside it, which
-              is a number somebody has to work out the meaning of; a labelled
-              row is read without stopping. */}
-          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t border-rule pt-4">
-            <p className="label text-ink-faint">Prize pool</p>
+          {/* The money, named, and the one thing to do about it beside it.
 
-            <p className="tabular text-[1.375rem] font-bold text-verified">
-              {/* Absent rather than zero when the contract could not be reached.
-                  A prize shown as nothing is a claim; a prize shown as unknown
-                  is the truth. */}
-              {hackathon.prize === null ? (
-                <span className="label font-normal text-ink-faint">not readable</span>
-              ) : (
-                <>
-                  {prize.figure}{" "}
-                  <span className="text-[1rem] font-semibold text-ink-soft">{prize.code}</span>
-                </>
-              )}
-            </p>
+              They were stacked, which gave the foot of the card three rows for
+              two facts and pushed the button a whole line below the figure it
+              belongs to. On one row the prize reads left and the offer sits in
+              the corner, where a card's action is looked for. */}
+          {/* Centred rather than bottom aligned. The figure is set with
+              `leading-none` and the button is a forty four pixel pill, so
+              hanging both from their bottom edges put the button's label a few
+              pixels under the number it belongs to — and, since the figures are
+              different lengths, at a different offset on every card in the
+              row. */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-rule pt-4">
+            <div className="min-w-0">
+              <p className="label text-ink-faint">Current prize pool</p>
+
+              {/* One flex row rather than inline runs. `align-middle` centres a
+                  box against the line's middle, which is not where the digits
+                  are: the mark sat low against the figure beside it and the
+                  three cards disagreed about how low. */}
+              <p className="tabular mt-1 flex items-center gap-2 text-[2rem] font-bold leading-none text-verified drop-shadow-[0_0_14px_color-mix(in_srgb,var(--color-verified)_30%,transparent)]">
+                {/* Absent rather than zero when the contract could not be
+                    reached. A prize shown as nothing is a claim; a prize shown
+                    as unknown is the truth. */}
+                {currentPrize === null ? (
+                  <span className="label font-normal text-ink-faint">not readable</span>
+                ) : (
+                  <>
+                    {prize.figure}
+                    {/* The mark rides with the ticker rather than in front of
+                        the figure. What is being named is the token, not the
+                        amount, and a logo left of the number reads as a
+                        currency symbol the number is quoted in — which for a
+                        prize shown in dollars it is not.
+
+                        Sized to the letters beside it rather than to some
+                        fraction of them: at eighteen pixels against a thirty
+                        two pixel ticker it read as a footnote on the word. */}
+                    <span className="inline-flex items-center gap-1.5 font-bold text-ink">
+                      <TokenMark code={prize.code} className="size-[1.5rem]" />
+                      {prize.code}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* The second thing somebody can do with a hackathon, offered where
+                they are already reading the prize.
+
+                Shown on the phase alone rather than on the frozen rules,
+                because the rules are a contract call and a grid of these would
+                make one per card. Whether this particular event opened its door
+                is settled on the page this points at, which reads the rules
+                anyway. A link that lands somewhere without the button is a
+                small disappointment; a landing page that takes a second longer
+                is a cost every visitor pays.
+
+                Above the overlay, so pressing it goes here rather than to the
+                hackathon behind it. */}
+            {sponsorable && (
+              <Link
+                href={`/hackathons/${hackathon.slug}?donate=1#prizes`}
+                className={`${styles.donate} relative z-20 inline-flex min-h-11 shrink-0 items-center rounded-full bg-ink px-5 text-[0.9375rem] font-semibold text-paper transition-transform duration-150 ease-settle hover:-translate-y-0.5`}
+              >
+                <span className="relative z-10 inline-flex items-center gap-2">
+                  <Coin />
+                  Donate
+                </span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -241,6 +324,7 @@ function Picture({
           together is what somebody scanning a grid actually does. */}
       <span className="label bg-paper/90 px-2.5 py-1.5 text-ink backdrop-blur-sm">
         <Remaining
+          opensAt={hackathon.registrationOpensAt}
           closesAt={hackathon.closesAt}
           registrationClosesAt={hackathon.registrationClosesAt}
           finished={finished}
@@ -284,7 +368,14 @@ function label(hackathon: HackathonSummary): string {
     case 1:
       return "Soon";
     case 2:
-      return "Open";
+      /* Published is not the same as open to sign-ups, and the phase cannot
+         tell them apart: an organizer publishes ahead of the doors opening,
+         which is the whole reason to publish early. Read off the phase alone
+         the badge said "Open" beside a clock reading "sign-ups in 13 days",
+         which is the card disagreeing with itself. */
+      return hackathon.registrationOpensAt !== null && now < hackathon.registrationOpensAt
+        ? "Soon"
+        : "Open";
     case 3:
       return "Checking";
     case 4:
@@ -309,10 +400,13 @@ function label(hackathon: HackathonSummary): string {
  * page re-render forever for a figure nobody watches change.
  */
 function Remaining({
+  opensAt,
   closesAt,
   registrationClosesAt,
   finished,
 }: {
+  /** When sign-ups open, which is a different clock from when they shut. */
+  opensAt: number | null;
   closesAt: number | null;
   registrationClosesAt: number | null;
   finished: boolean;
@@ -322,6 +416,21 @@ function Remaining({
   }
 
   const now = Math.floor(Date.now() / 1000);
+
+  /*
+    Three clocks, not two, and the first one was missing.
+
+    A hackathon published before sign-ups open has a registration deadline in
+    the future, so the card counted down to it and said "13 days to register"
+    about a door that is not open yet. An event somebody cannot join for another
+    two hours should say so: it is the one number that decides whether they come
+    back tonight or forget about it.
+  */
+  const waiting = opensAt !== null && opensAt > now;
+
+  if (waiting) {
+    return <>{`sign-ups in ${howLong(opensAt - now)}`}</>;
+  }
 
   /* The clock the reader is on. Somebody who can still sign up is deciding
      whether to; once that has gone they are watching a build deadline that is
@@ -333,7 +442,14 @@ function Remaining({
     return <>no deadline set</>;
   }
 
-  const what = registering ? "to register" : "left";
+  /*
+    Named rather than left as "left", because the badge beside it is answering
+    a different question and the two read as a contradiction otherwise. An
+    event whose sign-ups have shut while the build runs showed "Closed" next to
+    "1 minute left", which sounds like one clock disagreeing with itself. It is
+    two clocks: the door, and the deadline for the people already inside.
+  */
+  const what = registering ? "to register" : "to submit";
   const left = deadline - now;
 
   if (left <= 0) {
@@ -372,6 +488,23 @@ function Pin() {
     >
       <path d="M6 11S1.8 7.6 1.8 4.8a4.2 4.2 0 1 1 8.4 0C10.2 7.6 6 11 6 11Z" />
       <circle cx="6" cy="4.7" r="1.4" />
+    </svg>
+  );
+}
+
+/** A coin, drawn rather than fetched, so a card ships no extra image. */
+function Coin() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      className="size-3.5 shrink-0"
+    >
+      <circle cx="6" cy="6" r="4.6" />
+      <path d="M6 3.4v5.2M7.4 4.7a1.6 1.6 0 0 0-2.8.9c0 1.5 2.8.7 2.8 2.1a1.6 1.6 0 0 1-2.8.9" />
     </svg>
   );
 }

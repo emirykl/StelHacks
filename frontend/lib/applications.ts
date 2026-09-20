@@ -12,6 +12,9 @@
  * cannot see is an application that was never made.
  */
 
+import { spec } from "./constitution";
+import { send, type Sent } from "./send";
+
 const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
 const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 
@@ -208,4 +211,57 @@ export async function reasonHash(reason: string): Promise<Uint8Array> {
   const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
 
   return new Uint8Array(digest);
+}
+
+/**
+ * Deciding a queue in one signature.
+ *
+ * The singular calls are still there and still right for one name at a time.
+ * These exist because a reviewer facing forty applications had forty wallet
+ * prompts to get through, and a wallet prompt is the one step in this product
+ * that cannot be made quicker. What that produced was not a slow afternoon; it
+ * was queues nobody finished.
+ *
+ * The contract treats a batch as several decisions rather than one: each name
+ * gets its own row, its own timestamp and its own event. What is shared is the
+ * signature and, on a refusal, the written reason — which is what a reviewer
+ * turning thirty people away actually has, one rule they all fell outside of.
+ *
+ * One name's state never touches another's. A name already decided — in a
+ * second tab, by a collaborator working the same list, or by appearing twice
+ * in one selection — is passed over and keeps the decision it has; everybody
+ * else in the list goes through. The contract returns how many it actually
+ * decided, and the queue re-read afterwards says exactly who is left.
+ */
+export async function decideAll(
+  contractId: string,
+  reviewer: string,
+  applicants: string[],
+  /** The words behind a refusal, or null to let them in. */
+  reason: string | null,
+): Promise<Sent> {
+  /* Through the contract's own published interface, never by hand. This is the
+     one call in the applications path that sends a vector, and writing that
+     layout here is exactly how an address ends up encoded into the wrong slot
+     without anything failing. */
+  const encoder = await spec();
+
+  const args =
+    reason === null
+      ? encoder.funcArgsToScVals("approve_applications", {
+          reviewer,
+          applicants,
+        })
+      : encoder.funcArgsToScVals("reject_applications", {
+          reviewer,
+          applicants,
+          reason: Buffer.from(await reasonHash(reason)),
+        });
+
+  return send(
+    contractId,
+    reason === null ? "approve_applications" : "reject_applications",
+    args.map((value) => ({ value })),
+    reviewer,
+  );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Switcher } from "./switcher";
+import { TokenMark } from "../../components/token";
 
 /**
  * The hackathon, at the top of its own panel, in the shape the public page uses.
@@ -31,6 +32,7 @@ export function Masthead({
   applications,
   submissions,
   prize,
+  prizeCode,
   live,
 }: {
   contractId: string;
@@ -48,8 +50,10 @@ export function Masthead({
   /** Null until the counts have been read. */
   applications: number | null;
   submissions: number | null;
-  /** Already formatted, with its ticker, or null when the rules are unreadable. */
+  /** The figure alone, or null when the rules are unreadable. */
   prize: string | null;
+  /** Its ticker, kept apart from the figure so the mark can be drawn beside it. */
+  prizeCode: string | null;
   live: boolean;
 }) {
   return (
@@ -109,7 +113,19 @@ export function Masthead({
             {prize === null ? (
               <p className="text-[0.9375rem] text-ink-faint">Not readable from the contract.</p>
             ) : (
-              <p className="tabular text-[1.75rem] font-bold leading-none text-ink">{prize}</p>
+              /* The mark beside the ticker rather than instead of it, the same
+                 way the public page sets a prize. A figure with the token's
+                 mark on it is recognised without being read. */
+              <p className="tabular flex items-center gap-2 text-[1.75rem] font-bold leading-none text-ink">
+                {prize}
+
+                {prizeCode !== null && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <TokenMark code={prizeCode} className="size-6" />
+                    {prizeCode}
+                  </span>
+                )}
+              </p>
             )}
           </Panel>
 

@@ -64,6 +64,7 @@ export default async function Vote({ params }: PageProps<"/hackathons/[slug]/vot
           }))}
           power={rules?.votePower ?? 0}
           maxChoices={rules?.maxChoices ?? 0}
+          revealAt={rules?.schedule.judgingCloses ?? null}
         />
       </div>
     </main>

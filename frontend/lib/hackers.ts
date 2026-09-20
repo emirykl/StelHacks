@@ -95,11 +95,46 @@ export async function hackersOf(contractId: string, limit = 60): Promise<Hacker[
   });
 }
 
+/**
+ * The places somebody said they can be found, in the order the profile page
+ * lists them.
+ *
+ * Typed over the three fields rather than over a `Hacker` or a `Person`, so
+ * the guest list and the applications queue build the same links from the
+ * same rules. Two copies of "GitHub usernames become a github.com URL and a
+ * LinkedIn is already one" is how one surface ends up linking to nothing.
+ */
+export function linksOf(who: Pick<Hacker, "github" | "linkedin" | "x">) {
+  return [
+    who.github === null
+      ? null
+      : { key: "github" as const, title: "GitHub", href: `https://github.com/${who.github}` },
+    who.x === null ? null : { key: "x" as const, title: "X", href: `https://x.com/${who.x}` },
+    /* Already a URL, because LinkedIn's own handles are not stable enough to
+       build one from. Whatever the profile stored is what is followed. */
+    who.linkedin === null
+      ? null
+      : { key: "linkedin" as const, title: "LinkedIn", href: who.linkedin },
+  ].filter((link) => link !== null);
+}
+
 /** Who an address belongs to, when it belongs to anybody. */
 export interface Person {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
+  /**
+   * The places they said they can be found, absent unless they filled them in.
+   *
+   * Carried because the one surface reading this is an organizer deciding
+   * whether to let somebody into their hackathon, and a name with nothing
+   * behind it is not much to decide on. The columns were already being read —
+   * `profilesOf` selects them for the guest list — and were being thrown away
+   * here.
+   */
+  github: string | null;
+  linkedin: string | null;
+  x: string | null;
 }
 
 /**
@@ -145,6 +180,11 @@ export async function peopleFor(addresses: string[]): Promise<Record<string, Per
         username: String(row["username"]),
         displayName: (row["display_name"] as string | null) ?? null,
         avatarUrl: (row["avatar_url"] as string | null) ?? null,
+        github: (row["github_username"] as string | null) ?? null,
+        linkedin: (row["linkedin_url"] as string | null) ?? null,
+        /* Absent on the older schema, which `profilesOf` falls back to. A
+           missing column reads as a link nobody gave, which is the truth. */
+        x: (row["x_username"] as string | null) ?? null,
       };
     }
   }

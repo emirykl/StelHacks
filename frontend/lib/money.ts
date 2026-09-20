@@ -58,6 +58,22 @@ export interface Worth {
 }
 
 /**
+ * The token's own symbol, or a shortened address when it is not one we know.
+ *
+ * Separate from `worthOf` because naming a token needs no price and no network:
+ * a page totalling what every hackathon paid has to group by asset before it
+ * can quote anything, and waiting on a quote to do that would make the grouping
+ * fail whenever the price feed did.
+ */
+export function codeOf(asset: string | null): string {
+  if (asset === null) {
+    return "tokens";
+  }
+
+  return KNOWN[asset]?.code ?? `${asset.slice(0, 4)}…${asset.slice(-4)}`;
+}
+
+/**
  * The lumen price, fetched once and remembered for a while.
  *
  * Cached in the module rather than per request, because every card on a page
@@ -103,9 +119,7 @@ export async function lumenPrice(): Promise<number | null> {
 /** What one prize is worth, given the asset the rules name and the amount. */
 export async function worthOf(asset: string | null, amount: bigint | null): Promise<Worth> {
   const known = asset === null ? undefined : KNOWN[asset];
-
-  const code =
-    known?.code ?? (asset === null ? "tokens" : `${asset.slice(0, 4)}…${asset.slice(-4)}`);
+  const code = codeOf(asset);
 
   if (amount === null || known === undefined) {
     return { code, dollars: null };
@@ -124,6 +138,30 @@ export async function worthOf(asset: string | null, amount: bigint | null): Prom
 }
 
 /**
+ * A token total in dollars, given a lumen price the caller already has.
+ *
+ * The price is passed in rather than fetched, which is what lets this stay
+ * synchronous and lets a page total several tokens against one quote instead of
+ * one quote per token. Unknown tokens answer null: a share of a whole is only
+ * honest when every part of that whole can be quoted.
+ */
+export function dollarsOf(code: string, amount: bigint, lumen: number | null): number | null {
+  const basis = PRIZE_ASSETS.find((asset) => asset.code === code)?.dollars;
+
+  if (basis === undefined) {
+    return null;
+  }
+
+  const units = Number(amount) / 10_000_000;
+
+  if (basis === "one-to-one") {
+    return units;
+  }
+
+  return lumen === null ? null : units * lumen;
+}
+
+/**
  * A prize as one figure, in the currency somebody thinks in.
  *
  * Dollars lead. A reader comparing five hackathons is comparing what they are
@@ -139,7 +177,7 @@ export function prizeLabel(worth: Worth, amount: bigint | null): { figure: strin
   }
 
   if (worth.dollars !== null) {
-    return { figure: `${round(worth.dollars)}$`, code: worth.code };
+    return { figure: `$${round(worth.dollars)}`, code: worth.code };
   }
 
   /* No honest conversion, so the token amount stands on its own rather than

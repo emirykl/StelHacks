@@ -5,11 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, ButtonLink } from "../../components/primitives";
 import { CommitButton } from "../../components/commit-button";
 import { useWallet } from "../../components/wallet-context";
-import { send, type Sent } from "../../../lib/send";
+import { arg, send, type Sent } from "../../../lib/send";
+import { rootHeldFor } from "../../../lib/judge";
 import { runningOf, type Running } from "../../../lib/running";
 import { JOURNEY, PHASES, phaseName, stepOf } from "../../../lib/phase";
 import { PRIZE_ASSETS, units } from "../../../lib/money";
 import { Applications } from "./applications";
+import { BackerQueue } from "./backer-queue";
+import { SponsorQueue } from "./sponsor-queue";
 import { Masthead } from "./masthead";
 import { applicantsOf, type Applicant } from "../../../lib/applications";
 import { entriesOf, type Entry } from "../../../lib/submissions";
@@ -18,6 +21,7 @@ import { Schedule } from "./schedule";
 import { Panel, type View } from "./panel";
 import { Screening } from "./screening";
 import { rulesFor, type Rules } from "../../../lib/rules";
+import { rootsOf } from "../../../lib/roots";
 
 /**
  * Getting a hackathon from written to open, one legal call at a time.
@@ -43,6 +47,7 @@ export function Console({
     name: string;
     slug: string;
     tagline: string | null;
+    description: string | null;
     logo: string | null;
     banner: string | null;
     location: string | null;
@@ -75,15 +80,40 @@ export function Console({
   const [applicants, setApplicants] = useState<Applicant[] | null>(null);
   const [entries, setEntries] = useState<Entry[] | null>(null);
 
+  /*
+    Whether judging has been sealed, which is the one thing standing between
+    this panel and a hackathon nobody can ever rank.
+
+    A root can only be published while the contract is in Judging. Leaving that
+    phase without one is not a stage ending early, it is a door closing: the
+    cards stay in the collection service with nowhere on chain to put them. The
+    clock service already refuses to advance past Judging for this reason, and
+    this panel offers the same call by hand — so it has to know the same fact,
+    or the manual button quietly does what the automatic one is written to
+    prevent.
+  */
+  const [sealed, setSealed] = useState<boolean | null>(null);
+
   const reread = useCallback(async () => {
-    /* Both together. The setup screen reads what is about to be frozen off the
-       rules and what is still owed off the state, and showing one against a
+    /* All three together. The setup screen reads what is about to be frozen off
+       the rules and what is still owed off the state, and showing one against a
        stale copy of the other is how a deposit figure ends up disagreeing with
        the prize table beside it. */
-    const [state, written] = await Promise.all([runningOf(contractId), rulesFor(contractId)]);
+    const [state, written, roots] = await Promise.all([
+      runningOf(contractId),
+      rulesFor(contractId),
+      rootsOf(contractId).catch(() => ({ scores: null, ballots: null })),
+    ]);
 
     setRunning(state);
     setRules(written);
+    /* Ballots only when the rules run a community vote at all, the same
+       condition the clock applies. Waiting on a root that was never going to
+       exist would hold every event that scores the ordinary way. */
+    setSealed(
+      roots.scores !== null &&
+        ((written?.communityBps ?? 0) === 0 || roots.ballots !== null),
+    );
   }, [contractId]);
 
   useEffect(() => {
@@ -113,7 +143,10 @@ export function Console({
   const recount = useCallback(async () => {
     const [applied, entered] = await Promise.all([
       applicantsOf(contractId, written?.createdAt).catch(() => []),
-      entriesOf(contractId, false).catch(() => []),
+      /* With the roster, because the screening tab is fed from here and says
+         how many people are behind each entry. Read without it, every card in
+         that tab said "0 members" about a team that plainly had one. */
+      entriesOf(contractId).catch(() => []),
     ]);
 
     setApplicants(applied);
@@ -152,8 +185,18 @@ export function Console({
   }
 
   /* Past the check above the phase is known, and saying so once here saves
-     every reader below from re-establishing it. */
-  const state = { ...running, phase: running.phase };
+     every reader below from re-establishing it.
+
+     The prize asset comes from the rules. `runningOf` asks the contract seven
+     cheap questions and the asset is not one of them, so it leaves the field
+     null and this page was reading that null as an asset it did not recognise:
+     every figure on the console printed as a bare number with no ticker beside
+     it. The document names it and has already been read. */
+  const state = {
+    ...running,
+    phase: running.phase,
+    prizeAsset: running.prizeAsset ?? rules?.prizeAsset ?? null,
+  };
 
   const mine = wallet !== null && wallet.address === state.organizer;
   const funded = state.held >= state.required && state.required > BigInt(0);
@@ -179,7 +222,10 @@ export function Console({
       {/* What this page is, said once. Everything below it is about one event,
           so an organizer arriving from a form, a menu or a link lands knowing
           which of the product's rooms they are standing in. */}
-      <p className="label text-[1.0625rem] tracking-[0.14em] font-semibold text-ink">
+      {/* Spelled out rather than reaching for `.label`, which fixes the weight
+          at 600. This is the page's own title and carries more than a label
+          does. */}
+      <p className="text-[1.375rem] font-bold tracking-[0.1em] text-ink uppercase">
         Hackathon management
       </p>
 
@@ -196,11 +242,12 @@ export function Console({
         phase={phaseName(state.phase)}
         applications={applicants?.length ?? null}
         submissions={entries?.length ?? null}
-        prize={
-          rules === null
-            ? null
-            : `${units(state.held)}${code.length > 0 ? ` ${code}` : ""}`
-        }
+        /* The prize table, not what the vault holds. The two differ by the
+           platform fee, which is deposited into the same vault and paid to us
+           rather than to a winner, so quoting the balance advertised a prize
+           nobody will ever be given. */
+        prize={rules === null ? null : units(rules.total)}
+        prizeCode={code.length > 0 ? code : null}
         live={live}
       />
 
@@ -246,6 +293,7 @@ export function Console({
             contractId={contractId}
             organizer={mine ? (wallet?.address ?? null) : null}
             entries={entries}
+            phase={state.phase}
             reread={recount}
           />
         ) : (
@@ -256,27 +304,54 @@ export function Console({
         )
       ) : (
         <Overview>
+        {/* Above the facts, because it is the only thing here that somebody
+            else is waiting on. It draws nothing at all when no sponsor has
+            asked, which is most events. */}
+        <SponsorQueue
+          contractId={contractId}
+          organizer={mine ? (wallet?.address ?? null) : null}
+          code={code}
+        />
+
+        {/* Beside the track queue because it is the same kind of thing: a
+            sponsor waiting on the organizer. It asks for less — a name rather
+            than a category — and it costs the reader nothing when empty. */}
+        <BackerQueue
+          contractId={contractId}
+          organizer={mine ? (wallet?.address ?? null) : null}
+          code={code}
+        />
+
         {/* The facts somebody comes back to check, before the one thing they
             can do about them. The tab was a single action card on an empty
             page, which does not read as an overview of anything. */}
         {rules !== null && (
           <Card>
             <dl className="grid gap-x-10 gap-y-5 sm:grid-cols-3">
+              {/* What the winners share, which is the prize table rather than
+                  the vault's balance: the platform fee sits in the same vault
+                  and goes to us. A shortfall is still said, because an
+                  underfunded vault is the organizer's problem and the figure
+                  above it would otherwise look settled. */}
               <Fact name="Prize pot">
-                {units(state.held)}
+                {units(rules.total)}
                 {code.length > 0 && ` ${code}`}
                 {state.held < state.required && (
                   <span className="text-broken">
                     {" "}
-                    of {units(state.required)}
+                    — {units(state.required - state.held)} still to deposit
                   </span>
                 )}
               </Fact>
 
+              {/* Named rather than counted. "2 categories" is a number an
+                  organizer already knows and the names are what they came to
+                  check, since a track is what every prize and every scorecard
+                  is filed under. */}
               <Fact name="Categories">
-                {rules.tracks.length === 1
-                  ? (rules.tracks[0]?.id ?? "One")
-                  : `${rules.tracks.length} categories`}
+                {rules.tracks.length === 0
+                  ? "None"
+                  : rules.tracks.map((track) => track.id).join(", ")}
               </Fact>
 
               <Fact name="Judges">
@@ -327,11 +402,38 @@ export function Console({
               applications={applicants?.length ?? null}
               contractId={contractId}
               address={wallet?.address ?? null}
+              sealed={sealed}
               busy={busy}
               run={run}
             />
           )}
         </div>
+
+        {/*
+          The organizer's own scoring, when the rules named them a judge too.
+
+          Small events are run by the people judging them, and for those the
+          panel was a dead end: it says judging is open, offers the button that
+          ends it, and says nothing about the one job still outstanding. The
+          card below it is the organizer's; this is the same wallet's other hat,
+          so it is offered here rather than left in a menu.
+
+          Only while the window is open. Once the phase moves the console
+          refuses cards anyway, and a link to a room that turns somebody away is
+          worse than no link.
+        */}
+        {state.phase === 4 &&
+          wallet !== null &&
+          (rules?.judgeAddresses ?? []).includes(wallet.address) && (
+            <div className="mt-7 flex flex-wrap items-center gap-5 border-t border-rule pt-7">
+              <ButtonLink href={`/judge/${contractId}`}>Score the projects</ButtonLink>
+
+              <p className="max-w-[32rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+                The rules name this wallet as a judge. Your cards are wanted
+                before you close the window above.
+              </p>
+            </div>
+          )}
       </Card>
 
         </Overview>
@@ -560,6 +662,116 @@ function Fact({ name, children }: { name: string; children: React.ReactNode }) {
 }
 
 /** The overview's own column, so its parts space like the other tabs' do. */
+/**
+ * Judging is over and no root is on chain, which is two different situations.
+ *
+ * The panel used to call both of them "your judges have not handed their cards
+ * in yet", from evidence that says nothing of the sort: a missing root means
+ * only that nothing has been published, and the service that holds the cards
+ * was never asked. An organizer whose judge had scored an hour earlier was
+ * being told their judge had not turned up.
+ *
+ * So the service is asked. It answers with the root it would publish, or with
+ * nothing when it truly holds no cards, and those two get different sentences.
+ *
+ * The button exists for the events frozen before the constitution named the
+ * service as their sealer. The contract asks the named address to authorize the
+ * root, so on those the service cannot publish it and the organizer can — but
+ * only this page can put the two halves together, because the root is the
+ * service's and the key is theirs.
+ */
+function Sealing({
+  contractId,
+  rules,
+  address,
+}: {
+  contractId: string;
+  rules: Rules | null;
+  address: string | null;
+}) {
+  const [root, setRoot] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    void rootHeldFor(contractId).then((found) => alive && setRoot(found));
+
+    return () => {
+      alive = false;
+    };
+  }, [contractId]);
+
+  /* Only the wallet the document names. Offering it to anybody else would be
+     offering a call the contract refuses, on the one stage where a refusal is
+     hard to tell from a hackathon that is simply not ready. */
+  const ours = address !== null && rules?.sealer === address;
+
+  async function publish() {
+    if (root === null || root === undefined || address === null) {
+      return;
+    }
+
+    setBusy(true);
+    setWhy(null);
+
+    const bytes = Uint8Array.from(root.match(/../g)!.map((pair) => parseInt(pair, 16)));
+    const outcome = await send(
+      contractId,
+      "publish_score_root",
+      [await arg.bytes32(bytes)],
+      address,
+    );
+
+    setBusy(false);
+
+    if (!outcome.ok) {
+      setWhy(outcome.why ?? "The wallet refused it.");
+    }
+  }
+
+  return (
+    <div className="grid gap-3">
+      <p className="text-[1.125rem] text-ink">
+        {root === undefined
+          ? "The judging deadline has passed."
+          : root === null
+            ? "The judging deadline has passed, and no cards have been handed in."
+            : "The judging deadline has passed. The cards are in and their root is not on chain yet."}
+      </p>
+
+      <p className="max-w-[40rem] text-[1rem] leading-relaxed text-ink-soft">
+        Nothing moves on until it is, and that is deliberate: the scores can only
+        be put on chain while this stage is open, so closing it now would leave
+        the hackathon with no way to ever be ranked. The window stays open for as
+        long as it takes.{" "}
+        {root === null &&
+          (rules !== null && rules.judges === 1
+            ? "Your judge has not handed a card in yet."
+            : "Your judges have not handed their cards in yet.")}
+        {root !== null &&
+          root !== undefined &&
+          (ours
+            ? "This hackathon named your wallet as its sealer, so publishing it is your signature."
+            : "The collection service publishes it on its own, usually within a minute.")}
+      </p>
+
+      {root !== null && root !== undefined && ours && (
+        <div className="mt-1">
+          <Button disabled={busy} onClick={() => void publish()}>
+            {busy ? "Signing" : "Publish the score root"}
+          </Button>
+        </div>
+      )}
+
+      {why !== null && (
+        <p className="max-w-[40rem] text-[1rem] leading-relaxed text-broken">{why}</p>
+      )}
+    </div>
+  );
+}
+
 function Overview({ children }: { children: React.ReactNode }) {
   return <div className="space-y-6">{children}</div>;
 }
@@ -642,6 +854,7 @@ function Next({
   applications,
   contractId,
   address,
+  sealed,
   busy,
   run,
 }: {
@@ -653,6 +866,8 @@ function Next({
   contractId: string;
   /** The connected wallet, which is what decides whether a move is offered. */
   address: string | null;
+  /** Whether judging's roots are on chain, or null while that is still unread. */
+  sealed: boolean | null;
   busy: boolean;
   run: (work: () => Promise<Sent & { contractId?: string }>) => Promise<void>;
 }) {
@@ -810,6 +1025,24 @@ function Next({
           </p>
         </div>
       );
+    }
+
+    /*
+      Judging, with nothing sealed.
+
+      This is the one deadline whose passing is not a cue to move on. A root can
+      only be published while the contract is in Judging, so advancing without
+      one strands the hackathon for good: the cards sit in the collection
+      service with nowhere to put them, and nothing can ever be ranked. The
+      contract does not stop it — until a clock existed, the only party sending
+      this call was the one who knew whether the sealing had happened.
+
+      So the button is withheld rather than disabled. The organizer is not
+      waiting on a service here, they are waiting on judges who have not handed
+      their cards in, and the honest thing to show is who.
+    */
+    if (running.phase === 4 && sealed === false) {
+      return <Sealing contractId={contractId} rules={rules} address={address} />;
     }
 
     /*

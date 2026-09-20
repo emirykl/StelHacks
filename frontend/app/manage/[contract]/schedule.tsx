@@ -5,7 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "../../components/primitives";
 import { arg, send } from "../../../lib/send";
 import { reasonHash } from "../../../lib/applications";
-import { scheduleOf, type Movable } from "../../../lib/schedule";
+import {
+  carryForward,
+  extendSchedule,
+  orderProblem,
+  scheduleOf,
+  type Movable,
+} from "../../../lib/schedule";
 
 /**
  * Moving a deadline, inside the allowance that was announced before the lock.
@@ -41,6 +47,10 @@ export function Schedule({
   const [moving, setMoving] = useState<number | null>(null);
   const [when, setWhen] = useState("");
   const [reason, setReason] = useState("");
+  /* On by default, because a hackathon that runs late runs late at every stage.
+     An organizer who means to move one deadline alone turns it off; one who
+     leaves it alone gets the thing they almost certainly meant. */
+  const [carry, setCarry] = useState(true);
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
 
@@ -69,7 +79,7 @@ export function Schedule({
   const now = Math.floor(Date.now() / 1000);
 
   async function move(at: number) {
-    if (organizer === null) {
+    if (organizer === null || found === null) {
       return;
     }
 
@@ -83,16 +93,20 @@ export function Schedule({
     setBusy(true);
     setSaid(null);
 
-    const outcome = await send(
-      contractId,
-      "extend_deadline",
-      [
-        await arg.u32(at),
-        await arg.u64(BigInt(moment)),
-        await arg.bytes32(await reasonHash(reason.trim())),
-      ],
-      organizer,
-    );
+    const digest = await reasonHash(reason.trim());
+    const following = carry ? carryForward(at, moment, found.deadlines, now) : [];
+
+    /* One call either way. The batched one exists for the run, so sending a run
+       of one through it would be a longer argument for the same thing. */
+    const outcome =
+      following.length > 1
+        ? await extendSchedule(contractId, following, digest, organizer)
+        : await send(
+            contractId,
+            "extend_deadline",
+            [await arg.u32(at), await arg.u64(BigInt(moment)), await arg.bytes32(digest)],
+            organizer,
+          );
 
     setBusy(false);
 
@@ -104,7 +118,11 @@ export function Schedule({
     setMoving(null);
     setWhen("");
     setReason("");
-    setSaid("Moved. The new moment is the one in force from now on.");
+    setSaid(
+      following.length > 1
+        ? `Moved, and ${following.length - 1} later ${following.length === 2 ? "deadline" : "deadlines"} with it. The new moments are the ones in force from now on.`
+        : "Moved. The new moment is the one in force from now on.",
+    );
 
     await reread();
   }
@@ -189,8 +207,52 @@ export function Schedule({
                         className="tabular h-12 w-full max-w-[20rem] rounded-[0.625rem] bg-paper px-4 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
                       />
 
-                      <span className="text-[0.875rem] text-ink-faint">
-                        Later than it is now, and inside the published allowance.
+                      {(() => {
+                        /* Said while the date is still being typed. The contract
+                           checks the same thing and answers with a failed
+                           transaction and a number, which is the worst moment
+                           and the worst words to learn it in. */
+                        const asked = Math.floor(new Date(when).getTime() / 1000);
+                        const wrong = Number.isFinite(asked)
+                          ? carry
+                            ? null
+                            : orderProblem(deadline.at, asked, found.deadlines)
+                          : null;
+
+                        if (wrong !== null) {
+                          return <span className="text-[0.875rem] text-danger">{wrong}</span>;
+                        }
+
+                        return (
+                          <span className="text-[0.875rem] text-ink-faint">
+                            Later than it is now, and inside the published allowance.
+                          </span>
+                        );
+                      })()}
+                    </label>
+
+                    {/* The ordinary case rather than an extra. Everything after
+                        this deadline keeps its own gap and travels with it, so a
+                        week added to the build window is a week added to the
+                        rounds that follow rather than a week taken out of
+                        them. */}
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={carry}
+                        onChange={(event) => setCarry(event.target.checked)}
+                        className="mt-1 size-4 accent-ink"
+                      />
+
+                      <span className="grid gap-1">
+                        <span className="text-[0.9375rem] text-ink">
+                          Move everything after it by the same amount
+                        </span>
+
+                        <span className="text-[0.875rem] text-ink-faint">
+                          One signature for the whole run. Each deadline spends its own allowance,
+                          and any that has already passed is left where it is.
+                        </span>
                       </span>
                     </label>
 

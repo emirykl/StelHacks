@@ -1,0 +1,56 @@
+.donate {
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgb(211 166 48 / 72%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 225 137 / 8%),
+    0 8px 24px rgb(159 112 8 / 17%);
+}
+
+/* A narrow highlight crossing polished gold: always moving, but slow enough
+   that the action still reads as a button rather than an advert. */
+.donate::before {
+  position: absolute;
+  z-index: 0;
+  inset: -120% -75%;
+  content: "";
+  background: linear-gradient(
+    108deg,
+    transparent 38%,
+    rgb(183 125 9 / 10%) 44%,
+    rgb(255 198 55 / 72%) 49%,
+    rgb(255 239 174 / 94%) 51%,
+    rgb(218 157 20 / 42%) 56%,
+    transparent 63%
+  );
+  transform: translateX(-58%);
+  animation: gold-sweep 2.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.donate:hover {
+  border-color: rgb(238 192 67 / 92%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 236 173 / 13%),
+    0 10px 28px rgb(159 112 8 / 24%);
+}
+
+@keyframes gold-sweep {
+  0%,
+  14% {
+    transform: translateX(-58%);
+  }
+
+  72%,
+  100% {
+    transform: translateX(58%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .donate::before {
+    animation: none;
+    transform: translateX(0);
+    opacity: 0.32;
+  }
+}

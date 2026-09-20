@@ -1,0 +1,80 @@
+.dashboard { max-width: 88rem; margin: 0 auto; }
+.heading { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; margin-bottom: 2rem; }
+.heading h1 { font-size: clamp(2.6rem, 4vw, 3.75rem); font-weight: 800; line-height: 1; }
+.toolbar { display: flex; align-items: center; gap: .8rem; }
+.tabs { display: flex; padding: .25rem; background: var(--color-paper-sunk); border: 1px solid var(--color-rule); border-radius: 3rem; gap: .25rem; }
+.tabs a { padding: .55rem .95rem; border-radius: 2rem; font-size: .85rem; color: var(--color-ink-soft); white-space: nowrap; }
+.tabs a:hover { color: var(--color-ink); }
+.tabs a[aria-current] { background: var(--color-ink); color: var(--color-paper); }
+.selectLabel { max-width: 100%; }
+.selectLabel select { width: 14rem; max-width: 100%; background: var(--color-paper); color: var(--color-ink); border: 1px solid var(--color-rule-strong); border-radius: 2rem; padding: .8rem 1rem; font-size: .85rem; text-overflow: ellipsis; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.2rem; }
+.metric { border: 1px solid var(--color-rule); border-radius: .85rem; padding: 1.5rem; background: var(--color-paper-sunk); }
+.metric > div { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.metric h2 { font-family: var(--font-sans); font-size: clamp(1rem, 1.15vw, 1.2rem); font-weight: 750; letter-spacing: -.015em; line-height: 1.35; }
+.metric svg { color: var(--color-ink-soft); flex-shrink: 0; }
+.value { font-family: var(--font-display); font-size: clamp(3.25rem, 4.2vw, 4.5rem); font-weight: 800; letter-spacing: -.055em; line-height: 1; margin-top: 1.6rem; font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; margin-top: 1.2rem; }
+.panel { min-width: 0; border: 1px solid var(--color-rule); border-radius: 1rem; padding: 1.5rem; }
+.panel h2 { font-size: clamp(1.25rem, 1.65vw, 1.55rem); font-weight: 750; line-height: 1.25; letter-spacing: -.025em; }
+.empty { height: 20rem; display: flex; justify-content: center; align-items: center; color: var(--color-ink-soft); font-size: .85rem; }
+.timeline { position: relative; height: 20rem; display: flex; align-items: center; margin-top: 1rem; }
+.timeline svg { width: 100%; max-height: 100%; overflow: visible; }
+.tooltip { position: absolute; top: 0; right: 0; padding: .35rem .65rem; background: var(--color-ink); color: var(--color-paper); border-radius: .4rem; font-size: .75rem; }
+.gridline { stroke: var(--color-rule); stroke-dasharray: 3 5; }
+.axis { fill: var(--color-ink); font-size: 13px; font-weight: 600; }
+.countryChart { height: 20rem; display: flex; flex-direction: column; justify-content: center; margin-top: 1rem; }
+.countries { display: flex; flex-direction: column; gap: .4rem; }
+.countries li { display: grid; grid-template-columns: minmax(4rem, 7rem) 1fr 2.5rem; align-items: center; gap: .7rem; font-size: .95rem; font-weight: 650; }
+.country { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--color-ink-soft); }
+.countries strong { text-align: right; font-size: 1rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.barTrack { height: 1.3rem; }
+.barTrack > div { height: 100%; background: #18a84b; border-radius: 0 .15rem .15rem 0; min-width: 3px; }
+.countryAxis { display: flex; justify-content: space-between; margin: .7rem 3.2rem 0 7.7rem; border-top: 1px solid var(--color-rule); padding-top: .35rem; color: var(--color-ink-soft); font-size: .75rem; }
+.payouts { height: 20rem; display: flex; flex-direction: column; justify-content: center; gap: .9rem; margin-top: 1rem; }
+.payout { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; padding: 1.15rem 1.35rem; background: var(--color-paper-sunk); border: 1px solid var(--color-rule); border-radius: .85rem; }
+/* Sized here rather than on the mark, so a token with no mark of its own still
+   leaves the column it would have filled and the codes stay in one line. */
+.payoutMark { width: 2.25rem; height: 2.25rem; display: flex; }
+.payoutIcon { width: 100%; height: 100%; }
+.payoutLabel { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.payoutLabel strong { font-size: 1.05rem; font-weight: 750; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; }
+.payoutLabel span { font-size: .8rem; color: var(--color-ink-soft); }
+.payoutAmount { font-family: var(--font-display); font-size: clamp(1.7rem, 2.4vw, 2.3rem); font-weight: 800; letter-spacing: -.045em; line-height: 1; font-variant-numeric: tabular-nums; }
+.pieRow { display: flex; align-items: center; justify-content: center; gap: 2rem; height: 20rem; margin-top: 1rem; }
+.pie { width: 16rem; max-width: 56%; flex-shrink: 0; }
+.legend { display: flex; flex-direction: column; gap: .85rem; }
+.legend li { display: flex; gap: .6rem; align-items: center; font-size: 1rem; font-weight: 650; }
+.legendDot { width: .7rem; height: .7rem; border-radius: .1rem; flex-shrink: 0; }
+.legend strong { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-left: auto; }
+@media (max-width: 1100px) {
+  .heading { align-items: flex-start; }
+  .toolbar { flex-wrap: wrap; justify-content: flex-end; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pieRow { gap: 1rem; }
+  .legend li { font-size: .75rem; gap: .4rem; }
+}
+@media (max-width: 700px) {
+  .heading { flex-direction: column; margin-bottom: 1.25rem; }
+  .toolbar { width: 100%; justify-content: flex-start; }
+  .tabs { width: 100%; }
+  .tabs a { flex: 1; text-align: center; padding: .55rem .6rem; }
+  .selectLabel, .selectLabel select { width: 100%; }
+  .metrics { gap: .75rem; }
+  .metric { padding: 1rem; }
+  .metric h2 { font-size: .9rem; }
+  .metric svg { width: 18px; height: 18px; }
+  .value { font-size: 2.8rem; margin-top: 1rem; }
+  .grid { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .panel { padding: 1.15rem; }
+  .panel h2 { font-size: 1.2rem; }
+  .timeline, .countryChart, .pieRow, .payouts, .empty { height: 16rem; }
+  .payout { padding: .9rem 1rem; gap: .75rem; }
+  .payoutMark { width: 1.75rem; height: 1.75rem; }
+  .payoutAmount { font-size: 1.6rem; }
+  .pieRow { gap: .8rem; }
+  .legend li { flex-wrap: wrap; }
+  .legend strong { margin-left: 0; }
+  .countries li { grid-template-columns: 5.5rem 1fr 2rem; }
+  .countryAxis { margin-left: 6.2rem; margin-right: 2.7rem; }
+}

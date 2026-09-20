@@ -18,6 +18,40 @@ import { CONSTITUTION_VERSION } from "./rules";
 /** Weights are basis points and a rubric has to add up to exactly this. */
 export const WEIGHT_TOTAL_BPS = 10_000;
 
+/**
+ * The collection service's own address, as the frozen rules will name it.
+ *
+ * Configured rather than discovered. What goes into the document has to be the
+ * key the service actually signs with, and asking the service who it is would
+ * be taking its word for the one fact the document exists to pin down.
+ *
+ * Absent on a deployment running no service, which is a real configuration and
+ * not a mistake: the organizer seals their own event by hand there.
+ */
+export function sealerAddress(): string | null {
+  const said = process.env["NEXT_PUBLIC_SEALER_ADDRESS"];
+
+  return said !== undefined && /^G[A-Z2-7]{55}$/.test(said) ? said : null;
+}
+
+/**
+ * What one wallet gets to place, and across how many projects.
+ *
+ * The contract's own defaults, repeated here because the form does not ask for
+ * them yet and something has to be written into the document. Ten points over
+ * at most three projects: ten divides the way people already think about a
+ * shortlist without asking anybody to reason in percentages, and three is where
+ * backing a field stops being a ballot and starts being a shrug.
+ *
+ * They are constants rather than fields on the draft for the same reason the
+ * claim period is: a setting nobody has been offered a way to choose is a
+ * setting with one value, and the honest place for it is here until the form
+ * grows a control for it. Both are frozen into the constitution either way, so
+ * a voter can read what their ballot is worth before the event opens.
+ */
+const VOTE_POWER = 10;
+const MAX_CHOICES = 3;
+
 export interface Criterion {
   id: string;
   weightBps: number;
@@ -88,6 +122,15 @@ export interface Draft {
   judges: Judge[];
   judgeQuorum: number;
   /**
+   * Who may read the project write-ups stored by StelHacks.
+   *
+   * The discriminants are the contract's `ProjectVisibility` order:
+   * public, approved participants, then organizers and judges only. The value
+   * is frozen with the rest of the constitution so the organizer cannot open a
+   * closed gallery after seeing what was submitted.
+   */
+  visibility: 0 | 1 | 2;
+  /**
    * The crowd's share of the final score, in basis points.
    *
    * Zero is the standard hackathon and what the form opens on. Ten thousand is
@@ -138,6 +181,18 @@ export interface Draft {
    */
   settlementDelay: number;
   /**
+   * How far each deadline may slip, announced before anybody enters.
+   *
+   * Two numbers because the contract spends two: how many times one deadline
+   * may move and how many seconds it may gain in total. They are per deadline
+   * rather than shared, so a build window that slips does not quietly eat the
+   * judging window's room.
+   *
+   * Zero and zero is a schedule that cannot move at all, which the contract
+   * accepts and treats as final. Anything else has to have both.
+   */
+  extensions: { times: number; seconds: number };
+  /**
    * What the platform takes, decided from the organizer's tier before the form
    * opened and frozen into the document at the lock like everything else.
    *
@@ -148,6 +203,15 @@ export interface Draft {
    * could be different from what was shown.
    */
   platformFee: PlatformFee;
+  /**
+   * Whether other people may put money into this hackathon's prizes.
+   *
+   * Frozen like everything else, and that is the whole weight of the field: an
+   * organizer who opens it cannot shut it once somebody has started building,
+   * and one who leaves it shut cannot be talked into it later by a sponsor with
+   * a cheque. So the form asks before the lock or the answer is no forever.
+   */
+  sponsorship: Sponsorship;
 }
 
 /** Where the cut goes and how much of it there is. */
@@ -155,6 +219,34 @@ export interface PlatformFee {
   collector: string;
   bps: number;
 }
+
+/** How far outside money may reach into a hackathon after the rules freeze. */
+export interface Sponsorship {
+  /** Whether anyone may add to a prize already on the table. */
+  topUps: boolean;
+  /** How many tracks sponsors may open between them. Zero forbids them. */
+  maxNewTracks: number;
+  /** The least one contribution may carry, in whole units of the prize asset. */
+  minBounty: string;
+}
+
+/**
+ * What the form opens on: open to money, closed to new categories.
+ *
+ * Open, because the alternative is a hackathon nobody can ever help fund and no
+ * way back. Taking money never costs a participant anything — the prize table
+ * only grows, and every contribution is aimed at a position that was already
+ * announced.
+ *
+ * Closed to new tracks, because a category is a change to the shape of the
+ * competition rather than to its size, and an organizer should reach for that
+ * deliberately rather than find they agreed to it by not reading a form.
+ */
+export const OPEN_TO_SPONSORS: Sponsorship = {
+  topUps: true,
+  maxNewTracks: 0,
+  minBounty: "10",
+};
 
 /**
  * The fee this deployment can actually charge, or nothing when it cannot.
@@ -207,7 +299,13 @@ export function totalPrize(tracks: Track[]): bigint {
 
 let cached: import("@stellar/stellar-sdk/contract").Spec | null = null;
 
-async function spec() {
+/**
+ * The contract's interface, built once and reused.
+ *
+ * Exported because sponsorship sends a prize table too, and a second copy of
+ * this would be a second place the layout could be got wrong.
+ */
+export async function spec() {
   if (cached === null) {
     const { Spec } = await import("@stellar/stellar-sdk/contract");
     cached = new Spec(entries as string[]);
@@ -256,23 +354,43 @@ export async function createArgs(organizer: string, draft: Draft) {
 
     judge_quorum: draft.judgeQuorum,
 
-    /* Easy mode, which is the one that is built. It names the address allowed
-       to publish the sealed roots; the organizer seals their own event until
-       there is a service to do it for them. Strict is in the roadmap's
-       deferred table rather than half implemented here. */
-    judging_mode: { tag: "Easy", values: [organizer] },
+    /*
+      Easy mode, which is the one that is built. It names the address allowed
+      to publish the sealed roots, and that address has to be the collection
+      service's: the service is what holds the cards and computes the root, and
+      the contract asks the named address to authorize the call.
+
+      It used to name the organizer, from a time before the service existed.
+      That froze events whose judges had scored perfectly well — the cards were
+      taken and the receipts were real, but nothing could ever put a root on
+      chain, and a hackathon cannot leave Judging without one.
+
+      The organizer is still the fallback for a deployment running no service
+      at all, where they are genuinely the only party who can seal. The panel
+      offers them the call by hand in that case, which is what makes this a
+      fallback rather than the same trap with a different owner.
+    */
+    judging_mode: { tag: "Easy", values: [sealerAddress() ?? organizer] },
 
     /* The split the organizer chose. Zero for the crowd is the standard event
        and what the form opens on: a weighting nobody asked for should never
-       arrive by default. */
+       arrive by default.
+
+       The ballot's size goes with the split rather than beside it, because the
+       contract refuses the two apart: an event with no community vote must
+       carry no ballot size at all, since a document holding one for an event
+       that takes no ballots reads to anybody checking it as a vote that was
+       configured and then quietly switched off. */
     vote: {
       judge_bps: WEIGHT_TOTAL_BPS - draft.communityBps,
       community_bps: draft.communityBps,
+      power: draft.communityBps > 0 ? VOTE_POWER : 0,
+      max_choices: draft.communityBps > 0 ? MAX_CHOICES : 0,
     },
 
-    /* Public. Written as a number because a Soroban enum whose variants carry
-       no payload is a `u32` on the wire, unlike the ones that do. */
-    visibility: 0,
+    /* Written as a number because a Soroban enum whose variants carry no
+       payload is a `u32` on the wire, unlike the ones that do. */
+    visibility: draft.visibility,
 
     submission_requirements: {
       repository: ON_THE_WIRE[draft.requires.repository],
@@ -311,6 +429,24 @@ export async function createArgs(organizer: string, draft: Draft) {
       bps: draft.platformFee.bps,
     },
 
+    /* The sponsorship door, frozen with the rest. The contract reads
+       `borrows_from` only where sponsored tracks are allowed, but it is sent
+       unconditionally and pointed at a track that exists, because a field whose
+       meaning depends on a neighbour is a field somebody will eventually read
+       on its own. */
+    sponsorship: {
+      top_ups_allowed: draft.sponsorship.topUps,
+      max_new_tracks: draft.sponsorship.maxNewTracks,
+      /* The contract refuses a floor of zero wherever the door is open, since
+         the vault will not move nothing and the record would be of money that
+         never arrived. A shut door carries zero, which is what it validates. */
+      min_bounty:
+        draft.sponsorship.topUps || draft.sponsorship.maxNewTracks > 0
+          ? toSmallestUnit(draft.sponsorship.minBounty)
+          : BigInt(0),
+      borrows_from: draft.tracks[0]?.id ?? "main",
+    },
+
     /* The chain the contract walks when two projects tie. Highest single
        criterion first, then who submitted earlier, which is the only tie break
        that cannot be influenced after the fact. */
@@ -320,9 +456,7 @@ export async function createArgs(organizer: string, draft: Draft) {
        believed. */
     tie_break: [
       { tag: "JudgeScore", values: undefined },
-      ...(draft.communityBps > 0
-        ? [{ tag: "CommunityScore", values: undefined }]
-        : []),
+      ...(draft.communityBps > 0 ? [{ tag: "CommunityScore", values: undefined }] : []),
       { tag: "Criterion", values: [draft.tracks[0]?.criteria[0]?.id ?? "impact"] },
       { tag: "SubmissionOrder", values: undefined },
     ],
@@ -384,8 +518,8 @@ export async function createArgs(organizer: string, draft: Draft) {
     },
 
     extensions: {
-      max_extensions_per_deadline: 1,
-      max_total_seconds_per_deadline: BigInt(172_800),
+      max_extensions_per_deadline: draft.extensions.times,
+      max_total_seconds_per_deadline: BigInt(draft.extensions.seconds),
     },
   };
 

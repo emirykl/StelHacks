@@ -11,8 +11,9 @@ import { peopleFor } from "../../../lib/hackers";
  * proved they hold it has a name here. So this answers for what it can and says
  * nothing about the rest.
  *
- * Everything it returns is already public — a username, a display name and an
- * avatar are what a profile page shows anyone.
+ * Everything it returns is already public — a username, a display name, an
+ * avatar and the links somebody chose to put on their profile are what that
+ * profile page shows anyone who visits it.
  */
 
 export const dynamic = "force-dynamic";

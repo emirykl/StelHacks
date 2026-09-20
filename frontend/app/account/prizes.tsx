@@ -7,6 +7,7 @@ import { CashOut } from "../hackathons/[slug]/cash-out";
 import { useWallet } from "../components/wallet-context";
 import { amountOf, codeFor, prizesFor, type Prize } from "../../lib/prizes";
 import { assetOf, type PrizeAsset } from "../../lib/trustline";
+import { titleOf } from "../../lib/words";
 
 /**
  * What this wallet has won, and the way to spend it.
@@ -107,7 +108,7 @@ export function Prizes() {
               )}
 
               <span className="label ml-3 text-ink-faint">
-                {ordinal(prize.rank)} · {prize.track}
+                {ordinal(prize.rank)} · {titleOf(prize.track)}
               </span>
             </span>
 

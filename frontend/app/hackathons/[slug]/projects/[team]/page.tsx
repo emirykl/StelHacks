@@ -7,6 +7,7 @@ import { Deck, Video } from "./media";
 import { findHackathon } from "../../../../../lib/chain";
 import { entriesOf } from "../../../../../lib/submissions";
 import { membersOf, projectOf, type Member } from "../../../../../lib/project";
+import { titleOf } from "../../../../../lib/words";
 
 /**
  * One project, laid out the way somebody reads one.
@@ -87,7 +88,7 @@ export default async function ProjectPage({
           >
             Projects
           </a>
-          {entry !== null && <span className="text-ink"> / {entry.track}</span>}
+          {entry !== null && <span className="text-ink"> / {titleOf(entry.track)}</span>}
         </p>
 
         {/* The banner, with the mark sitting over its lower left corner. Round

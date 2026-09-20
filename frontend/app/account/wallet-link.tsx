@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../components/primitives";
 import { useWallet } from "../components/wallet-context";
-import { browserClient } from "../../lib/supabase/client";
-import { proveAddressHex } from "../../lib/wallet";
+import { isLinked, linkWallet } from "../../lib/link";
 
 /**
  * Proving that the connected wallet is this account's.
@@ -33,21 +32,13 @@ export function WalletLink() {
   const address = wallet?.address ?? null;
 
   const reread = useCallback(async () => {
-    const db = browserClient();
-
-    if (db === null || address === null) {
+    if (address === null) {
       setStanding("unlinked");
 
       return;
     }
 
-    const { data } = await db
-      .from("wallet_links")
-      .select("address")
-      .eq("address", address)
-      .maybeSingle();
-
-    setStanding(data === null ? "unlinked" : "linked");
+    setStanding((await isLinked(address)) ? "linked" : "unlinked");
   }, [address]);
 
   useEffect(() => {
@@ -62,37 +53,23 @@ export function WalletLink() {
     setBusy(true);
     setFailed(null);
 
-    try {
-      const asked = await fetch(`/api/wallet?address=${address}`);
-      const issued = (await asked.json()) as { message?: string; error?: string };
+    const outcome = await linkWallet(address);
 
-      if (!asked.ok || issued.message === undefined) {
-        setFailed(issued.error ?? "could not ask for a challenge");
+    setBusy(false);
 
-        return;
-      }
-
-      const signature = await proveAddressHex(address, issued.message);
-
-      const answered = await fetch("/api/wallet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, signature }),
-      });
-
-      if (!answered.ok) {
-        const said = (await answered.json()) as { error?: string };
-        setFailed(said.error ?? "that did not check out");
-
-        return;
-      }
-
+    if (outcome === "linked") {
       await reread();
-    } catch (thrown) {
-      setFailed(thrown instanceof Error ? thrown.message : "your wallet refused");
-    } finally {
-      setBusy(false);
+
+      return;
     }
+
+    setFailed(
+      outcome === "refused"
+        ? "Your wallet did not sign it."
+        : outcome === "signed-out"
+          ? "Sign in again, then try once more."
+          : "That did not check out.",
+    );
   }
 
   if (!known || address === null || standing === "reading") {

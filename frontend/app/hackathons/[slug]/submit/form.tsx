@@ -2,7 +2,7 @@
 
 import { looksLikeContract } from "../../../../lib/explorer";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Measure } from "../../../components/primitives";
 import { CommitButton } from "../../../components/commit-button";
@@ -16,6 +16,7 @@ import { metadataHash, standingOf, type Standing } from "../../../../lib/partici
 import { proveAddressHex } from "../../../../lib/wallet";
 import type { Track } from "../../../../lib/rules";
 import type { FieldRule, SubmissionFields } from "../../../../lib/constitution";
+import { titleOf } from "../../../../lib/words";
 
 /**
  * Entering a project, on a page of its own.
@@ -68,6 +69,7 @@ export function SubmitForm({
   const [standing, setStanding] = useState<Standing | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [chainAccepted, setChainAccepted] = useState(false);
 
   const [track, setTrack] = useState(tracks[0]?.id ?? "");
   const [title, setTitle] = useState("");
@@ -115,6 +117,53 @@ export function SubmitForm({
     !missing(requires.pitchDeck, deck) &&
     !missing(requires.deployedContract, deployed);
 
+  async function saveProject(address: string, teamId: number): Promise<string | null> {
+    if (userId === null) {
+      return "Your entry is on-chain, but its title, description and artwork need a signed-in StelHacks account before they can be saved.";
+    }
+
+    try {
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const response = await fetch("/api/project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contract: contractId,
+          teamId,
+          title: title.trim(),
+          summary: summary.trim(),
+          description: about.trim(),
+          contract_address: deployed.trim(),
+          logo_url: logo,
+          banner_url: banner,
+          pitch_deck_url: deck,
+          repository_url: repo.trim(),
+          live_url: live.trim(),
+          demo_video_url: video.trim(),
+          issuedAt,
+          signature: await proveAddressHex(
+            address,
+            challengeFor(contractId, userId, issuedAt, "team"),
+          ),
+        }),
+      });
+
+      if (response.ok) {
+        return null;
+      }
+
+      const problem = (await response.json().catch(() => null)) as { error?: unknown } | null;
+      const reason =
+        typeof problem?.error === "string" && problem.error.length > 0
+          ? problem.error
+          : `the details service returned ${response.status}`;
+
+      return `Your entry is on-chain, but its project details were not saved: ${reason}`;
+    } catch {
+      return "Your entry is on-chain, but its project details could not be saved because the details service could not be reached.";
+    }
+  }
+
   async function submit() {
     if (address === null || team === null) {
       return;
@@ -123,86 +172,78 @@ export function SubmitForm({
     setBusy(true);
     setFailed(null);
 
-    /*
-      Hashed from exactly what was typed, in the browser that typed it.
+    if (!chainAccepted) {
+      /*
+        Hashed from exactly what was typed, in the browser that typed it.
 
-      The contract keeps this digest and nothing else, so anybody can later take
-      the text off our side, hash it the same way and see whether it is the text
-      that was pinned before the deadline. Fields the person left empty are left
-      out rather than hashed as empty strings, so adding an optional field later
-      does not change the digest of a project that never used it.
-    */
-    const pinned = Object.fromEntries(
-      Object.entries({
-        title: title.trim(),
-        summary: summary.trim(),
-        description: about.trim(),
-        contract_address: deployed.trim(),
-        repository: repo.trim(),
-        live: live.trim(),
-        video: video.trim(),
-        /* Pinned now that an organizer can demand one. A field the frozen rules
-           can make compulsory has to be covered by the digest, or an event
-           could require a deck and have nothing to hold the team to. */
-        deck: deck.trim(),
-      }).filter(([, value]) => value.length > 0),
-    );
+        The contract keeps this digest and nothing else, so anybody can later take
+        the text off our side, hash it the same way and see whether it is the text
+        that was pinned before the deadline. Fields the person left empty are left
+        out rather than hashed as empty strings, so adding an optional field later
+        does not change the digest of a project that never used it.
+      */
+      const pinned = Object.fromEntries(
+        Object.entries({
+          title: title.trim(),
+          summary: summary.trim(),
+          description: about.trim(),
+          contract_address: deployed.trim(),
+          repository: repo.trim(),
+          live: live.trim(),
+          video: video.trim(),
+          /* Pinned now that an organizer can demand one. A field the frozen rules
+             can make compulsory has to be covered by the digest, or an event
+             could require a deck and have nothing to hold the team to. */
+          deck: deck.trim(),
+        }).filter(([, value]) => value.length > 0),
+      );
 
-    const digest = await metadataHash(pinned);
+      const digest = await metadataHash(pinned);
 
-    const outcome: Sent = await send(
-      contractId,
-      "submit_project",
-      [
-        await arg.address(address),
-        await arg.u32(team),
-        await arg.symbol(track),
-        await arg.bytes32(digest),
-        await arg.text(repo.trim()),
-      ],
-      address,
-    );
+      /*
+        The URI is public contract state, so it must never be the repository or
+        another private submission field. It points back to the StelHacks page
+        instead; that page reads the write-up through RLS and therefore keeps
+        the same Public / Participants / Restricted rule as the gallery.
+      */
+      const projectUri = new URL(
+        `/hackathons/${encodeURIComponent(slug)}/projects/${team}`,
+        window.location.origin,
+      ).toString();
 
-    if (!outcome.ok) {
-      setFailed(outcome.refused ? null : (outcome.why ?? "the contract refused it"));
+      const outcome: Sent = await send(
+        contractId,
+        "submit_project",
+        [
+          await arg.address(address),
+          await arg.u32(team),
+          await arg.symbol(track),
+          await arg.bytes32(digest),
+          await arg.text(projectUri),
+        ],
+        address,
+      );
+
+      if (!outcome.ok) {
+        setFailed(outcome.refused ? null : (outcome.why ?? "the contract refused it"));
+        setBusy(false);
+
+        return;
+      }
+
+      setChainAccepted(true);
+    }
+
+    /* A failed description write no longer masquerades as success. The
+       on-chain entry is already safe, and the next press retries only this
+       off-chain half instead of asking the wallet to submit it again. */
+    const saveError = await saveProject(address, team);
+
+    if (saveError !== null) {
+      setFailed(saveError);
       setBusy(false);
 
       return;
-    }
-
-    /* The entry is on chain either way. What follows is the description of it,
-       and a description that failed to save is worth saying so about without
-       implying the submission did not happen. */
-    try {
-      const issuedAt = Math.floor(Date.now() / 1000);
-
-      if (userId !== null) {
-        await fetch("/api/project", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contract: contractId,
-            teamId: team,
-            title: title.trim(),
-            summary: summary.trim(),
-            description: about.trim(),
-            contract_address: deployed.trim(),
-            logo_url: logo,
-            banner_url: banner,
-            pitch_deck_url: deck,
-            repository_url: repo.trim(),
-            live_url: live.trim(),
-            demo_video_url: video.trim(),
-            issuedAt,
-            signature: await proveAddressHex(
-              address,
-              challengeFor(contractId, userId, issuedAt, "team"),
-            ),
-          }),
-        });
-      }
-    } catch {
-      /* Nothing to do about it here. The entry stands. */
     }
 
     router.push(`/hackathons/${slug}?tab=projects`);
@@ -257,7 +298,7 @@ export function SubmitForm({
                 >
                   {tracks.map((one) => (
                     <option key={one.id} value={one.id}>
-                      {one.id}
+                      {titleOf(one.id)}
                     </option>
                   ))}
                 </select>
@@ -398,7 +439,13 @@ export function SubmitForm({
             already say. */}
         <div className="mt-12 flex justify-center border-t border-rule pt-10">
           <CommitButton disabled={busy || !ready} onClick={() => void submit()}>
-            {busy ? "Signing" : "Submit the project"}
+            {busy
+              ? chainAccepted
+                ? "Saving details"
+                : "Signing"
+              : chainAccepted
+                ? "Retry saving project details"
+                : "Submit the project"}
           </CommitButton>
         </div>
 
@@ -593,8 +640,14 @@ function DeckPicker({
   onChange: (url: string) => void;
   optional: boolean;
 }) {
+  const picker = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  /* What was chosen, remembered here because the upload renames the file to a
+     timestamp on the way into the bucket and the URL that comes back carries
+     nothing a person would recognise. Absent on a draft reopened later, where
+     there is a deck and no memory of what it was called. */
+  const [chose, setChose] = useState<{ name: string; size: number } | null>(null);
 
   async function take(file: File | undefined) {
     if (file === undefined) {
@@ -614,23 +667,27 @@ function DeckPicker({
       return;
     }
 
+    setChose({ name: file.name, size: file.size });
     onChange(uploaded.url);
   }
 
+  const attached = value.length > 0;
+
   return (
-    <label className="grid gap-2">
+    <div className="grid gap-2">
       <span className="flex items-baseline gap-2.5">
         <span className="text-[1rem] font-semibold text-ink">Pitch deck</span>
         <span className="text-[0.875rem] text-ink-faint">PDF, up to 20 MB</span>
 
         {optional ? (
           <span className="text-[0.875rem] text-ink-faint">optional</span>
-        ) : (
+        ) : attached ? null : (
           <span className="text-[0.875rem] text-signal-deep dark:text-signal">required</span>
         )}
       </span>
 
       <input
+        ref={picker}
         type="file"
         accept="application/pdf"
         className="hidden"
@@ -642,16 +699,109 @@ function DeckPicker({
         }}
       />
 
-      <span className="flex h-12 cursor-pointer items-center gap-3 rounded-[0.625rem] bg-paper px-4 text-[1rem] ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle hover:ring-ink">
-        <Document />
+      {/*
+        Attached, and visibly so.
 
-        <span className={value.length === 0 ? "text-ink-faint" : "truncate text-ink"}>
-          {busy ? "Uploading" : value.length === 0 ? "Choose a file" : "Uploaded — choose another"}
-        </span>
-      </span>
+        This was one grey row reading "Uploaded — choose another", which asks
+        somebody to notice that four words changed in a control that otherwise
+        looks identical either way. A pitch deck is the one thing on this form
+        a team cannot check by re-reading it, so the confirmation says the
+        file's own name, its size, and offers to open it. Opening it is the
+        part that actually proves the upload: the bytes came back.
+      */}
+      {attached ? (
+        <div className="grid gap-2 rounded-[0.625rem] bg-verified/8 p-3 ring-1 ring-inset ring-verified/30">
+          <div className="flex items-center gap-3">
+            <Ticked />
+
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[1rem] text-ink">
+                {chose?.name ?? "Your pitch deck"}
+              </span>
+
+              <span className="block text-[0.8125rem] text-ink-soft">
+                {busy
+                  ? "Replacing"
+                  : chose === null
+                    ? "Attached to this submission"
+                    : `Attached · ${megabytes(chose.size)}`}
+              </span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-[0.875rem]">
+            <a
+              href={value}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-ink underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:decoration-ink"
+            >
+              Open it
+            </a>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => picker.current?.click()}
+              className="text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink disabled:opacity-40"
+            >
+              Replace
+            </button>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setChose(null);
+                onChange("");
+              }}
+              className="text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-broken hover:decoration-broken disabled:opacity-40"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => picker.current?.click()}
+          className="flex h-12 items-center gap-3 rounded-[0.625rem] bg-paper px-4 text-left text-[1rem] ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle hover:ring-ink disabled:opacity-60"
+        >
+          <Document />
+
+          <span className="text-ink-faint">{busy ? "Uploading" : "Choose a file"}</span>
+        </button>
+      )}
 
       {refused !== null && <span className="text-[0.875rem] text-broken">{refused}</span>}
-    </label>
+    </div>
+  );
+}
+
+/** The size as a person would say it, which is never in bytes. */
+function megabytes(size: number): string {
+  const mb = size / 1_000_000;
+
+  return mb < 0.1 ? `${Math.max(1, Math.round(size / 1_000))} KB` : `${mb.toFixed(1)} MB`;
+}
+
+/** The one mark on this form that says a thing is done rather than pending. */
+function Ticked() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-5 shrink-0 text-verified"
+    >
+      <circle cx="8" cy="8" r="6.4" />
+      <path d="m5.4 8.2 1.8 1.8 3.4-3.8" />
+    </svg>
   );
 }
 

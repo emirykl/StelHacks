@@ -322,6 +322,30 @@
     animation: draw 0.4s var(--ease-settle) forwards;
   }
 
+  /*
+    A line arriving just after the one above it.
+
+    For a short ordered list that is describing a sequence: four moves that will
+    happen one after another read as a sequence when they arrive as one, and as
+    four unrelated rows when they are all simply there. The delay is set where
+    the list is drawn, because only the list knows its own order.
+  */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.375rem);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .rise {
+    opacity: 0;
+    animation: rise 0.45s var(--ease-settle) forwards;
+  }
+
   /* The grain that makes a flat surface read as printed. Kept separate from
      the halftone so a surface can carry one without the other. */
   .grain {
@@ -354,6 +378,13 @@
        the tick invisible: the state would be lost along with the motion. */
     .tick {
       stroke-dasharray: none;
+    }
+
+    /* The rule above collapses the motion but not the wait before it, and a
+       line held at zero opacity for a quarter of a second is the animation
+       again, just worse. */
+    .rise {
+      animation-delay: 0ms !important;
     }
   }
 }

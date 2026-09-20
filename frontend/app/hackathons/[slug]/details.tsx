@@ -2,7 +2,13 @@ import { Measure } from "../../components/primitives";
 import { OnChain } from "./on-chain";
 import { windowsOf } from "../../../lib/rules";
 import { WEIGHT_TOTAL_BPS } from "../../../lib/constitution";
-import { prizeLabel, worthOf } from "../../../lib/money";
+import { prizeLabel, units, worthOf } from "../../../lib/money";
+import { Sponsor } from "./sponsor";
+import { TokenMark } from "../../components/token";
+import { backersOf } from "../../../lib/backers";
+import { canSponsor, contributionsOf, positionsOf, type Position } from "../../../lib/sponsor";
+import { codeFor } from "../../../lib/prizes";
+import { titleOf } from "../../../lib/words";
 import type { HackathonDetail } from "../../../lib/chain";
 import type { Rules } from "../../../lib/rules";
 
@@ -37,6 +43,13 @@ interface Part {
 export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
   const rules = hackathon.rules;
 
+  /* What each place pays today rather than what the document froze. Read once
+     here and handed to both the table and the sponsor panel below it: they were
+     showing two different figures for the same prize, and the frozen one was on
+     the table everybody reads. */
+  const positions =
+    rules === null ? [] : await positionsOf(hackathon.contract_id, rules);
+
   const parts: Part[] = [
     { id: "introduction", title: "Introduction", when: hackathon.description !== null },
     { id: "timeline", title: "Timeline", when: rules !== null },
@@ -70,7 +83,24 @@ export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
 
               {rules.tiers.length > 0 && (
                 <Part id="prizes" title="Prizes">
-                  <Prizes rules={rules} asset={hackathon.asset} />
+                  <div className="grid gap-8">
+                    <Prizes rules={rules} positions={positions} asset={hackathon.asset} />
+
+                    {/* Under the table rather than beside it. A reader has to
+                        see what the positions pay before being asked whether to
+                        make one of them pay more. */}
+                    {canSponsor(rules, hackathon.phase) && (
+                      <Sponsor
+                        contractId={hackathon.contract_id}
+                        rules={rules}
+                        phase={hackathon.phase}
+                        positions={positions}
+                        contributions={await contributionsOf(hackathon.contract_id)}
+                        backers={await backersOf(hackathon.contract_id)}
+                        code={codeOf(hackathon.asset)}
+                      />
+                    )}
+                  </div>
                 </Part>
               )}
 
@@ -90,35 +120,36 @@ export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
               own claim with them. Behind a button they are the reader asking
               rather than the page telling. */}
           <OnChain
+            proofHref={`/hackathons/${hackathon.slug}/proof`}
             held={[
               {
                 label: "Rules digest",
-                said: "A fingerprint of the frozen rules. Rebuild them from this page, hash them yourself, and compare: if the two differ, the competition being run is not the one that was announced. There is nothing to open on an explorer, because it is a hash of a document rather than an address.",
+                said: "Fingerprint of the rules frozen before registration opened.",
                 value: hackathon.constitution_hash,
-                missing: "the rules are not locked yet",
+                missing: "The rules are not locked yet.",
               },
               {
                 label: "Hackathon contract",
-                said: "The contract running this event. It holds the rules, the phase and the result.",
+                said: "Runs the event and stores its rules, current phase and result.",
                 value: hackathon.contract_id,
                 kind: "contract",
               },
               {
                 label: "Prize vault",
-                said: "The contract holding the money. It has no owner and no way to withdraw; only the hackathon above can move anything out of it, and only after a result is final.",
+                said: "Holds the prize. Only the hackathon contract can pay it out.",
                 value: hackathon.vault_id,
                 kind: "contract",
-                missing: "no vault bound yet",
+                missing: "No vault is connected yet.",
               },
               {
                 label: "Organizer",
-                said: "The wallet the contract treats as the organizer. It is the only key that can screen entries or move the event on.",
+                said: "Wallet authorized to manage this hackathon.",
                 value: hackathon.organizer,
                 kind: "account",
               },
               {
                 label: "Prize token",
-                said: "The token the prizes are denominated in and paid out in. Not an amount: this is the contract for the token itself.",
+                said: "Asset used to fund and pay every prize.",
                 value: hackathon.asset ?? hackathon.prize_asset,
                 kind: "contract",
               },
@@ -261,8 +292,23 @@ function When({ at }: { at: number }) {
  * table for: they want to know what winning gets them. The pool is already the
  * headline figure in the rail at the top of the page, and how the vault works
  * is the whole of the how-it-works page.
+ *
+ * The figures come from the contract's `payable`, not from the frozen tiers.
+ * They are the same number until somebody sponsors a place, and after that the
+ * frozen one is wrong in the only direction that matters: it understates what a
+ * winner is about to be paid. The old amount stays beside the new one, because
+ * a prize that grew is worth seeing as having grown.
  */
-function Prizes({ rules, asset }: { rules: Rules; asset: string | null }) {
+function Prizes({
+  rules,
+  positions,
+  asset,
+}: {
+  rules: Rules;
+  /** What each place pays today, read from the contract. */
+  positions: Position[];
+  asset: string | null;
+}) {
   /* Grouped under the category that pays them rather than repeating its name on
      every row. A track with three places said "in payments" three times. */
   const tracks = [...new Set(rules.tiers.map((tier) => tier.track))];
@@ -274,30 +320,49 @@ function Prizes({ rules, asset }: { rules: Rules; asset: string | null }) {
 
         return (
           <div key={track}>
-            <h3 className="mb-1 text-[1rem] text-ink-soft">{track}</h3>
+            <h3 className="mb-1 text-[1rem] text-ink-soft">{titleOf(track)}</h3>
 
             <ul className="grid gap-0">
-              {tiers.map((tier, at) => (
-                <li
-                  key={tier.rank}
-                  className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3 ${
-                    at === tiers.length - 1 ? "" : "border-b border-rule"
-                  }`}
-                >
-                  <span className="flex items-baseline gap-2.5 text-[1rem] text-ink">
-                    {/* A medal for the three places that have one. Hidden from
-                        a screen reader: the word beside it already says which
-                        place this is, and "first place medal, First" is the
-                        same fact twice. */}
-                    <span aria-hidden className="text-[1.125rem]">
-                      {MEDALS[tier.rank] ?? ""}
-                    </span>
-                    {ordinal(tier.rank)}
-                  </span>
+              {tiers.map((tier, at) => {
+                const pays =
+                  positions.find(
+                    (one) => one.track === tier.track && one.rank === tier.rank,
+                  )?.worth ?? tier.amount;
 
-                  <Amount amount={tier.amount} asset={asset} />
-                </li>
-              ))}
+                return (
+                  <li
+                    key={tier.rank}
+                    className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3 ${
+                      at === tiers.length - 1 ? "" : "border-b border-rule"
+                    }`}
+                  >
+                    <span className="flex items-baseline gap-2.5 text-[1rem] text-ink">
+                      {/* A medal for the three places that have one. Hidden from
+                          a screen reader: the word beside it already says which
+                          place this is, and "first place medal, First" is the
+                          same fact twice. */}
+                      <span aria-hidden className="text-[1.125rem]">
+                        {MEDALS[tier.rank] ?? ""}
+                      </span>
+                      {ordinal(tier.rank)}
+                    </span>
+
+                    <span className="flex items-baseline gap-2.5">
+                      {/* Only when it moved. On the table every reader sees, a
+                          prize that quietly grew looks like a table somebody
+                          edited; saying what it was is what makes it a prize
+                          somebody added to. */}
+                      {pays > tier.amount && (
+                        <span className="text-[0.8125rem] text-ink-faint">
+                          was {units(tier.amount)}
+                        </span>
+                      )}
+
+                      <Amount amount={pays} asset={asset} />
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         );
@@ -316,7 +381,11 @@ async function Amount({ amount, asset }: { amount: bigint; asset: string | null 
 
   return (
     <span className="text-[1rem] text-ink">
-      {shown.figure} <span className="font-bold text-ink">{shown.code}</span>
+      {shown.figure}{" "}
+      <span className="inline-flex items-center gap-1.5 align-middle font-bold text-ink">
+        <TokenMark code={shown.code} className="size-4" />
+        {shown.code}
+      </span>
     </span>
   );
 }
@@ -337,7 +406,7 @@ function Judging({ rules }: { rules: Rules }) {
               category every small event has is a heading that labels the whole
               section twice. */}
           {rules.tracks.length > 1 && (
-            <h3 className="mb-2 text-[1rem] text-ink-soft">{track.id}</h3>
+            <h3 className="mb-2 text-[1rem] text-ink-soft">{titleOf(track.id)}</h3>
           )}
 
           <ul className="grid gap-0">
@@ -348,7 +417,7 @@ function Judging({ rules }: { rules: Rules }) {
                   at === track.criteria.length - 1 ? "" : "border-b border-rule"
                 }`}
               >
-                <span className="text-[1rem] text-ink">{criterion.id}</span>
+                <span className="text-[1rem] text-ink">{titleOf(criterion.id)}</span>
 
                 <span className="text-[1rem] text-ink-soft">
                   {percent(criterion.weightBps)}
@@ -450,4 +519,15 @@ function ordinal(rank: number): string {
   ];
 
   return names[rank] ?? `Place ${rank} winner`;
+}
+
+/**
+ * The prize token's ticker, or a neutral word when it is not one we offer.
+ *
+ * Shown beside every figure in the sponsorship panel, so an unknown asset gets
+ * "units" rather than an empty string: a number with nothing after it reads as
+ * a number somebody forgot to label.
+ */
+function codeOf(asset: string | null): string {
+  return codeFor(asset) ?? "units";
 }

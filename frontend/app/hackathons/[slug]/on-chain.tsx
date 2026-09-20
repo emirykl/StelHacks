@@ -1,146 +1,109 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 
+import { Modal, ModalClose } from "../../components/modal";
 import { EXPLORER } from "../../../lib/explorer";
 
-/**
- * The values the chain holds, behind one press.
- *
- * They were a section of the page, five rows of fifty six characters that
- * almost nobody reads and that nobody reads twice. Kept open they set the tone
- * of a page whose subject is a hackathon rather than a ledger; removed they
- * would take the product's own claim with them, because "check it yourself" is
- * not a claim if the things to check are not there.
- *
- * So they are here, whole and uncut, one press away. A dialog is the right
- * shape for that: it is the reader asking rather than the page telling.
- */
-
+/** One essential value the event stores on-chain. */
 export interface Held {
   label: string;
-  /** What it means, in the words of somebody who has not met a digest before. */
   said: string;
   value: string | null;
-  /** An account and a contract are different pages on the explorer. */
+  /** An account and a contract open on different explorer routes. */
   kind?: "contract" | "account";
   missing?: string;
 }
 
-export function OnChain({ held }: { held: Held[] }) {
+/**
+ * A short proof summary.
+ *
+ * This modal deliberately contains only the five identifiers somebody is most
+ * likely to verify. Entries, sealed roots and results live on the full proof
+ * page linked at the bottom, so the quick view and the receipt have distinct
+ * jobs instead of repeating one another beside the same button.
+ */
+export function OnChain({ held, proofHref }: { held: Held[]; proofHref: string }) {
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const escape = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
-
-    document.addEventListener("keydown", escape);
-
-    return () => document.removeEventListener("keydown", escape);
-  }, [open]);
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2.5 self-start rounded-full px-5 py-3 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:ring-ink"
+        className="flex items-center gap-2.5 justify-self-start rounded-full px-5 py-3 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:ring-ink"
       >
         <Seal />
-        On-chain proofs
+        On-chain proof
       </button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="On-chain proofs"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 backdrop-blur-sm sm:items-center"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="max-h-[85vh] w-full max-w-[44rem] overflow-y-auto rounded-[1.25rem] bg-paper p-6 shadow-2xl sm:p-8"
-          >
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <h2 className="text-[1.5rem] font-semibold text-ink">On-chain proofs</h2>
+      <Modal open={open} onClose={() => setOpen(false)} title="On-chain proof">
+        <ModalClose onClose={() => setOpen(false)} />
 
-                <p className="mt-2 max-w-[34rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-                  Everything this page claims is stored by a contract rather than
-                  by us. These are the values it holds, in full, so they can be
-                  compared against what the network says.
+        <header className="pr-10">
+          <p className="label text-[0.75rem] text-verified">Read from Stellar</p>
+          <h2 className="display mt-1 text-[1.75rem] font-bold leading-tight text-ink">
+            On-chain proof
+          </h2>
+          <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+            The essential addresses behind this hackathon. Open any linked value
+            to verify it on Stellar Expert.
+          </p>
+        </header>
+
+        <div className="mt-7 grid gap-5">
+          {held.map((one) => (
+            <section key={one.label} className="border-b border-rule pb-5 last:border-0 last:pb-0">
+              <h3 className="display text-[1.125rem] font-bold leading-tight text-ink">
+                {one.label}
+              </h3>
+              <p className="mt-1.5 text-[0.875rem] leading-relaxed text-ink-soft">{one.said}</p>
+
+              {one.value === null ? (
+                <p className="mt-3 text-[0.875rem] font-medium text-ink-faint">
+                  {one.missing ?? "Not published yet"}
                 </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="grid size-9 shrink-0 place-items-center rounded-full text-ink-faint transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
-              >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  className="size-4"
+              ) : one.kind === undefined ? (
+                <p className="tabular mt-3 break-all rounded-[0.625rem] bg-paper-sunk px-3 py-2.5 text-[0.8125rem] leading-relaxed text-ink">
+                  {one.value}
+                </p>
+              ) : (
+                <a
+                  href={`https://stellar.expert/explorer/${EXPLORER}/${one.kind}/${one.value}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group mt-3 block rounded-[0.625rem] bg-paper-sunk px-3 py-2.5 ring-1 ring-inset ring-rule transition-colors hover:bg-paper hover:ring-ink"
                 >
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
-              </button>
-            </div>
-
-            <dl className="mt-7 divide-y divide-rule border-y border-rule">
-              {held.map((one) => (
-                <div key={one.label} className="grid gap-1.5 py-4">
-                  <dt className="label text-[0.8125rem] font-semibold text-ink">{one.label}</dt>
-
-                  <dd className="min-w-0">
-                    <p className="text-[0.875rem] leading-relaxed text-ink-soft">{one.said}</p>
-
-                    {one.value === null ? (
-                      <p className="mt-1.5 text-[0.875rem] text-ink-faint">
-                        {one.missing ?? "not published yet"}
-                      </p>
-                    ) : (
-                      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                        {/* Whole, because this is the one place somebody
-                            compares a value character by character and a digest
-                            with its middle cut out compares against nothing. */}
-                        <span className="tabular min-w-0 break-all text-[0.875rem] text-ink">
-                          {one.value}
-                        </span>
-
-                        {one.kind !== undefined && (
-                          <a
-                            href={`https://stellar.expert/explorer/${EXPLORER}/${one.kind}/${one.value}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="label shrink-0 text-[0.75rem] text-ink-faint underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
-                          >
-                            Explorer ↗
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+                  <span className="tabular block break-all text-[0.8125rem] leading-relaxed text-ink">
+                    {one.value}
+                  </span>
+                  <span className="mt-2 inline-block text-[0.875rem] font-bold text-ink underline decoration-rule underline-offset-4 group-hover:decoration-ink">
+                    Open in Stellar Expert ↗
+                  </span>
+                </a>
+              )}
+            </section>
+          ))}
         </div>
-      )}
+
+        <div className="mt-7 border-t border-rule pt-6">
+          <Link
+            href={proofHref}
+            onClick={() => setOpen(false)}
+            className="inline-flex min-h-11 items-center rounded-full bg-ink px-5 text-[0.9375rem] font-bold text-paper transition-transform hover:-translate-y-0.5"
+          >
+            View the full proof page&nbsp;→
+          </Link>
+          <p className="mt-2 text-[0.8125rem] leading-relaxed text-ink-faint">
+            Includes entries, sealed judging records and final results.
+          </p>
+        </div>
+      </Modal>
     </>
   );
 }
 
-/** A stamp, for the one control that offers proof rather than information. */
 function Seal() {
   return (
     <svg

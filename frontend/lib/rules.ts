@@ -62,14 +62,15 @@ export const VISIBILITY = ["Public", "Participants", "Restricted"] as const;
 /**
  * The constitution shape this build understands.
  *
- * It is three because a submission field stopped being a yes or no, and a
- * hackathon created before that has three booleans where this build reads five
- * rules. The number is here rather than imported from the contract because
+ * It is six because the prize table stopped being the whole of the prize: a
+ * hackathon created before that has no sponsorship door, and a build that
+ * offered one would be offering a call its contract refuses. The number is
+ * here rather than imported from the contract because
  * nothing on this side can import Rust; it has to match `CONSTITUTION_VERSION`
  * in `contracts/hackathon-core/src/constitution/document.rs`, and the fixtures
  * both languages read are what catch it when it does not.
  */
-export const CONSTITUTION_VERSION = 5;
+export const CONSTITUTION_VERSION = 6;
 
 export interface Rules {
   /**
@@ -96,6 +97,15 @@ export interface Rules {
    */
   judgeAddresses: string[];
   judgeQuorum: number;
+  /**
+   * The address the rules allow to publish the sealed roots.
+   *
+   * Null in strict mode, where there is no such party. Worth reading rather
+   * than assuming: the contract asks this exact key to authorize the call, so a
+   * panel that guessed it would offer the one button whose refusal strands an
+   * event in judging for good.
+   */
+  sealer: string | null;
   maxTeamSize: number;
   multiTeamAllowed: boolean;
   /**
@@ -122,6 +132,15 @@ export interface Rules {
   votePower: number;
   maxChoices: number;
   /**
+   * How far each deadline may still move, as the rules announced it.
+   *
+   * Read rather than assumed because the organizer's panel offers the move and
+   * has to say what is left of the allowance, and because reopening the create
+   * form on an existing draft has to show what was chosen rather than the
+   * default.
+   */
+  extensions: { times: number; seconds: number };
+  /**
    * Seconds between the ranking and the first payment, or zero for none.
    *
    * Read back because the edit form has to put it in front of somebody again,
@@ -129,6 +148,36 @@ export interface Rules {
    * later rather than as anything visible when it was chosen.
    */
   settlementDelay: number;
+  /**
+   * How far outside money may reach into this event, as the rules froze it.
+   *
+   * Read rather than assumed because it is what decides whether a page offers
+   * to take a contribution at all. A hackathon locked before version six has no
+   * such field, and the decoder reads that absence as shut: offering a button
+   * whose call the contract would refuse is worse than not offering it.
+   */
+  sponsorship: Sponsorship;
+  /**
+   * What the platform takes, in basis points of the prize table.
+   *
+   * Read back because it is charged again on every contribution, and the panel
+   * that asks somebody for money has to quote the rate this event froze rather
+   * than one written into the interface. Zero is a real answer and the common
+   * one for community events.
+   */
+  platformFeeBps: number;
+}
+
+/** What the frozen rules allow a sponsor to do. */
+export interface Sponsorship {
+  /** Whether anyone may add to a prize already on the table. */
+  topUps: boolean;
+  /** How many tracks sponsors may open between them. */
+  maxNewTracks: number;
+  /** The least one contribution may carry, in the asset's smallest unit. */
+  minBounty: bigint;
+  /** The track a sponsored one takes its rubric and its judges from. */
+  borrowsFrom: string;
 }
 
 export async function rulesFor(contractId: string): Promise<Rules | null> {
@@ -140,10 +189,7 @@ export async function rulesFor(contractId: string): Promise<Rules | null> {
   }
 
   const [{ Account, Contract, TransactionBuilder, BASE_FEE, scValToNative }, rpc] =
-    await Promise.all([
-      import("@stellar/stellar-sdk/base"),
-      import("@stellar/stellar-sdk/rpc"),
-    ]);
+    await Promise.all([import("@stellar/stellar-sdk/base"), import("@stellar/stellar-sdk/rpc")]);
 
   const server = new rpc.Server(rpcUrl);
 
@@ -222,6 +268,7 @@ function shape(raw: Record<string, unknown>): Rules {
       .map((assignment) => field(assignment, "judge"))
       .filter((address): address is string => typeof address === "string"),
     judgeQuorum: Number(raw["judge_quorum"] ?? 0),
+    sealer: sealerIn(raw["judging_mode"]),
     maxTeamSize: Number(teams["max_size"] ?? 0),
     multiTeamAllowed: teams["multi_team_allowed"] === true,
     /* Reviewed unless the document plainly says otherwise, which is the safe
@@ -240,8 +287,46 @@ function shape(raw: Record<string, unknown>): Rules {
     communityBps: Number(vote["community_bps"] ?? 0),
     votePower: Number(vote["power"] ?? 0),
     maxChoices: Number(vote["max_choices"] ?? 0),
+    extensions: extensionsOf(raw["extensions"]),
     settlementDelay: delayOf(discretion["settlement"]),
+    sponsorship: sponsorshipOf(raw["sponsorship"]),
+    platformFeeBps: Number(field(raw["platform_fee"], "bps") ?? 0),
   };
+}
+
+/**
+ * What the frozen rules allow a sponsor to do, defended like everything else
+ * that crosses the decoder.
+ *
+ * An absent field reads as shut rather than open, which is the safe end here.
+ * Every hackathon locked before the sponsorship door existed has no such field,
+ * and its contract would refuse the call; a page that offered the button anyway
+ * would be inviting somebody into a wallet prompt that cannot succeed.
+ */
+function sponsorshipOf(raw: unknown): Sponsorship {
+  const policy = (raw ?? {}) as Record<string, unknown>;
+
+  return {
+    topUps: policy["top_ups_allowed"] === true,
+    maxNewTracks: Number(policy["max_new_tracks"] ?? 0),
+    minBounty: BigInt((policy["min_bounty"] as bigint | undefined) ?? 0),
+    borrowsFrom: typeof policy["borrows_from"] === "string" ? policy["borrows_from"] : "",
+  };
+}
+
+/**
+ * Who the judging mode names as its sealer.
+ *
+ * `Easy` carries the address; `Strict` carries nothing, because there is no
+ * service standing between the judge and the chain in that mode. Read off the
+ * tagged union rather than from a settings file, since the document is what the
+ * contract will check the signature against.
+ */
+function sealerIn(mode: unknown): string | null {
+  const said = field(mode, "values");
+  const named = Array.isArray(said) ? said[0] : null;
+
+  return typeof named === "string" && /^G[A-Z2-7]{55}$/.test(named) ? named : null;
 }
 
 /**
@@ -264,6 +349,22 @@ function ruleOf(raw: unknown): FieldRule {
  * same way rather than inventing a delay, since a wait this side made up would
  * be a countdown pointing at a moment the contract has never heard of.
  */
+/**
+ * The extension allowance, as two numbers that always travel together.
+ *
+ * A document missing the field reads as a schedule that cannot move, which is
+ * the safe end: it offers nothing rather than offering a move the contract
+ * would then refuse.
+ */
+function extensionsOf(raw: unknown): { times: number; seconds: number } {
+  const held = (raw ?? {}) as Record<string, unknown>;
+
+  return {
+    times: Number(held["max_extensions_per_deadline"] ?? 0),
+    seconds: Number(held["max_total_seconds_per_deadline"] ?? 0),
+  };
+}
+
 function delayOf(settlement: unknown): number {
   return Array.isArray(settlement) && settlement[0] === "SafetyWindow"
     ? Number(settlement[1] ?? 0)

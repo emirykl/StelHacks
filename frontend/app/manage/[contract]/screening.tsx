@@ -19,18 +19,29 @@ import type { Card } from "../../../lib/project";
  *
  * The reason is required. `invalidate_submission` will not take a call without
  * a digest, for the same reason a refused application will not.
+ *
+ * The tab outlives the window it acts in. Entries are worth reading from the
+ * moment they arrive until the event is over, but `invalidate_submission`
+ * answers anything outside Screening with `WrongPhase`, so the button goes away
+ * with the phase and the rest of the card stays.
  */
+
+/** The phase the contract will take a strike in, and the only one. */
+const SCREENING = 3;
 
 export function Screening({
   contractId,
   organizer,
   entries,
+  phase,
   reread,
 }: {
   contractId: string;
   organizer: string | null;
   /** The entries, read by the panel and handed down rather than read twice. */
   entries: Entry[] | null;
+  /** Where the event has got to, which decides whether striking is still open. */
+  phase: number;
   /** Re-reads them after a strike, so the panel's count follows it. */
   reread: () => Promise<void>;
 }) {
@@ -98,6 +109,20 @@ export function Screening({
         </p>
       ) : (
         <>
+          {/* Why the strike button is not on the cards, said once above them
+              rather than left to be discovered. An organizer who struck an
+              entry yesterday and cannot find the control today is owed the
+              reason, and the reason is that the contract has moved past the
+              window where it would have taken the call. */}
+          {organizer !== null && phase > SCREENING && (
+            <p className="mb-5 max-w-[46rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+              The entry check is over, so nothing can be struck out from here
+              any more. Anything that surfaces now goes through the
+              disqualification route, which asks the judges and gives the team a
+              window to answer.
+            </p>
+          )}
+
           {/* The same card the public gallery draws, because it is the same
               project. An organizer deciding whether an entry belongs in the
               event should be looking at what the judges and everybody else will
@@ -160,7 +185,7 @@ export function Screening({
                         : `${entry.members.length} members`}
                     </p>
 
-                    {!entry.invalid && organizer !== null && (
+                    {!entry.invalid && organizer !== null && phase === SCREENING && (
                       <div className="mt-4">
                         <button
                           type="button"
@@ -173,7 +198,7 @@ export function Screening({
                       </div>
                     )}
 
-                    {striking === entry.team && organizer !== null && (
+                    {striking === entry.team && organizer !== null && phase === SCREENING && (
                       <div className="mt-3 grid gap-3 rounded-[0.75rem] bg-paper-sunk p-3">
                         <input
                           value={reason}

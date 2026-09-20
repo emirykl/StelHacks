@@ -118,7 +118,9 @@ export function Filters({
               ›
             </span>
             Topic
-            {(applied.tag ?? "") !== "" && <span className="text-ink">· {applied.tag}</span>}
+            {(applied.tag ?? "") !== "" && (
+              <span className="text-ink">· {titled(applied.tag ?? "")}</span>
+            )}
           </summary>
 
           <div className="flex flex-wrap items-center gap-1 pb-3">
@@ -137,7 +139,7 @@ export function Filters({
                 href={linkTo({ ...applied, tag })}
                 chosen={applied.tag === tag}
               >
-                {tag}
+                {titled(tag)}
               </Choice>
             ))}
           </div>
@@ -257,6 +259,20 @@ function Choice({
       <span className="relative">{children}</span>
     </Link>
   );
+}
+
+/**
+ * A topic as a row of choices should show it, rather than as it is stored.
+ *
+ * Tags are lowercased on the way into the database so that "Soroban" and
+ * "soroban" are one topic in a filter rather than two chips that split the same
+ * hackathons between them. That is right for storage and wrong for a reader:
+ * next to "Everything" and the four stage choices beside it, a row of lowercase
+ * words read as unfinished. The stored value is untouched — only the label
+ * changes, so the link still points at the tag the query matches on.
+ */
+function titled(tag: string): string {
+  return tag.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
 }
 
 /** The mark everybody already reads as "type here to look for something". */

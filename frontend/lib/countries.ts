@@ -46,6 +46,29 @@ export function countryName(code: string): string {
   }
 }
 
+/**
+ * The country's flag, derived from its own code rather than fetched.
+ *
+ * A flag emoji is the two letters of the code shifted into the regional
+ * indicator block, so every code this product stores already carries its flag
+ * and there is no image, no sprite sheet and no list to keep in step with the
+ * one above. A platform without the glyphs falls back to the two letters, which
+ * is exactly what the profile stored.
+ *
+ * Empty for anything that is not one of the codes. A pair of indicators built
+ * from arbitrary text renders as two stray letters in a box, which reads as a
+ * bug rather than as an absence.
+ */
+export function flagOf(code: string): string {
+  if (!isCountry(code)) {
+    return "";
+  }
+
+  return String.fromCodePoint(
+    ...[...code.toUpperCase()].map((letter) => 0x1_f1e6 + letter.charCodeAt(0) - 65),
+  );
+}
+
 /** Every country, named and in the order a person would look through them. */
 export function countriesByName(): { code: string; name: string }[] {
   return COUNTRY_CODES.map((code) => ({ code, name: countryName(code) })).sort((a, b) =>

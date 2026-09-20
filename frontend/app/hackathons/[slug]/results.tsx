@@ -11,8 +11,10 @@ import { rulesFor } from "../../../lib/rules";
 import { runningOf } from "../../../lib/running";
 import { CashOut } from "./cash-out";
 import { Podium } from "./podium";
+import { Reveal } from "./reveal";
 import { teamMarks, type Mark } from "../../../lib/team-names";
 import { accept, assetOf, holds, type PrizeAsset } from "../../../lib/trustline";
+import { titleOf } from "../../../lib/words";
 
 /**
  * Who won, and whether they have been paid.
@@ -341,7 +343,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
             {mine.rank <= 3 ? "Congratulations. " : ""}
             Your team placed{" "}
             <span className="font-medium">{ordinal(mine.rank)}</span> in{" "}
-            {mine.track}
+            {titleOf(mine.track)}
             {mine.paid ? " and the prize has been paid." : "."}
           </p>
         )}
@@ -440,11 +442,13 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
           cannot go below and still be read.
         */}
         <div className="mt-10 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="rounded-[1.25rem] bg-paper px-8 py-10 ring-1 ring-rule">
-            {results.map((result) => (
-              <Podium key={result.track} places={result.places} marks={names} />
-            ))}
-          </div>
+          <Reveal contractId={contractId}>
+            <div className="rounded-[1.25rem] bg-paper px-8 py-10 ring-1 ring-rule">
+              {results.map((result) => (
+                <Podium key={result.track} places={result.places} marks={names} />
+              ))}
+            </div>
+          </Reveal>
 
           {asset !== null && paidHere && prizeAsset !== null && (
             <CashOut asset={asset} token={prizeAsset} />
@@ -457,7 +461,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
               key={result.track}
               className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10"
             >
-              <h3 className="text-[1.3125rem] text-ink">{result.track}</h3>
+              <h3 className="text-[1.3125rem] text-ink">{titleOf(result.track)}</h3>
 
               <div className="mt-6">
                 <SpecRows>

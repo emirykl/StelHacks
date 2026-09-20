@@ -28,13 +28,23 @@ import { useWallet } from "../../components/wallet-context";
 interface Written {
   name: string;
   tagline: string;
+  /** The long one, which the public page prints as its introduction. */
+  description: string;
   location: string;
   tags: string;
   logo: string;
   banner: string;
 }
 
-const blank: Written = { name: "", tagline: "", location: "", tags: "", logo: "", banner: "" };
+const blank: Written = {
+  name: "",
+  tagline: "",
+  description: "",
+  location: "",
+  tags: "",
+  logo: "",
+  banner: "",
+};
 
 export function Details({
   contractId,
@@ -70,6 +80,7 @@ export function Details({
             : {
                 name: String(found["name"] ?? ""),
                 tagline: String(found["tagline"] ?? ""),
+                description: String(found["description"] ?? ""),
                 location: String(found["location"] ?? ""),
                 tags: Array.isArray(found["tags"]) ? (found["tags"] as string[]).join(", ") : "",
                 logo: String(found["logo_url"] ?? ""),
@@ -163,6 +174,7 @@ export function Details({
         ...(proof ?? {}),
         name: written.name.trim(),
         tagline: written.tagline.trim(),
+        description: written.description.trim(),
         location: written.location.trim(),
         logo_url: written.logo.trim(),
         banner_url: written.banner.trim(),
@@ -213,6 +225,20 @@ export function Details({
             onChange={(tagline) => setWritten({ ...written, tagline })}
             placeholder="What it does, and who it is for"
             note="Shown under the name on the listing."
+          />
+
+          {/* The long one, and until now there was nowhere to write it. The
+              create form says the full description comes later, the column has
+              been in the table since the beginning and the public page prints
+              it as its introduction — but no screen ever asked for it, so every
+              hackathon on the site opened with an empty introduction. */}
+          <Field
+            label="Full description"
+            lines={8}
+            value={written.description}
+            onChange={(description) => setWritten({ ...written, description })}
+            placeholder="What the event is, who it is for, what you expect people to build, and anything a team should know before entering."
+            note="The introduction on the public page. Line breaks are kept."
           />
 
           <TagField
@@ -266,23 +292,42 @@ function Field({
   onChange,
   placeholder,
   note,
+  lines,
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
   placeholder: string;
   note?: string;
+  /** Given for a field somebody writes paragraphs into, in rows. */
+  lines?: number;
 }) {
+  /* One class for both shapes, minus the height a single line fixes. A
+     textarea that did not match the inputs around it would read as a different
+     kind of thing on a form where it is not one. */
+  const look =
+    "w-full rounded-[0.625rem] bg-paper px-4 text-[1.0625rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink";
+
   return (
     <label className="grid gap-2">
       <span className="label text-[0.875rem] text-ink">{label}</span>
 
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-12 w-full rounded-[0.625rem] bg-paper px-4 text-[1.0625rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
-      />
+      {lines === undefined ? (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={`h-12 ${look}`}
+        />
+      ) : (
+        <textarea
+          value={value}
+          rows={lines}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={`resize-y py-3 leading-relaxed ${look}`}
+        />
+      )}
 
       {note !== undefined && <span className="text-[0.875rem] text-ink-faint">{note}</span>}
     </label>

@@ -7,15 +7,15 @@
  * handed to the same collection service the judges use. The contract sees it
  * only at the reveal, as a Merkle proof.
  *
- * The two bounds on that service are the same ones judging has. The signature
- * shows the ballot was this wallet's, so the service cannot invent one. The
- * receipt, and the inclusion proof it can be checked against afterwards, shows
- * the ballot was counted, so the service cannot drop one.
+ * Sub Rosa tlock keeps the choices unreadable until the judging deadline. The
+ * signature then shows the ballot was this wallet's, while the receipt and
+ * later inclusion proof show it was counted rather than quietly dropped.
  */
 
 import { db } from "./chain";
 import { toHex } from "./hex";
 import type { Receipt } from "./judge";
+import { sealUntil } from "./sealed-input";
 
 const sealerUrl = process.env["NEXT_PUBLIC_SEALER_URL"];
 
@@ -87,16 +87,22 @@ export async function submitBallot(
   contract: string,
   voter: string,
   choices: readonly Choice[],
+  leaf: Uint8Array,
   signature: string,
+  revealAt: number,
 ): Promise<Receipt> {
   if (sealerUrl === undefined) {
     throw new Error("no collection service is configured for this deployment");
   }
 
+  const sealed = await sealUntil(
+    { kind: "stelhacks.ballot.v1", voter, choices },
+    revealAt,
+  );
   const answer = await fetch(`${sealerUrl}/ballot`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contract, voter, choices, signature }),
+    body: JSON.stringify({ contract, voter, leaf: toHex(leaf), signature, sealed }),
   });
 
   const said = (await answer.json()) as Receipt & { error?: string };
