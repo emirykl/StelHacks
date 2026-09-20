@@ -118,6 +118,16 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
   const dealt =
     anchor !== null && code !== null && anchor.currencies.some((one) => one.code === code);
 
+  /*
+    Re-read once the transfer settles as well as on arrival.
+
+    The card opened saying "you hold 10 USDC" and went on saying it after the
+    ten had gone, which is the one moment a balance on screen is certain to be
+    wrong. The status is the trigger rather than a timer: it changes exactly
+    when the money did.
+  */
+  const finished = stage.at === "running" && settled(stage.transfer.status);
+
   useEffect(() => {
     if (anchor === null || address === null || asset.kind !== "issued") {
       return;
@@ -150,7 +160,7 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
     return () => {
       alive = false;
     };
-  }, [anchor, address, asset, assetContract]);
+  }, [anchor, address, asset, assetContract, finished]);
 
   const resume = useCallback(async () => {
     if (anchor === null || address === null || code === null || token.current === null) {
@@ -348,7 +358,7 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
           and the arrangement after, because that is what they are agreeing to.
           "Your prize" is a phrase; "10 USDC leaves, about 4,800 TRY arrives" is
           the thing. */}
-      {held !== null && (
+      {held !== null && Number(held) > 0 && (
         <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink">
           You hold <span className="tabular font-medium">{held}</span> {codeOf(asset)}.
           {worth !== null && (
