@@ -88,11 +88,16 @@ describe("a signed scorecard", () => {
 });
 
 describe("a signed ballot", () => {
+  const cast = [
+    { team: 3, weight: 6 },
+    { team: 4, weight: 4 },
+  ];
+
   it("verifies against the voter who cast it", () => {
     const keypair = judge();
-    const signed = signBallot(keypair.publicKey(), 3, keypair);
+    const signed = signBallot(keypair.publicKey(), cast, keypair);
 
-    expect(verifyBallot(keypair.publicKey(), 3, signed)).toBe(true);
+    expect(verifyBallot(keypair.publicKey(), cast, signed)).toBe(true);
   });
 
   /**
@@ -102,9 +107,28 @@ describe("a signed ballot", () => {
    */
   it("stops covering the ballot when the project changes", () => {
     const keypair = judge();
-    const signed = signBallot(keypair.publicKey(), 3, keypair);
+    const signed = signBallot(keypair.publicKey(), cast, keypair);
 
-    expect(verifyBallot(keypair.publicKey(), 4, signed)).toBe(false);
+    expect(verifyBallot(keypair.publicKey(), [{ team: 5, weight: 6 }, cast[1]!], signed)).toBe(
+      false,
+    );
+  });
+
+  /**
+   * The weights matter as much as the projects. A signature that survived a
+   * point being moved from one project to another would let a collection
+   * service reweigh a ballot without the voter ever knowing.
+   */
+  it("stops covering the ballot when a point moves between projects", () => {
+    const keypair = judge();
+    const signed = signBallot(keypair.publicKey(), cast, keypair);
+
+    const reweighed = [
+      { team: 3, weight: 5 },
+      { team: 4, weight: 5 },
+    ];
+
+    expect(verifyBallot(keypair.publicKey(), reweighed, signed)).toBe(false);
   });
 
   it("refuses to sign in another voter's name", () => {

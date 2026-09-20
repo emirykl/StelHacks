@@ -11,7 +11,13 @@ import {
   scorecardLeaf,
 } from "../src/hashing.js";
 import { node } from "../src/merkle.js";
-import { canonicalConstitution, canonicalMetadata, canonicalScorecard, VOTER } from "./canonical.js";
+import {
+  canonicalBallot,
+  canonicalConstitution,
+  canonicalMetadata,
+  canonicalScorecard,
+  VOTER,
+} from "./canonical.js";
 
 /**
  * The digests the Rust contract tests assert against, read from the same files.
@@ -116,7 +122,7 @@ describe("sealed leaves", () => {
   });
 
   it("puts a ballot where the contract puts it", () => {
-    expect(toHex(ballotLeaf(VOTER, 2))).toBe(fixture("ballot-leaf.sha256"));
+    expect(toHex(ballotLeaf(VOTER, canonicalBallot()))).toBe(fixture("ballot-leaf.sha256"));
   });
 
   /**
@@ -125,7 +131,7 @@ describe("sealed leaves", () => {
    * the thing an inclusion proof actually depends on.
    */
   it("combines into the root the contract computed", () => {
-    const combined = node(scorecardLeaf(canonicalScorecard()), ballotLeaf(VOTER, 2));
+    const combined = node(scorecardLeaf(canonicalScorecard()), ballotLeaf(VOTER, canonicalBallot()));
 
     expect(toHex(combined)).toBe(fixture("merkle-root.sha256"));
   });

@@ -1,5 +1,5 @@
 import { Keypair, StrKey, hash } from "@stellar/stellar-sdk";
-import type { Scorecard } from "hackathon-core";
+import type { Scorecard, VoteChoice } from "hackathon-core";
 
 import { ballotLeaf, scorecardLeaf } from "./hashing.js";
 import { toHex } from "./hex.js";
@@ -64,12 +64,16 @@ export function signScorecard(scorecard: Scorecard, keypair: Keypair): SealedSig
 }
 
 /** Signs a community ballot as the voter it names. */
-export function signBallot(voter: string, team: number, keypair: Keypair): SealedSignature {
+export function signBallot(
+  voter: string,
+  choices: readonly VoteChoice[],
+  keypair: Keypair,
+): SealedSignature {
   if (keypair.publicKey() !== voter) {
     throw new Error(`this keypair is ${keypair.publicKey()}, but the ballot names ${voter}`);
   }
 
-  return sign(ballotLeaf(voter, team), keypair);
+  return sign(ballotLeaf(voter, choices), keypair);
 }
 
 /**
@@ -101,8 +105,12 @@ export function verifyScorecard(scorecard: Scorecard, entry: SealedSignature): b
 }
 
 /** The same check for a ballot. */
-export function verifyBallot(voter: string, team: number, entry: SealedSignature): boolean {
-  return matches(ballotLeaf(voter, team), entry) && entry.signer === voter;
+export function verifyBallot(
+  voter: string,
+  choices: readonly VoteChoice[],
+  entry: SealedSignature,
+): boolean {
+  return matches(ballotLeaf(voter, choices), entry) && entry.signer === voter;
 }
 
 /**

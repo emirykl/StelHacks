@@ -1,6 +1,7 @@
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{Address, Bytes, BytesN, Env};
+use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
+use crate::ballot::VoteChoice;
 use crate::constitution::Constitution;
 use crate::merkle;
 use crate::scorecard::Scorecard;
@@ -56,14 +57,28 @@ pub fn scorecard_leaf(env: &Env, scorecard: &Scorecard) -> BytesN<32> {
 
 /// The leaf a community ballot occupies.
 ///
-/// A ballot is only ever a voter and the project they chose, so the payload is
-/// exactly that pair. Nothing about the voter's identity is hidden here: the
-/// tally is sealed until the reveal, and after it every ballot is open for
-/// anyone to recount.
-pub fn ballot_leaf(env: &Env, voter: &Address, team: u32) -> BytesN<32> {
+/// The whole ballot, not one choice of it. A voter places points across up to
+/// three projects and all of it is sealed under a single digest, because the
+/// rules count a ballot rather than a choice: one wallet spends its power once,
+/// and splitting the seal per project would let somebody reveal the half that
+/// suits them and abandon the rest.
+///
+/// Nothing about the voter's identity is hidden here. The tally is sealed until
+/// the reveal, and after it every ballot is open for anyone to recount.
+pub fn ballot_leaf(env: &Env, voter: &Address, choices: &Vec<VoteChoice>) -> BytesN<32> {
     let mut payload = Bytes::from_slice(env, BALLOT_DOMAIN);
     payload.append(&voter.clone().to_xdr(env));
-    payload.extend_from_array(&team.to_be_bytes());
+
+    /* Length first, then the choices in the one order the contract accepts.
+    Without the length a ballot of two choices and a ballot of one whose team
+    number happened to spell the second pair would hash the same, which is the
+    ordinary way a concatenation becomes ambiguous. */
+    payload.extend_from_array(&choices.len().to_be_bytes());
+
+    for choice in choices.iter() {
+        payload.extend_from_array(&choice.team.to_be_bytes());
+        payload.extend_from_array(&choice.weight.to_be_bytes());
+    }
 
     merkle::leaf(env, &payload)
 }

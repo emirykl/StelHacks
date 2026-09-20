@@ -36,12 +36,12 @@ function ranking(): { topVotes: number; projects: ProjectData[]; expected: Row[]
     const fields = Object.fromEntries(
       line
         .split(" ")
-        .slice(line.startsWith("top_votes") ? 0 : 1)
+        .slice(line.startsWith("top_weight") ? 0 : 1)
         .map((pair) => pair.split("=") as [string, string]),
     );
 
-    if (line.startsWith("top_votes")) {
-      topVotes = Number(fields["top_votes"]);
+    if (line.startsWith("top_weight")) {
+      topVotes = Number(fields["top_weight"]);
     } else if (line.startsWith("project")) {
       projects.push({
         team: Number(fields["team"]),
@@ -49,7 +49,7 @@ function ranking(): { topVotes: number; projects: ProjectData[]; expected: Row[]
         submittedAt: BigInt(fields["submitted_at"]!),
         valid: fields["valid"] === "1",
         scores: { count: Number(fields["score_count"]), total: BigInt(fields["score_total"]!) },
-        votes: Number(fields["votes"]),
+        votes: Number(fields["weight"]),
         criterionTallies: {},
       });
     } else {

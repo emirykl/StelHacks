@@ -29,4 +29,6 @@ pub use scoring::{
 };
 pub use teams::{TeamPolicy, MAX_TEAM_SIZE, MIN_TEAM_SIZE};
 pub use visibility::ProjectVisibility;
-pub use voting::{VotePolicy, VOTE_SPLIT_TOTAL_BPS};
+pub use voting::{
+    VotePolicy, DEFAULT_MAX_CHOICES, DEFAULT_VOTE_POWER, MAX_VOTE_POWER, VOTE_SPLIT_TOTAL_BPS,
+};

@@ -89,11 +89,11 @@ pub enum DataKey {
     BallotRoot,
     /// Whether one wallet's ballot has been counted.
     BallotCounted(Address),
-    /// How many ballots one project has been given.
-    VoteCount(u32),
-    /// The largest vote count any project holds, which is the denominator the
+    /// How many points one project has been given, across every ballot.
+    VoteWeight(u32),
+    /// The largest total any project holds, which is the denominator the
     /// community score is measured against.
-    TopVoteCount,
+    TopVoteWeight,
     /// One criterion's revealed scores for one project.
     CriterionTally(u32, Symbol),
     /// One track's finished ranking, in order.
@@ -513,33 +513,52 @@ pub fn has_ballot_counted(env: &Env, voter: &Address) -> bool {
 }
 
 /// Counts one ballot, marking the voter so they cannot be counted again.
-pub fn count_ballot(env: &Env, voter: &Address, team: u32) {
+/// Records that this wallet has spent its ballot, whatever it spent it on.
+///
+/// Separate from the points themselves because the two answer different
+/// questions. This one is what stops a second ballot from the same wallet, and
+/// it has to be written even when every project the ballot named turned out to
+/// be ruled out, or somebody whose choices all fell away could vote again.
+pub fn mark_voted(env: &Env, voter: &Address) {
     let voted = DataKey::BallotCounted(voter.clone());
     env.storage().persistent().set(&voted, &true);
     touch_entry(env, &voted);
+}
 
-    let tally = vote_count(env, team) + 1;
-    let counter = DataKey::VoteCount(team);
+/// Adds one ballot's points to a project, and moves the top total if it leads.
+///
+/// The top is held rather than searched for, because the community score
+/// divides by it and finding it would mean reading every project on every
+/// ranking. Saturating at the ceiling instead of overflowing: `MAX_VOTE_POWER`
+/// keeps this inside a `u32` for any electorate that could exist, and a total
+/// that somehow reached the top of the type should stop climbing rather than
+/// wrap around to nothing.
+pub fn add_vote_weight(env: &Env, team: u32, weight: u32) {
+    let tally = vote_weight(env, team).saturating_add(weight);
+    let counter = DataKey::VoteWeight(team);
     env.storage().persistent().set(&counter, &tally);
     touch_entry(env, &counter);
 
-    if tally > top_vote_count(env) {
-        env.storage().instance().set(&DataKey::TopVoteCount, &tally);
+    if tally > top_vote_weight(env) {
+        env.storage()
+            .instance()
+            .set(&DataKey::TopVoteWeight, &tally);
         touch(env);
     }
 }
 
-pub fn vote_count(env: &Env, team: u32) -> u32 {
+/// Every point this project was given, across every ballot counted so far.
+pub fn vote_weight(env: &Env, team: u32) -> u32 {
     env.storage()
         .persistent()
-        .get(&DataKey::VoteCount(team))
+        .get(&DataKey::VoteWeight(team))
         .unwrap_or(0u32)
 }
 
-pub fn top_vote_count(env: &Env) -> u32 {
+pub fn top_vote_weight(env: &Env) -> u32 {
     env.storage()
         .instance()
-        .get(&DataKey::TopVoteCount)
+        .get(&DataKey::TopVoteWeight)
         .unwrap_or(0u32)
 }
 

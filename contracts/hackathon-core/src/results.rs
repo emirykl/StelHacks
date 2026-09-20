@@ -179,6 +179,8 @@ mod test {
         VotePolicy {
             judge_bps,
             community_bps,
+            power: crate::constitution::DEFAULT_VOTE_POWER,
+            max_choices: crate::constitution::DEFAULT_MAX_CHOICES,
         }
     }
 

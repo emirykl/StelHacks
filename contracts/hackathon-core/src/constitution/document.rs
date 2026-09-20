@@ -16,13 +16,12 @@ use crate::submission::SubmissionRequirements;
 /// The format version of the constitution, so a reader can tell which shape it
 /// is looking at once this structure has changed a few times.
 ///
-/// Four since the rules began saying who gets in. The bump is not decoration:
-/// every digest in `fixtures/` moved with it, and the distinction matters more
-/// than most. A version three constitution cannot express an open event, so a
-/// client reading one and assuming applications were reviewed would be right;
-/// reading a version four one the same way would be wrong about who was
-/// admitted and on whose say-so.
-pub const CONSTITUTION_VERSION: u32 = 4;
+/// Five since a ballot became an amount rather than a mark. The bump is not
+/// decoration: every digest in `fixtures/` moved with it, and a client reading
+/// a version four document has one that could only ever say "this wallet chose
+/// this project". Counting a version five event with that assumption would
+/// undercount every voter who spread their points.
+pub const CONSTITUTION_VERSION: u32 = 5;
 
 /// A judge and the tracks they are responsible for.
 #[contracttype]

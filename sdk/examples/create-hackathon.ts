@@ -79,7 +79,10 @@ const constitution: Constitution = {
   judges,
   judge_quorum: 3,
   judging_mode: { tag: "Easy", values: [organizer] },
-  vote: { judge_bps: 8_000, community_bps: 2_000 },
+  // Ten points a wallet, spread across at most three projects. Frozen here
+  // because a ballot size that could move after the lock would change how much
+  // influence the people who had not voted yet were holding.
+  vote: { judge_bps: 8_000, community_bps: 2_000, power: 10, max_choices: 3 },
   visibility: 0,
   // Two demanded, one offered, and the deck and the contract never asked for.
   // The three way rule is what lets an event leave a field off the form

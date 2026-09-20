@@ -6,6 +6,7 @@
 //! judge scorecards and community votes, and computes the final ranking. Nothing
 //! outside this contract is allowed to decide who won.
 
+mod ballot;
 mod constitution;
 mod contract;
 mod errors;
@@ -26,13 +27,15 @@ mod submission;
 mod test;
 mod vault;
 
+pub use ballot::{validate_ballot, VoteChoice};
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, validate_tie_break, Constitution, Criterion,
     Deadline, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode, PlatformFee,
     PrizeTier, ProjectVisibility, RefundRoute, RegistrationPolicy, Schedule, SettlementMode,
-    TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION, FEE_TOTAL_BPS,
-    MAX_CRITERION_SCORE, MAX_PLATFORM_FEE_BPS, MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE,
-    MIN_TEAM_SIZE, VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
+    TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION, DEFAULT_MAX_CHOICES,
+    DEFAULT_VOTE_POWER, FEE_TOTAL_BPS, MAX_CRITERION_SCORE, MAX_PLATFORM_FEE_BPS,
+    MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE, MAX_VOTE_POWER, MIN_TEAM_SIZE,
+    VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
 };
 pub use contract::{HackathonCore, HackathonCoreClient};
 pub use errors::Error;

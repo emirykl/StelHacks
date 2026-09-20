@@ -1,5 +1,6 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec};
 
+use crate::ballot::{validate_ballot, VoteChoice};
 use crate::constitution::{Constitution, Deadline, TeamPolicy, TieBreakRule};
 use crate::errors::Error;
 use crate::events;
@@ -1088,28 +1089,40 @@ impl HackathonCore {
 
     /// Opens one sealed ballot and counts it.
     ///
-    /// Three gates stand between a sealed ballot and the tally, and each one
-    /// exists because of a specific way a vote can be bought. The voter has to
-    /// have been approved before registration closed, so an organizer cannot
+    /// Three gates stand between a sealed ballot and the tally. The voter has
+    /// to have been approved before registration closed, so an organizer cannot
     /// admit an electorate once they know what it would decide. They cannot
-    /// have been counted before, so one wallet is one vote. And they cannot be
-    /// on the team they chose, so nobody votes for themselves.
+    /// have been counted before, so one wallet spends its power once. And the
+    /// ballot has to be the shape the rules froze: every point placed, across
+    /// no more projects than the document allows.
+    ///
+    /// A voter may back their own team. That is a deliberate loosening of an
+    /// earlier refusal, and it is not free: a team of five can place fifty
+    /// points on itself, so a project's own members are a visible part of its
+    /// total rather than something the contract quietly removes. The event
+    /// carries the whole ballot, which is what lets a reader separate the two.
+    ///
+    /// A choice naming a project that screening ruled out is dropped rather
+    /// than taken as a reason to refuse the ballot. The voter chose while that
+    /// project was still standing, and the alternative — voiding every ballot
+    /// that happened to name it — would let one disqualification silently
+    /// delete the rest of somebody's vote.
     ///
     /// Like the scorecard reveal, this needs no signature: the proof is what
     /// authorizes it.
     pub fn reveal_ballot(
         env: Env,
         voter: Address,
-        team_id: u32,
+        choices: Vec<VoteChoice>,
         proof: Vec<BytesN<32>>,
-    ) -> Result<u32, Error> {
+    ) -> Result<(), Error> {
         let state = storage::load_state(&env)?;
         if state.phase != Phase::Reveal {
             return Err(Error::WrongPhase);
         }
 
         let root = storage::load_ballot_root(&env)?;
-        let leaf = hashing::ballot_leaf(&env, &voter, team_id);
+        let leaf = hashing::ballot_leaf(&env, &voter, &choices);
 
         if !merkle::verify(&env, &root, &leaf, &proof) {
             return Err(Error::ProofDoesNotMatchRoot);
@@ -1125,23 +1138,25 @@ impl HackathonCore {
             return Err(Error::VoterNotEligible);
         }
 
-        let team = storage::load_team(&env, team_id)?;
-        if team.has_member(&voter) {
-            return Err(Error::SelfVoteRejected);
+        let constitution = storage::load_constitution(&env)?;
+        validate_ballot(&choices, &constitution.vote)?;
+
+        /* Marked before the points are placed, so a ballot whose every choice
+        turns out to be ruled out still uses the wallet up. */
+        storage::mark_voted(&env, &voter);
+
+        for choice in choices.iter() {
+            // Loading it is also what proves the team exists: a ballot naming a
+            // project nobody entered is refused here rather than counted into
+            // a total for a team that was never created.
+            if storage::load_submission(&env, choice.team)?.is_valid() {
+                storage::add_vote_weight(&env, choice.team, choice.weight);
+            }
         }
 
-        // A project that was ruled out during screening is not in the running,
-        // so a ballot for it counts toward nothing.
-        if !storage::load_submission(&env, team_id)?.is_valid() {
-            return Err(Error::SubmissionNotEligible);
-        }
+        events::ballot_counted(&env, &voter, &choices);
 
-        storage::count_ballot(&env, &voter, team_id);
-        let votes = storage::vote_count(&env, team_id);
-
-        events::ballot_counted(&env, &voter, team_id, votes);
-
-        Ok(votes)
+        Ok(())
     }
 
     /// Computes the ranking and closes the result.
@@ -1683,7 +1698,7 @@ impl HackathonCore {
         constitution: &Constitution,
         track: &Symbol,
     ) -> Result<Vec<Placement>, Error> {
-        let top_votes = storage::top_vote_count(env);
+        let top_votes = storage::top_vote_weight(env);
         let quorum_binds = constitution.vote.judge_score_counts();
 
         let mut ordered: Vec<Candidate> = Vec::new(env);
@@ -1703,7 +1718,7 @@ impl HackathonCore {
                 continue;
             }
 
-            let community = results::community_score(storage::vote_count(env, team_id), top_votes);
+            let community = results::community_score(storage::vote_weight(env, team_id), top_votes);
             let judge_average = tally.average();
 
             let candidate = Candidate {
@@ -1784,18 +1799,18 @@ impl HackathonCore {
         storage::load_ballot_root(&env)
     }
 
-    /// How many ballots a project has been given.
-    pub fn vote_count(env: Env, team_id: u32) -> u32 {
-        storage::vote_count(&env, team_id)
+    /// How many points a project has been given, across every ballot counted.
+    pub fn vote_weight(env: Env, team_id: u32) -> u32 {
+        storage::vote_weight(&env, team_id)
     }
 
-    /// The largest vote count any project holds.
+    /// The largest total any project holds.
     ///
     /// This is the denominator the community score is measured against, so the
-    /// project the crowd liked most scores a hundred and the rest are placed
+    /// project the crowd gave most to scores a hundred and the rest are placed
     /// relative to it.
-    pub fn top_vote_count(env: Env) -> u32 {
-        storage::top_vote_count(&env)
+    pub fn top_vote_weight(env: Env) -> u32 {
+        storage::top_vote_weight(&env)
     }
 
     /// Whether this wallet's ballot has already been counted.

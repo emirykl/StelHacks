@@ -1,5 +1,5 @@
-top_votes=0
-project team=1 track=payments submitted_at=86403600 valid=1 score_count=3 score_total=2580000 votes=0
-project team=2 track=payments submitted_at=86403600 valid=1 score_count=3 score_total=1080000 votes=0
+top_weight=0
+project team=1 track=payments submitted_at=86403600 valid=1 score_count=3 score_total=2580000 weight=0
+project team=2 track=payments submitted_at=86403600 valid=1 score_count=3 score_total=1080000 weight=0
 placement rank=1 team=1 final_score=688000 judge_average=860000 community=0 decided_by=0
 placement rank=2 team=2 final_score=288000 judge_average=360000 community=0 decided_by=0

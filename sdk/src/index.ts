@@ -75,5 +75,6 @@ export type {
   SubmissionMetadata,
   SubmissionRequirements,
   Track,
+  VoteChoice,
   VotePolicy,
 } from "hackathon-core";

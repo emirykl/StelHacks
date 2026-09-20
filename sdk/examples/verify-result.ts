@@ -43,7 +43,7 @@ if (toHex(hashConstitution(constitution)) !== published.toString("hex")) {
 
 // Everything the ranking was derived from, straight off the chain.
 const teams = (await core.team_count()).result;
-const topVotes = (await core.top_vote_count()).result;
+const topVotes = (await core.top_vote_weight()).result;
 
 const projects: ProjectData[] = [];
 
@@ -77,7 +77,7 @@ for (let team = 1; team <= teams; team += 1) {
     submittedAt: entry.submitted_at,
     valid: entry.status === 0,
     scores: { count: scores.count, total: scores.total },
-    votes: (await core.vote_count({ team_id: team })).result,
+    votes: (await core.vote_weight({ team_id: team })).result,
     criterionTallies,
   });
 }

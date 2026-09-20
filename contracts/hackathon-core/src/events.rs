@@ -10,8 +10,9 @@
 //! the whole stream. Values that a reader needs but would never filter on, such
 //! as a digest, travel in the payload.
 
-use soroban_sdk::{contractevent, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contractevent, Address, BytesN, Env, Symbol, Vec};
 
+use crate::ballot::VoteChoice;
 use crate::constitution::Deadline;
 use crate::phase::Phase;
 
@@ -252,15 +253,22 @@ pub struct BallotRootPublished {
 }
 
 /// One ballot was opened and counted.
+///
+/// The whole ballot in one event, because that is the unit the rules count: a
+/// wallet spends its power once, across up to three projects, and an event per
+/// project would let a reader who missed one conclude the voter spent less than
+/// they did.
+///
+/// Counted is not the same as credited. A choice naming a project that was
+/// ruled out in screening is carried here and adds nothing to that project,
+/// which is what lets a reader see the ballot as it was cast rather than as it
+/// landed.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BallotCounted {
     #[topic]
     pub voter: Address,
-    pub team: u32,
-    /// The project's running total, so a reader can follow the count without
-    /// replaying every ballot.
-    pub votes: u32,
+    pub choices: Vec<VoteChoice>,
 }
 
 /// One track's ranking is settled.
@@ -579,11 +587,10 @@ pub fn ballot_root_published(env: &Env, root: &BytesN<32>) {
     BallotRootPublished { root: root.clone() }.publish(env);
 }
 
-pub fn ballot_counted(env: &Env, voter: &Address, team: u32, votes: u32) {
+pub fn ballot_counted(env: &Env, voter: &Address, choices: &Vec<VoteChoice>) {
     BallotCounted {
         voter: voter.clone(),
-        team,
-        votes,
+        choices: choices.clone(),
     }
     .publish(env);
 }

@@ -1,5 +1,5 @@
 import { Address, hash, xdr } from "@stellar/stellar-sdk";
-import type { Constitution, SubmissionMetadata, Scorecard } from "hackathon-core";
+import type { Constitution, SubmissionMetadata, Scorecard, VoteChoice } from "hackathon-core";
 
 import { leaf, type Digest } from "./merkle.js";
 import { spec } from "./spec.js";
@@ -67,20 +67,34 @@ export function scorecardLeaf(scorecard: Scorecard): Digest {
 /**
  * The leaf a community ballot occupies.
  *
- * A ballot is only ever a voter and the project they chose, so the payload is
- * exactly that pair: the address in XDR, then the team as four big endian
- * bytes. Nothing about the voter is hidden here; the tally is sealed until the
- * reveal, and after it every ballot is open for anyone to recount.
+ * The whole ballot rather than one choice of it: the address in XDR, then how
+ * many choices follow as four big endian bytes, then each team and weight as
+ * four more. The count is what stops two different ballots from concatenating
+ * into the same bytes, and the order is the ascending one the contract insists
+ * on, so a page that sorted its choices differently would seal a digest the
+ * contract will not recognise.
+ *
+ * Nothing about the voter is hidden here; the tally is sealed until the reveal,
+ * and after it every ballot is open for anyone to recount.
  */
-export function ballotLeaf(voter: string, team: number): Digest {
-  const id = new Uint8Array(4);
-  new DataView(id.buffer).setUint32(0, team, false);
-
+export function ballotLeaf(voter: string, choices: readonly VoteChoice[]): Digest {
   // An address is a built in value rather than one of the contract's own types,
   // so it does not go through the spec; the SDK already knows its encoding.
   const address = new Uint8Array(new Address(voter).toScVal().toXDR());
 
-  return leaf(concat(text(BALLOT_DOMAIN), address, id));
+  const body = [u32(choices.length)];
+  for (const choice of choices) {
+    body.push(u32(choice.team), u32(choice.weight));
+  }
+
+  return leaf(concat(text(BALLOT_DOMAIN), address, ...body));
+}
+
+function u32(value: number): Uint8Array {
+  const bytes = new Uint8Array(4);
+  new DataView(bytes.buffer).setUint32(0, value, false);
+
+  return bytes;
 }
 
 function digest(domain: string, body: Uint8Array): Digest {

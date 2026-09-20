@@ -1,4 +1,4 @@
-import type { Constitution, Scorecard, SubmissionMetadata } from "hackathon-core";
+import type { Constitution, Scorecard, SubmissionMetadata, VoteChoice } from "hackathon-core";
 import { FieldRule, ProjectVisibility, RefundRoute, RegistrationPolicy } from "hackathon-core";
 
 /**
@@ -31,7 +31,7 @@ const criteria = () => [
 
 export function canonicalConstitution(): Constitution {
   return {
-    version: 4,
+    version: 5,
     metadata_hash: Buffer.alloc(32, 7),
     prize_asset: PRIZE_ASSET,
     tracks: [
@@ -41,7 +41,7 @@ export function canonicalConstitution(): Constitution {
     judges: JUDGES.map((judge) => ({ judge, tracks: ["payments", "defi"] })),
     judge_quorum: 3,
     judging_mode: { tag: "Easy", values: [SEALER] },
-    vote: { judge_bps: 8_000, community_bps: 2_000 },
+    vote: { judge_bps: 8_000, community_bps: 2_000, power: 10, max_choices: 3 },
     visibility: ProjectVisibility.Public,
     submission_requirements: {
       repository: FieldRule.Required,
@@ -102,6 +102,21 @@ export function canonicalMetadata(): SubmissionMetadata {
     deployed_contract: "CA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ",
     track: "payments",
   };
+}
+
+/**
+ * The ballot the contract hashes, written here from the numbers rather than
+ * read from anything the Rust side produced.
+ *
+ * Two choices of different weights, because a single choice would hash the same
+ * whether or not the encoding carried the count and the order — the two things
+ * a second implementation is most likely to leave out.
+ */
+export function canonicalBallot(): VoteChoice[] {
+  return [
+    { team: 2, weight: 7 },
+    { team: 5, weight: 3 },
+  ];
 }
 
 export function canonicalScorecard(): Scorecard {

@@ -107,9 +107,12 @@ pub enum Error {
 
     // Community vote
     VoterNotEligible = 60,
-    SelfVoteRejected = 61,
     CommunityVoteDisabled = 62,
     BallotAlreadyCounted = 63,
+    /// The ballot is not the shape the locked rules describe: too many choices,
+    /// none at all, a project named twice or out of order, a choice worth
+    /// nothing, or a total that is not the power the rules hand out.
+    BallotMalformed = 64,
 
     // Discretion: disqualification, no award, cancellation
     /// A case of this kind is already running against this subject.

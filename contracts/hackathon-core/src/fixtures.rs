@@ -8,10 +8,12 @@
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, vec, Address, BytesN, Env, String, Symbol, Vec};
 
+use crate::ballot::VoteChoice;
 use crate::constitution::{
     Constitution, Criterion, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode,
     PlatformFee, PrizeTier, ProjectVisibility, RefundRoute, RegistrationPolicy, Schedule,
     SettlementMode, TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION,
+    DEFAULT_MAX_CHOICES, DEFAULT_VOTE_POWER,
 };
 use crate::scorecard::{CriterionScore, Scorecard};
 use crate::submission::{SubmissionMetadata, SubmissionRequirements};
@@ -108,6 +110,8 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
         vote: VotePolicy {
             judge_bps: 8_000,
             community_bps: 2_000,
+            power: DEFAULT_VOTE_POWER,
+            max_choices: DEFAULT_MAX_CHOICES,
         },
         visibility: ProjectVisibility::Public,
         submission_requirements: SubmissionRequirements::code_and_video(),
@@ -197,6 +201,8 @@ pub fn canonical_constitution(env: &Env) -> Constitution {
         vote: VotePolicy {
             judge_bps: 8_000,
             community_bps: 2_000,
+            power: DEFAULT_VOTE_POWER,
+            max_choices: DEFAULT_MAX_CHOICES,
         },
         visibility: ProjectVisibility::Public,
         submission_requirements: SubmissionRequirements::code_and_video(),
@@ -260,6 +266,20 @@ pub fn canonical_scorecard(env: &Env) -> Scorecard {
             },
         ],
     }
+}
+
+/// The ballot both languages turn into a leaf.
+///
+/// Two choices of different weights rather than one of ten, because a single
+/// choice would hash the same whether or not the encoding carried the count and
+/// the order, and those are exactly the two things a second implementation gets
+/// wrong.
+pub fn canonical_ballot(env: &Env) -> Vec<VoteChoice> {
+    vec![
+        env,
+        VoteChoice { team: 2, weight: 7 },
+        VoteChoice { team: 5, weight: 3 },
+    ]
 }
 
 /// A complete project submission, carrying every link the organizer can ask

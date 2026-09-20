@@ -23,7 +23,7 @@ use soroban_sdk::{symbol_short, Address, Bytes, Env};
 use std::string::String as StdString;
 
 use crate::fixtures::{
-    canonical_constitution, canonical_scorecard, sample_metadata, CANONICAL_VOTER,
+    canonical_ballot, canonical_constitution, canonical_scorecard, sample_metadata, CANONICAL_VOTER,
 };
 use crate::hashing::{ballot_leaf, hash_constitution, hash_submission_metadata, scorecard_leaf};
 use crate::merkle;
@@ -111,7 +111,7 @@ fn the_canonical_ballot_reaches_the_leaf_both_languages_expect() {
     let voter = Address::from_str(&env, CANONICAL_VOTER);
 
     assert_eq!(
-        hex(&ballot_leaf(&env, &voter, 2).to_array()),
+        hex(&ballot_leaf(&env, &voter, &canonical_ballot(&env)).to_array()),
         fixture!("ballot-leaf.sha256")
     );
 }
@@ -125,7 +125,7 @@ fn the_two_leaves_combine_into_the_root_both_languages_expect() {
     let voter = Address::from_str(&env, CANONICAL_VOTER);
 
     let scorecard = scorecard_leaf(&env, &canonical_scorecard(&env));
-    let ballot = ballot_leaf(&env, &voter, 2);
+    let ballot = ballot_leaf(&env, &voter, &canonical_ballot(&env));
 
     assert_eq!(
         hex(&merkle::node(&env, &scorecard, &ballot).to_array()),
@@ -355,21 +355,21 @@ fn ranking_report(fixture: &crate::test::Fixture, teams: &[u32]) -> StdString {
     use std::fmt::Write;
 
     let mut out = StdString::new();
-    let _ = writeln!(out, "top_votes={}", fixture.client.top_vote_count());
+    let _ = writeln!(out, "top_weight={}", fixture.client.top_vote_weight());
 
     for &team in teams {
         let submission = fixture.client.submission(&team);
         let tally = fixture.client.score_tally(&team);
         let _ = writeln!(
             out,
-            "project team={} track={} submitted_at={} valid={} score_count={} score_total={} votes={}",
+            "project team={} track={} submitted_at={} valid={} score_count={} score_total={} weight={}",
             team,
             symbol_text(&fixture.env, &submission.track),
             submission.submitted_at,
             u32::from(submission.is_valid()),
             tally.count,
             tally.total,
-            fixture.client.vote_count(&team),
+            fixture.client.vote_weight(&team),
         );
     }
 
