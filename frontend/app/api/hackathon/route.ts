@@ -45,6 +45,32 @@ interface Body {
   slug?: string;
 }
 
+/**
+ * The presentation columns for one hackathon, read back.
+ *
+ * Everything here is already public: it is what the listing and the hackathon
+ * page draw for a signed out visitor. It has a handler of its own because the
+ * edit form needs it keyed on the contract address, and the public pages are
+ * keyed on the slug, which a hackathon does not have until the indexer has
+ * caught up.
+ *
+ * No signature and no session, deliberately. Requiring either would be a check
+ * that reads public data with extra steps.
+ */
+export async function GET(request: Request) {
+  const contract = new URL(request.url).searchParams.get("contract");
+
+  if (contract === null || contract.length !== 56) {
+    return NextResponse.json({ error: "a contract address is needed" }, { status: 400 });
+  }
+
+  const written = await metadataOf(contract);
+
+  return written === null
+    ? NextResponse.json({ error: "no such hackathon" }, { status: 404 })
+    : NextResponse.json(written);
+}
+
 export async function POST(request: Request) {
   if (url === undefined || serviceRole === undefined) {
     /* Said plainly. A deployment without the key cannot write metadata at all,
@@ -141,6 +167,37 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ written: Object.keys(patch) });
+}
+
+/**
+ * What has been written beside one contract, or nothing.
+ *
+ * Through the anonymous key rather than the service role. These are the columns
+ * every visitor already reads, and reaching for the key that bypasses row level
+ * security to fetch public data is how a handler that only ever meant to read
+ * one row ends up being the one that leaked another.
+ */
+async function metadataOf(contract: string): Promise<Record<string, unknown> | null> {
+  const anon = process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
+
+  if (url === undefined || anon === undefined) {
+    return null;
+  }
+
+  const columns = "name,tagline,location,logo_url,banner_url,tags";
+
+  const answer = await fetch(
+    `${url}/rest/v1/hackathons?contract_id=eq.${encodeURIComponent(contract)}&select=${columns}`,
+    { headers: { apikey: anon, Authorization: `Bearer ${anon}` } },
+  ).catch(() => null);
+
+  if (answer === null || !answer.ok) {
+    return null;
+  }
+
+  const rows = (await answer.json()) as Record<string, unknown>[];
+
+  return rows[0] ?? null;
 }
 
 /** Who the contract says runs this hackathon. */
