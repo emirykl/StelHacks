@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 
 import {
   Address,
+  Asset,
   BASE_FEE,
   Contract,
   Keypair,
@@ -40,8 +41,36 @@ const PASSPHRASE = "Test SDF Network ; September 2015";
 const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
 const VAULT_WASM = "afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb";
 const XLM = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+
+/*
+  Which asset the prize is paid in, and the reason this is an argument.
+
+  A prize in lumens is a prize somebody holds. A prize in the asset an anchor
+  redeems is a prize somebody can spend, and that is the half of the product the
+  cash out panel exists for — but the panel cannot be looked at against an event
+  paying in lumens, because it does not draw for an asset the anchor has never
+  heard of. So the same walk runs in either, and which one is a word on the
+  command line.
+
+  Anything other than lumens has to be sourced, and there is exactly one place
+  to source it: the anchor itself, through the deposit half of its own ramp.
+  Friendbot does not issue anybody else's asset.
+
+    node --experimental-strip-types scripts/park-at-settlement.mts [XLM|USDC]
+*/
+const USDC = {
+  contract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+  code: "USDC",
+  issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+};
+
+const ANCHOR = process.env["NEXT_PUBLIC_ANCHOR_DOMAIN"] ?? "tr-mock-anchor.fly.dev";
+const wanted = (process.argv[2] ?? "XLM").toUpperCase();
+const PRIZE = wanted === "USDC" ? USDC.contract : XLM;
+
+console.log("prize in :", wanted === "USDC" ? "USDC, redeemable at " + ANCHOR : "XLM");
 /** Where this deployment sends its cut, from `frontend/.env.local`. */
-const COLLECTOR = "GB45FLZ24LKDNR2OSMHGI45PA47PY4W4VSTK7BPTATZTPN7JVEG3Y4WP";
+const COLLECTOR = "GD6VIYOQ6XZRAKQDOI2SSPD7VVJCB6U2G67NIYDMWNTFQQVVVM5RWZKF";
 
 const server = new Server(RPC);
 const spec = new Spec(JSON.parse(readFileSync("lib/contract-spec.json", "utf8")));
@@ -159,13 +188,39 @@ console.log("core     :", core);
   its deadline has passed, so the walk below spends most of its time waiting on
   a clock rather than on the network.
 */
+/*
+  Both accounts accept the asset, and the organizer buys some, before the clock
+  starts.
+
+  Before, and not merely early. Two trustlines and a round trip through the
+  anchor take the better part of a minute, and every window in this walk is a
+  minute wide: done after the timestamps below were taken, the setup spends the
+  submission window and the contract refuses the entry that was the point of
+  running it.
+
+  In that order because each depends on the last: the anchor cannot deliver to
+  an account that has not accepted, and the vault cannot be funded by an
+  organizer holding nothing. The builder accepts here rather than at settlement
+  for the same reason it matters in the product — `settle_prize` fails for an
+  unprepared winner, and the point of this walk is to reach a paid one.
+*/
+if (wanted === "USDC") {
+  await acceptAsset(organizer);
+  await acceptAsset(builder);
+  console.log("trustlines ✓");
+
+  /* Enough lira for a prize the anchor will take back: its floor is one USDC
+     and the table below pays out in whole units. */
+  await buyPrize(organizer, 3000);
+}
+
 const now = Math.floor(Date.now() / 1000);
 const minute = 60;
 
 const constitution = {
   version: 2,
   metadata_hash: Buffer.alloc(32),
-  prize_asset: XLM,
+  prize_asset: PRIZE,
   tracks: [
     {
       id: "payments",
@@ -234,7 +289,7 @@ await call(organizer, core, "lock_rules");
 console.log("lock     ✓");
 
 const vault = await deploy(organizer, VAULT_WASM);
-await call(organizer, vault, "create", new Address(core).toScVal(), new Address(XLM).toScVal());
+await call(organizer, vault, "create", new Address(core).toScVal(), new Address(PRIZE).toScVal());
 await call(organizer, core, "bind_vault", new Address(vault).toScVal());
 console.log("vault    ✓", vault);
 
@@ -363,6 +418,9 @@ console.log("  manage at: /manage/" + core);
 console.log("  organizer: " + organizer.publicKey());
 console.log("  secret   : " + organizer.secret());
 console.log("  collector: " + COLLECTOR);
+console.log("\nthe winner, whose prize is already paid:");
+console.log("  address  : " + builder.publicKey());
+console.log("  secret   : " + builder.secret());
 console.log("core :", core);
 console.log("vault:", vault);
 
@@ -373,4 +431,99 @@ async function waitFor(deadline: number, what: string): Promise<void> {
     console.log(`  waiting ${left}s for ${what}`);
     await new Promise((wake) => setTimeout(wake, left * 1000));
   }
+}
+
+/**
+ * Accept an issued asset, so an account can be paid in it.
+ *
+ * A classic operation, so it skips simulation: there is no footprint to work
+ * out. Both the organizer and the builder need one before anything can move —
+ * the organizer to hold what it funds the vault with, the builder to be paid.
+ * The vault itself needs none, because a contract holds balances in its own
+ * storage rather than in a trustline.
+ */
+async function acceptAsset(who: Keypair): Promise<void> {
+  const account = await server.getAccount(who.publicKey());
+  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: PASSPHRASE })
+    .addOperation(Operation.changeTrust({ asset: new Asset(USDC.code, USDC.issuer) }))
+    .setTimeout(120)
+    .build();
+
+  tx.sign(who);
+
+  const sent = await server.sendTransaction(tx);
+  const done = await server.pollTransaction(sent.hash, { attempts: 30, sleepStrategy: () => 1000 });
+
+  if (done.status !== "SUCCESS") {
+    throw new Error(`trustline for ${who.publicKey()}: ${done.status}`);
+  }
+}
+
+/**
+ * Buy the prize from the anchor with imaginary lira.
+ *
+ * The deposit half of the same ramp the winner will use to go the other way, so
+ * the asset in the vault is the asset that anchor redeems rather than one that
+ * merely shares its code. Nothing real is spent: the anchor's sandbox has an
+ * endpoint that says the bank transfer arrived, and that is the whole of it.
+ */
+async function buyPrize(who: Keypair, lira: number): Promise<void> {
+  const toml = await (await fetch(`https://${ANCHOR}/.well-known/stellar.toml`)).text();
+  const read = (key: string) =>
+    new RegExp(`^\\s*${key}\\s*=\\s*(.+)$`, "m").exec(toml)?.[1]?.replace(/^["']|["'].*$/g, "") ?? "";
+
+  const auth = read("WEB_AUTH_ENDPOINT");
+  const transfer = read("TRANSFER_SERVER");
+  const kyc = read("KYC_SERVER");
+
+  const challenge = await (await fetch(`${auth}?account=${who.publicKey()}`)).json();
+  const signed = TransactionBuilder.fromXDR(challenge.transaction, challenge.network_passphrase);
+
+  if (!("sign" in signed)) {
+    throw new Error("the anchor sent a fee bump");
+  }
+
+  signed.sign(who);
+
+  const { token } = await (
+    await fetch(auth, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction: signed.toXDR() }),
+    })
+  ).json();
+
+  await fetch(`${kyc}/customer`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ account: who.publicKey() }),
+  });
+
+  const opened = await (
+    await fetch(`${transfer}/deposit?asset_code=USDC&account=${who.publicKey()}&amount=${lira}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  ).json();
+
+  await fetch(`${transfer.replace(/\/sep6$/, "")}/sep6/tx/${opened.id}/simulate-bank-transfer`, {
+    method: "POST",
+  });
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { transaction } = await (
+      await fetch(`${transfer}/transaction?id=${opened.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    if (transaction?.status === "completed") {
+      console.log("bought   ✓", transaction.amount_out, "USDC for", lira, "TRY");
+
+      return;
+    }
+
+    await new Promise((wake) => setTimeout(wake, 2000));
+  }
+
+  throw new Error("the anchor never delivered");
 }
