@@ -1,5 +1,5 @@
 import type { Constitution, Scorecard, SubmissionMetadata } from "hackathon-core";
-import { ProjectVisibility, RefundRoute } from "hackathon-core";
+import { FieldRule, ProjectVisibility, RefundRoute, RegistrationPolicy } from "hackathon-core";
 
 /**
  * The same values `fixtures.rs` builds in Rust, written out again here.
@@ -31,7 +31,7 @@ const criteria = () => [
 
 export function canonicalConstitution(): Constitution {
   return {
-    version: 2,
+    version: 4,
     metadata_hash: Buffer.alloc(32, 7),
     prize_asset: PRIZE_ASSET,
     tracks: [
@@ -44,10 +44,13 @@ export function canonicalConstitution(): Constitution {
     vote: { judge_bps: 8_000, community_bps: 2_000 },
     visibility: ProjectVisibility.Public,
     submission_requirements: {
-      repository_required: true,
-      demo_video_required: true,
-      live_url_required: false,
+      repository: FieldRule.Required,
+      demo_video: FieldRule.Required,
+      live_url: FieldRule.Optional,
+      pitch_deck: FieldRule.Optional,
+      deployed_contract: FieldRule.Optional,
     },
+    registration: RegistrationPolicy.Reviewed,
     teams: { max_size: 4, multi_team_allowed: false },
     prize_tiers: [
       { track: "payments", rank: 1, amount: 5_000n },
@@ -95,6 +98,8 @@ export function canonicalMetadata(): SubmissionMetadata {
     repository_url: "https://github.com/example/lumen-split",
     demo_video_url: "https://youtu.be/example",
     live_url: "https://lumen-split.example.com",
+    pitch_deck_url: "https://cdn.example.com/lumen-split.pdf",
+    deployed_contract: "CA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ",
     track: "payments",
   };
 }

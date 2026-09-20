@@ -1,7 +1,7 @@
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::Address;
 
-use crate::constitution::PrizeTier;
+use crate::constitution::{PrizeTier, CONSTITUTION_VERSION};
 use crate::errors::Error;
 use crate::fixtures::sample_constitution;
 use crate::hashing::hash_constitution;
@@ -229,4 +229,24 @@ fn reading_the_hackathon_emits_nothing() {
     fixture.client.state();
 
     assert_eq!(events_emitted(&fixture), 0);
+}
+
+/// A constitution can only have one shape per wasm, so the version field is a
+/// label rather than a choice. Nothing checked it, and a caller that stamped the
+/// wrong number produced a document that froze, ran, and was then dropped by
+/// every reader that believed the label.
+#[test]
+fn a_constitution_labelled_with_the_wrong_shape_is_refused() {
+    let fixture = Fixture::empty();
+    let mut constitution = sample_constitution(&fixture.env);
+
+    constitution.version = CONSTITUTION_VERSION - 1;
+
+    assert_eq!(
+        fixture
+            .client
+            .try_create(&fixture.organizer, &constitution)
+            .err(),
+        Some(Ok(Error::ConstitutionInvalid))
+    );
 }

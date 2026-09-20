@@ -58,6 +58,9 @@ export type { Digest } from "./merkle.js";
 
 export { Client as HackathonCore } from "hackathon-core";
 export { Client as PrizeVault } from "prize-vault";
+/* A value rather than a type, because a phase read off the chain arrives as a
+   number and the name is what anybody reading a log or a page wants. */
+export { Phase } from "hackathon-core";
 export type {
   Constitution,
   DiscretionPolicy,

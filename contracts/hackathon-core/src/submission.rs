@@ -2,7 +2,40 @@ use soroban_sdk::{contracttype, BytesN, Env, String, Symbol};
 
 use crate::errors::Error;
 
-/// Which links a team has to supply before their project counts as submitted.
+/// What one field of a submission is worth to the organizer.
+///
+/// Three answers rather than two, because "not required" was covering two
+/// different intentions. An event that would like a deployed URL and an event
+/// that does not want to see one at all were both storing `false`, so the
+/// submission form had to show every field to everybody and a judge opening a
+/// design entry read an empty repository row as a team that never pushed code.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum FieldRule {
+    /// Never asked for. The form has no box for it and nothing later reports it
+    /// as missing, because it was never wanted.
+    Unasked = 0,
+    /// Offered, and an entry without it still counts.
+    Optional = 1,
+    /// An entry without it is incomplete.
+    Required = 2,
+}
+
+impl FieldRule {
+    /// Whether an entry that leaves this field empty is short of what was
+    /// announced.
+    pub fn demanded(&self) -> bool {
+        *self == FieldRule::Required
+    }
+
+    /// Whether the field is put in front of a team at all.
+    pub fn asked(&self) -> bool {
+        *self != FieldRule::Unasked
+    }
+}
+
+/// What a team has to supply before their project counts as submitted.
 ///
 /// The organizer chooses this before the lock, so nobody discovers on the last
 /// evening that a demo video was expected. A repository is required by default
@@ -12,22 +45,32 @@ use crate::errors::Error;
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionRequirements {
-    /// The team must supply a source repository link.
-    pub repository_required: bool,
-    /// The team must supply a demo video link.
-    pub demo_video_required: bool,
-    /// The team must supply a link to something running.
-    pub live_url_required: bool,
+    /// A source repository link.
+    pub repository: FieldRule,
+    /// A demo video link.
+    pub demo_video: FieldRule,
+    /// A link to a deployed instance a judge can open.
+    pub live_url: FieldRule,
+    /// A slide deck.
+    pub pitch_deck: FieldRule,
+    /// The contract the project deployed, as an id.
+    ///
+    /// Rarely worth demanding and here for the same reason as the rest: an
+    /// organizer running a contracts only track should be able to say so in the
+    /// frozen rules rather than in a paragraph on a page nobody can hash.
+    pub deployed_contract: FieldRule,
 }
 
 impl SubmissionRequirements {
-    /// The common setup: show the code, show it working on video, deploying it
-    /// somewhere is optional.
+    /// The common setup: show the code, show it working on video, everything
+    /// else offered and nothing else demanded.
     pub fn code_and_video() -> SubmissionRequirements {
         SubmissionRequirements {
-            repository_required: true,
-            demo_video_required: true,
-            live_url_required: false,
+            repository: FieldRule::Required,
+            demo_video: FieldRule::Required,
+            live_url: FieldRule::Optional,
+            pitch_deck: FieldRule::Optional,
+            deployed_contract: FieldRule::Optional,
         }
     }
 }
@@ -66,6 +109,10 @@ pub struct SubmissionMetadata {
     pub demo_video_url: String,
     /// A deployed instance a judge can open and click through.
     pub live_url: String,
+    /// Where the slide deck is stored.
+    pub pitch_deck_url: String,
+    /// The contract this project deployed, as a `C…` id.
+    pub deployed_contract: String,
     /// The track this project competes in.
     pub track: Symbol,
 }
@@ -261,9 +308,25 @@ mod test {
     fn the_common_setup_asks_for_code_and_a_video() {
         let requirements = SubmissionRequirements::code_and_video();
 
-        assert!(requirements.repository_required);
-        assert!(requirements.demo_video_required);
-        assert!(!requirements.live_url_required);
+        assert!(requirements.repository.demanded());
+        assert!(requirements.demo_video.demanded());
+        assert!(!requirements.live_url.demanded());
+    }
+
+    /// The distinction the third variant exists for. A field nobody has to fill
+    /// in is still a field a team is shown, and one that was never asked for is
+    /// not; reading `Unasked` as "not required" would put both back on the
+    /// form.
+    #[test]
+    fn a_field_nobody_asked_for_is_not_the_same_as_one_nobody_has_to_fill_in() {
+        assert!(FieldRule::Optional.asked());
+        assert!(!FieldRule::Optional.demanded());
+
+        assert!(!FieldRule::Unasked.asked());
+        assert!(!FieldRule::Unasked.demanded());
+
+        assert!(FieldRule::Required.asked());
+        assert!(FieldRule::Required.demanded());
     }
 
     #[test]

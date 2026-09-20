@@ -1,12 +1,15 @@
+import { FieldRule } from "hackathon-core";
 import { describe, expect, it } from "vitest";
 
 import { validateSubmission } from "../src/submission.js";
 import { canonicalMetadata } from "./canonical.js";
 
 const codeAndVideo = {
-  repository_required: true,
-  demo_video_required: true,
-  live_url_required: false,
+  repository: FieldRule.Required,
+  demo_video: FieldRule.Required,
+  live_url: FieldRule.Optional,
+  pitch_deck: FieldRule.Optional,
+  deployed_contract: FieldRule.Optional,
 };
 
 describe("what an organizer asked for", () => {
@@ -27,9 +30,40 @@ describe("what an organizer asked for", () => {
     metadata.live_url = "";
 
     expect(validateSubmission(metadata, codeAndVideo)).toEqual([]);
-    expect(validateSubmission(metadata, { ...codeAndVideo, live_url_required: true })).toEqual([
-      "live_url",
-    ]);
+    expect(
+      validateSubmission(metadata, { ...codeAndVideo, live_url: FieldRule.Required }),
+    ).toEqual(["live_url"]);
+  });
+
+  /**
+   * The difference the third rule exists for, from this side. A field nobody
+   * asked for is not missing when it is empty and not a breach when it is
+   * filled in, because the form it was never on could not have promised
+   * either way.
+   */
+  it("treats a field nobody asked for as neither missing nor a breach", () => {
+    const metadata = canonicalMetadata();
+    metadata.pitch_deck_url = "";
+
+    expect(validateSubmission(metadata, { ...codeAndVideo, pitch_deck: FieldRule.Unasked })).toEqual(
+      [],
+    );
+
+    metadata.pitch_deck_url = "https://cdn.example.com/deck.pdf";
+
+    expect(validateSubmission(metadata, { ...codeAndVideo, pitch_deck: FieldRule.Unasked })).toEqual(
+      [],
+    );
+  });
+
+  /** A contracts only track can insist on the thing it exists to judge. */
+  it("can demand a deployed contract", () => {
+    const metadata = canonicalMetadata();
+    metadata.deployed_contract = "";
+
+    expect(
+      validateSubmission(metadata, { ...codeAndVideo, deployed_contract: FieldRule.Required }),
+    ).toEqual(["deployed_contract"]);
   });
 
   /**
@@ -44,9 +78,11 @@ describe("what an organizer asked for", () => {
 
     expect(
       validateSubmission(metadata, {
-        repository_required: false,
-        demo_video_required: false,
-        live_url_required: false,
+        repository: FieldRule.Unasked,
+        demo_video: FieldRule.Unasked,
+        live_url: FieldRule.Unasked,
+        pitch_deck: FieldRule.Unasked,
+        deployed_contract: FieldRule.Unasked,
       }),
     ).toEqual([]);
   });

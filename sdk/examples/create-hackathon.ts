@@ -18,6 +18,7 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { basicNodeSigner } from "@stellar/stellar-sdk/contract";
 
 import { HackathonCore, hashConstitution, toHex, type Constitution } from "../src/index.js";
+import { RegistrationPolicy } from "hackathon-core";
 
 const NETWORK = "Test SDF Network ; September 2015";
 const RPC = "https://soroban-testnet.stellar.org";
@@ -66,7 +67,7 @@ const judges = [Keypair.random(), Keypair.random(), Keypair.random()].map((judge
 }));
 
 const constitution: Constitution = {
-  version: 2,
+  version: 4,
   metadata_hash: Buffer.alloc(32, 7),
   // The native lumen wrapped as a contract token, so the vault holds something
   // real without an issuer to set up first.
@@ -80,11 +81,19 @@ const constitution: Constitution = {
   judging_mode: { tag: "Easy", values: [organizer] },
   vote: { judge_bps: 8_000, community_bps: 2_000 },
   visibility: 0,
+  // Two demanded, one offered, and the deck and the contract never asked for.
+  // The three way rule is what lets an event leave a field off the form
+  // altogether rather than only leave it blank.
   submission_requirements: {
-    repository_required: true,
-    demo_video_required: true,
-    live_url_required: false,
+    repository: 2,
+    demo_video: 2,
+    live_url: 1,
+    pitch_deck: 0,
+    deployed_contract: 0,
   },
+  /* Reviewed, which is what an example should show: the open policy needs no
+     explanation and the queue is the part somebody has to plan for. */
+  registration: RegistrationPolicy.Reviewed,
   teams: { max_size: 4, multi_team_allowed: false },
   prize_tiers: [
     { track: "payments", rank: 1, amount: 5_000n },

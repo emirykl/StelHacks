@@ -29,10 +29,10 @@ mod vault;
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, validate_tie_break, Constitution, Criterion,
     Deadline, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode, PlatformFee,
-    PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy, TieBreakRule,
-    Track, VotePolicy, CONSTITUTION_VERSION, FEE_TOTAL_BPS, MAX_CRITERION_SCORE,
-    MAX_PLATFORM_FEE_BPS, MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE, MIN_TEAM_SIZE,
-    VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
+    PrizeTier, ProjectVisibility, RefundRoute, RegistrationPolicy, Schedule, SettlementMode,
+    TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION, FEE_TOTAL_BPS,
+    MAX_CRITERION_SCORE, MAX_PLATFORM_FEE_BPS, MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE,
+    MIN_TEAM_SIZE, VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
 };
 pub use contract::{HackathonCore, HackathonCoreClient};
 pub use errors::Error;
@@ -46,5 +46,7 @@ pub use roster::{ApplicationStatus, Registration, Team};
 pub use scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard, MAX_WEIGHTED_SCORE};
 pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
-pub use submission::{Submission, SubmissionMetadata, SubmissionRequirements, SubmissionStatus};
+pub use submission::{
+    FieldRule, Submission, SubmissionMetadata, SubmissionRequirements, SubmissionStatus,
+};
 pub use vault::{Vault, VaultClient};

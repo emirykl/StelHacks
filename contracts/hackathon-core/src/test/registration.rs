@@ -17,6 +17,15 @@ fn open() -> Fixture {
     fixture
 }
 
+/// The same, for a hackathon whose rules let everybody in.
+fn open_to_all() -> Fixture {
+    let fixture = Fixture::funded_and_open_to_all();
+    let opens_at = fixture.client.state().schedule.registration_opens_at;
+    fixture.env.ledger().set_timestamp(opens_at + 3_600);
+
+    fixture
+}
+
 fn applicant(fixture: &Fixture) -> Address {
     let who = Address::generate(&fixture.env);
     fixture.client.apply(&who);
@@ -83,6 +92,80 @@ fn an_approval_lets_someone_in() {
         ApplicationStatus::Approved
     );
     assert!(fixture.client.may_vote(&who));
+}
+
+/// An open event is the one an organizer cannot express by working faster.
+///
+/// Every application under the reviewed policy costs a signature that decides
+/// nothing when the answer was always yes, and a hundred of them is a hundred
+/// chances to leave somebody waiting on a queue that was never meant to hold
+/// anyone. Announced before the lock, so nobody is admitted under rules that
+/// changed after they applied.
+#[test]
+fn an_open_hackathon_admits_everybody_the_moment_they_apply() {
+    let fixture = open_to_all();
+    let who = applicant(&fixture);
+
+    assert_eq!(
+        fixture.client.registration(&who).status,
+        ApplicationStatus::Approved
+    );
+    assert!(fixture.client.may_vote(&who));
+}
+
+/// The admission has to be a decision and not just a status, because
+/// everything downstream reads the moment it was made: the electorate is fixed
+/// at the registration deadline and asks when somebody was approved, not
+/// whether the rules would have approved them.
+#[test]
+fn an_open_admission_is_dated_the_moment_it_arrived() {
+    let fixture = open_to_all();
+    let who = applicant(&fixture);
+    let registration = fixture.client.registration(&who);
+
+    assert_eq!(registration.decided_at, registration.applied_at);
+}
+
+/// Open means open. Somebody who is already in cannot be reviewed afterwards,
+/// which is the same refusal a second decision has always met and matters more
+/// here: an organizer who could reject an admitted entrant would have the
+/// reviewed policy back without having announced it.
+#[test]
+fn nobody_can_be_turned_away_from_an_open_hackathon_afterwards() {
+    let fixture = open_to_all();
+    let who = applicant(&fixture);
+    let organizer = fixture.organizer.clone();
+
+    assert_eq!(
+        fixture
+            .client
+            .try_reject_application(&organizer, &who, &reason(&fixture))
+            .err(),
+        Some(Ok(Error::ApplicationNotPending))
+    );
+    assert_eq!(
+        fixture
+            .client
+            .try_approve_application(&organizer, &who)
+            .err(),
+        Some(Ok(Error::ApplicationNotPending))
+    );
+}
+
+/// The deadline still fixes who can be in the electorate. An open policy
+/// decides who gets in, not when applications stop.
+#[test]
+fn an_open_hackathon_still_closes_when_registration_does() {
+    let fixture = open_to_all();
+    let closes_at = fixture.client.state().schedule.registration_closes_at;
+    fixture.env.ledger().set_timestamp(closes_at + 1);
+
+    let latecomer = Address::generate(&fixture.env);
+
+    assert_eq!(
+        fixture.client.try_apply(&latecomer).err(),
+        Some(Ok(Error::DeadlinePassed))
+    );
 }
 
 /// A refusal that leaves no trace would be the quiet back door beside the

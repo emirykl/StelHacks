@@ -22,6 +22,7 @@ mod submission;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env};
 
+use crate::constitution::RegistrationPolicy;
 use crate::contract::{HackathonCore, HackathonCoreClient};
 use crate::fixtures::{sample_constitution, sample_constitution_paying};
 
@@ -69,10 +70,23 @@ impl Fixture {
 
     /// A funded hackathon that has opened for applications.
     pub fn funded_and_open() -> Fixture {
+        Fixture::funded_and_open_under(RegistrationPolicy::Reviewed)
+    }
+
+    /// The same, for a hackathon whose rules admit everybody on arrival.
+    ///
+    /// Taken as an argument rather than written as a second setup, because the
+    /// two differ in one field and every other step of standing a hackathon up
+    /// is the part a registration test is not about.
+    pub fn funded_and_open_to_all() -> Fixture {
+        Fixture::funded_and_open_under(RegistrationPolicy::Open)
+    }
+
+    fn funded_and_open_under(registration: RegistrationPolicy) -> Fixture {
         use prize_vault::{PrizeVault, PrizeVaultClient};
         use soroban_sdk::token::StellarAssetClient;
 
-        let fixture = Fixture::locked_with_asset();
+        let fixture = Fixture::locked_with_asset_under(registration);
         let asset = fixture.client.constitution().prize_asset;
 
         let vault_id = fixture.env.register(PrizeVault, ());
@@ -98,6 +112,10 @@ impl Fixture {
     /// A locked hackathon whose prize asset is a token contract that exists, so
     /// a vault can be bound to it and money can actually move.
     pub fn locked_with_asset() -> Fixture {
+        Fixture::locked_with_asset_under(RegistrationPolicy::Reviewed)
+    }
+
+    fn locked_with_asset_under(registration: RegistrationPolicy) -> Fixture {
         let fixture = Fixture::empty();
 
         let issuer = Address::generate(&fixture.env);
@@ -106,7 +124,9 @@ impl Fixture {
             .register_stellar_asset_contract_v2(issuer)
             .address();
 
-        let constitution = sample_constitution_paying(&fixture.env, asset);
+        let mut constitution = sample_constitution_paying(&fixture.env, asset);
+        constitution.registration = registration;
+
         fixture.client.create(&fixture.organizer, &constitution);
         fixture.client.lock_rules();
 

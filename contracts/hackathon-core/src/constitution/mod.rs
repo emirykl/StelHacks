@@ -9,6 +9,7 @@ mod document;
 mod fee;
 mod judging;
 mod ranking;
+mod registration;
 mod schedule;
 mod scoring;
 mod teams;
@@ -20,6 +21,7 @@ pub use document::{Constitution, JudgeAssignment, CONSTITUTION_VERSION};
 pub use fee::{PlatformFee, FEE_TOTAL_BPS, MAX_PLATFORM_FEE_BPS};
 pub use judging::JudgingMode;
 pub use ranking::{validate_tie_break, TieBreakRule};
+pub use registration::RegistrationPolicy;
 pub use schedule::{Deadline, ExtensionPolicy, Schedule};
 pub use scoring::{
     total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,

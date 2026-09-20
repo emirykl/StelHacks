@@ -4,6 +4,7 @@ use crate::constitution::discretion::{DiscretionPolicy, RefundRoute};
 use crate::constitution::fee::PlatformFee;
 use crate::constitution::judging::JudgingMode;
 use crate::constitution::ranking::{validate_tie_break, TieBreakRule};
+use crate::constitution::registration::RegistrationPolicy;
 use crate::constitution::schedule::{ExtensionPolicy, Schedule};
 use crate::constitution::scoring::{total_prize_amount, validate_prize_tiers, PrizeTier, Track};
 use crate::constitution::teams::TeamPolicy;
@@ -15,10 +16,13 @@ use crate::submission::SubmissionRequirements;
 /// The format version of the constitution, so a reader can tell which shape it
 /// is looking at once this structure has changed a few times.
 ///
-/// Two since the platform fee joined the document. The bump is not decoration:
-/// every digest in `fixtures/` moved with it, and a client holding a version one
-/// constitution is holding one that never named a fee at all.
-pub const CONSTITUTION_VERSION: u32 = 2;
+/// Four since the rules began saying who gets in. The bump is not decoration:
+/// every digest in `fixtures/` moved with it, and the distinction matters more
+/// than most. A version three constitution cannot express an open event, so a
+/// client reading one and assuming applications were reviewed would be right;
+/// reading a version four one the same way would be wrong about who was
+/// admitted and on whose say-so.
+pub const CONSTITUTION_VERSION: u32 = 4;
 
 /// A judge and the tracks they are responsible for.
 #[contracttype]
@@ -64,6 +68,8 @@ pub struct Constitution {
     pub visibility: ProjectVisibility,
     /// Which links a team has to supply with their project.
     pub submission_requirements: SubmissionRequirements,
+    /// Whether applications are reviewed or everybody is admitted on arrival.
+    pub registration: RegistrationPolicy,
     /// How teams may be formed.
     pub teams: TeamPolicy,
     /// Payable positions per track.
@@ -157,6 +163,22 @@ impl Constitution {
     /// setting is rarely wrong on its own, it is wrong next to another setting,
     /// and the moment to catch that is before anybody writes code against it.
     pub fn validate(&self) -> Result<(), Error> {
+        /*
+          The shape this contract was compiled for, checked before anything in
+          it is read.
+
+          Nothing used to check this field, and a document could be labelled
+          anything at all: the body has only one shape per wasm, so a caller
+          that wrote the wrong number produced a constitution that froze fine,
+          ran fine, and was then dropped by every reader that believed the
+          label. A number nobody verifies is a number that will eventually be
+          wrong, and the failure it causes points at the reader rather than at
+          the caller that mislabelled it.
+        */
+        if self.version != CONSTITUTION_VERSION {
+            return Err(Error::ConstitutionInvalid);
+        }
+
         self.validate_tracks()?;
         self.validate_judges()?;
 

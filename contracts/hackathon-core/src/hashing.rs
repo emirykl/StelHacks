@@ -89,6 +89,7 @@ mod test {
         JudgingMode, ProjectVisibility, TieBreakRule, VotePolicy, CONSTITUTION_VERSION,
     };
     use crate::fixtures::{sample_constitution, sample_metadata, HOUR};
+    use crate::submission::FieldRule;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{symbol_short, vec, Address, String};
 
@@ -177,7 +178,7 @@ mod test {
         assert_ne!(hash_constitution(&env, &changed), original, "visibility");
 
         let mut changed = base.clone();
-        changed.submission_requirements.live_url_required = true;
+        changed.submission_requirements.live_url = FieldRule::Required;
         assert_ne!(
             hash_constitution(&env, &changed),
             original,

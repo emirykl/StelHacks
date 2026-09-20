@@ -10,8 +10,8 @@ use soroban_sdk::{symbol_short, vec, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::constitution::{
     Constitution, Criterion, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode,
-    PlatformFee, PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy,
-    TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION,
+    PlatformFee, PrizeTier, ProjectVisibility, RefundRoute, RegistrationPolicy, Schedule,
+    SettlementMode, TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION,
 };
 use crate::scorecard::{CriterionScore, Scorecard};
 use crate::submission::{SubmissionMetadata, SubmissionRequirements};
@@ -111,6 +111,7 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
         },
         visibility: ProjectVisibility::Public,
         submission_requirements: SubmissionRequirements::code_and_video(),
+        registration: RegistrationPolicy::Reviewed,
         teams: TeamPolicy::small_teams(),
         prize_tiers: vec![
             env,
@@ -199,6 +200,7 @@ pub fn canonical_constitution(env: &Env) -> Constitution {
         },
         visibility: ProjectVisibility::Public,
         submission_requirements: SubmissionRequirements::code_and_video(),
+        registration: RegistrationPolicy::Reviewed,
         teams: TeamPolicy::small_teams(),
         prize_tiers: vec![
             env,
@@ -271,6 +273,11 @@ pub fn sample_metadata(env: &Env, track: Symbol) -> SubmissionMetadata {
         repository_url: String::from_str(env, "https://github.com/example/lumen-split"),
         demo_video_url: String::from_str(env, "https://youtu.be/example"),
         live_url: String::from_str(env, "https://lumen-split.example.com"),
+        pitch_deck_url: String::from_str(env, "https://cdn.example.com/lumen-split.pdf"),
+        deployed_contract: String::from_str(
+            env,
+            "CA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ",
+        ),
         track,
     }
 }

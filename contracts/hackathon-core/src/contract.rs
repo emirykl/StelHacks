@@ -123,22 +123,75 @@ impl HackathonCore {
         let team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
-        let state = storage::load_state(&env)?;
-        if !state.phase.is_configurable() {
-            return Err(Error::RulesAlreadyLocked);
+        freeze(&env)
+    }
+
+    /// Opens the hackathon, all of it, in one call.
+    ///
+    /// Six calls did this and each needed the one before it settled on chain
+    /// first: freeze the rules, put a vault up, tell it what it serves, bind it
+    /// here, move the prize in, publish. Soroban allows one contract call per
+    /// transaction, so that was six wallet prompts for what an organizer thinks
+    /// of as a single decision, and four of them are bookkeeping nobody asked
+    /// to know about.
+    ///
+    /// Nothing was loosened to fold them together. Every step below is the same
+    /// entry point with the same checks, refusing the same things; what changed
+    /// is that this contract runs them inside one invocation the organizer
+    /// authorizes once.
+    ///
+    /// Whatever is already done is skipped, so a run that failed halfway can be
+    /// pressed again and carries on from where it stopped.
+    ///
+    /// The vault's code is named by the caller, because this contract cannot
+    /// know a hash that did not exist when it was compiled. That is not a hole:
+    /// the vault it deploys is bound through `bind_vault` like any other, which
+    /// checks the binding from both sides and refuses a pool holding a token
+    /// the rules do not name. A salt that was used before belongs to a contract
+    /// that already exists, so a retry needs a fresh one.
+    pub fn set_up(env: Env, vault_wasm: BytesN<32>, salt: BytesN<32>) -> Result<Address, Error> {
+        let team = storage::load_organizing_team(&env)?;
+        team.organizer.require_auth();
+
+        /* The signature is checked once, above. `lock_rules` and `bind_vault`
+        check it again for their own callers, and `require_auth` twice for
+        one address in one frame is refused by the host as a duplicate
+        authorization, so both hand their bodies to the helpers below and
+        this path calls those. */
+        if storage::load_state(&env)?.phase.is_configurable() {
+            freeze(&env)?;
         }
 
-        let constitution = storage::load_constitution(&env)?;
-        constitution.validate()?;
+        let vault = if storage::has_vault(&env) {
+            storage::load_vault(&env)?
+        } else {
+            let asset = storage::load_constitution(&env)?.prize_asset;
+            let deployed = env
+                .deployer()
+                .with_current_contract(salt)
+                .deploy_v2(vault_wasm, ());
 
-        let hash = hash_constitution(&env, &constitution);
+            VaultClient::new(&env, &deployed).create(&env.current_contract_address(), &asset);
 
-        storage::lock_constitution(&env, &hash);
-        storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
+            bind(&env, &deployed)?;
 
-        events::rules_locked(&env, &hash);
+            deployed
+        };
 
-        Ok(hash)
+        /* Topped up to the requirement rather than deposited blindly, because
+        anyone may have funded this pool already and a second full deposit
+        would be the organizer paying the prize twice. */
+        let required = storage::load_constitution(&env)?.required_funding()?;
+        let client = VaultClient::new(&env, &vault);
+        let held = client.balance();
+
+        if held < required {
+            client.deposit(&team.organizer, &(required - held));
+        }
+
+        Self::publish(env)?;
+
+        Ok(vault)
     }
 
     /// Points the hackathon at the vault holding its prize.
@@ -152,29 +205,7 @@ impl HackathonCore {
         let team = storage::load_organizing_team(&env)?;
         team.organizer.require_auth();
 
-        if storage::has_vault(&env) {
-            return Err(Error::VaultAlreadyBound);
-        }
-
-        let state = storage::load_state(&env)?;
-        if state.phase != Phase::Funding {
-            return Err(Error::WrongPhase);
-        }
-
-        let client = VaultClient::new(&env, &vault);
-        if client.core() != env.current_contract_address() {
-            return Err(Error::VaultRejected);
-        }
-
-        let constitution = storage::load_constitution(&env)?;
-        if client.asset() != constitution.prize_asset {
-            return Err(Error::VaultRejected);
-        }
-
-        storage::save_vault(&env, &vault);
-        events::vault_bound(&env, &vault);
-
-        Ok(())
+        bind(&env, &vault)
     }
 
     /// Opens the hackathon for registration and submissions.
@@ -209,6 +240,13 @@ impl HackathonCore {
     /// still be working through the queue after that, and a late approval is
     /// fine, but a late request is not: the deadline is what fixes who could
     /// possibly be in the electorate.
+    ///
+    /// Under [`RegistrationPolicy::Open`] there is no queue and the applicant
+    /// is in before this call returns. The decision is still recorded and still
+    /// announced, because the rest of the contract reads registrations rather
+    /// than policies: the electorate, the team roster and the gallery all ask
+    /// whether somebody was approved and when, and an admission that skipped
+    /// the record would be a participant none of them could see.
     pub fn apply(env: Env, applicant: Address) -> Result<(), Error> {
         applicant.require_auth();
 
@@ -229,8 +267,26 @@ impl HackathonCore {
             return Err(Error::ApplicationNotPending);
         }
 
-        storage::save_registration(&env, &applicant, &Registration::pending(&env, now));
+        let arrived = Registration::pending(&env, now);
+        let open = storage::load_constitution(&env)?
+            .registration
+            .admits_immediately();
+
+        /* Announced as an application either way, and as a decision only when
+        one was made. An open event emits both in the same transaction, which
+        is what it is: the applying and the admitting happen together. */
         events::applied(&env, &applicant);
+
+        if !open {
+            storage::save_registration(&env, &applicant, &arrived);
+
+            return Ok(());
+        }
+
+        let admitted = arrived.approve(&env, now)?;
+
+        storage::save_registration(&env, &applicant, &admitted);
+        events::application_decided(&env, &applicant, true, &admitted.reason);
 
         Ok(())
     }
@@ -1918,4 +1974,62 @@ impl HackathonCore {
     pub fn phase(env: Env) -> Result<Phase, Error> {
         Ok(storage::load_state(&env)?.phase)
     }
+}
+
+/*
+  The two steps `set_up` shares with the entry points they came from.
+
+  They exist because of one host rule: `require_auth` for the same address twice
+  in the same invocation is refused as a duplicate authorization. `set_up` checks
+  the organizer's signature once and then does the work of `lock_rules` and
+  `bind_vault`, so the work had to come out of them. Neither helper checks a
+  signature; every caller does that first, and there is no path to them from
+  outside the contract.
+*/
+
+/// Freezes the rules and returns their digest.
+fn freeze(env: &Env) -> Result<BytesN<32>, Error> {
+    let state = storage::load_state(env)?;
+    if !state.phase.is_configurable() {
+        return Err(Error::RulesAlreadyLocked);
+    }
+
+    let constitution = storage::load_constitution(env)?;
+    constitution.validate()?;
+
+    let hash = hash_constitution(env, &constitution);
+
+    storage::lock_constitution(env, &hash);
+    storage::save_state(env, &state.advance(env.ledger().timestamp())?);
+
+    events::rules_locked(env, &hash);
+
+    Ok(hash)
+}
+
+/// Points the hackathon at a vault, checking the binding from both sides.
+fn bind(env: &Env, vault: &Address) -> Result<(), Error> {
+    if storage::has_vault(env) {
+        return Err(Error::VaultAlreadyBound);
+    }
+
+    let state = storage::load_state(env)?;
+    if state.phase != Phase::Funding {
+        return Err(Error::WrongPhase);
+    }
+
+    let client = VaultClient::new(env, vault);
+    if client.core() != env.current_contract_address() {
+        return Err(Error::VaultRejected);
+    }
+
+    let constitution = storage::load_constitution(env)?;
+    if client.asset() != constitution.prize_asset {
+        return Err(Error::VaultRejected);
+    }
+
+    storage::save_vault(env, vault);
+    events::vault_bound(env, vault);
+
+    Ok(())
 }

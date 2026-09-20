@@ -6,7 +6,8 @@
 //! that answers when asked.
 
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::Address;
+use soroban_sdk::token::TokenClient;
+use soroban_sdk::{Address, BytesN};
 
 use crate::errors::Error;
 use crate::phase::Phase;
@@ -231,4 +232,85 @@ fn a_vault_cannot_be_bound_before_the_rules_are_locked() {
         fixture.client.try_bind_vault(&vault_id).err(),
         Some(Ok(Error::WrongPhase))
     );
+}
+
+/// Opening an event used to be six calls, so an organizer signed six times for
+/// one decision and the four in the middle were bookkeeping they never asked
+/// about. `set_up` runs the same steps, with the same checks, inside one
+/// invocation.
+#[test]
+fn one_call_locks_the_rules_funds_the_pool_and_opens_the_hackathon() {
+    let funded = Funded::bound();
+    let env = funded.core.env.clone();
+
+    let required = funded.core.client.required_funding();
+    funded.mint.mint(&funded.core.organizer, &required);
+
+    assert_eq!(funded.core.client.phase(), Phase::Funding);
+    assert_eq!(funded.vault.balance(), 0);
+
+    funded.core.client.set_up(
+        &BytesN::from_array(&env, &[0u8; 32]),
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
+
+    assert_eq!(funded.core.client.phase(), Phase::Open);
+    assert_eq!(funded.vault.balance(), required);
+}
+
+/// The pool takes money from anyone, so by the time an organizer presses this
+/// a sponsor may already have covered part of it. Depositing the whole
+/// requirement again would be the organizer paying the prize twice.
+#[test]
+fn set_up_moves_only_what_the_pool_is_short() {
+    let funded = Funded::bound();
+    let env = funded.core.env.clone();
+
+    let required = funded.core.client.required_funding();
+    let part = required / 4;
+
+    funded.vault.deposit(&funded.sponsor, &part);
+    funded.mint.mint(&funded.core.organizer, &required);
+
+    funded.core.client.set_up(
+        &BytesN::from_array(&env, &[0u8; 32]),
+        &BytesN::from_array(&env, &[2u8; 32]),
+    );
+
+    assert_eq!(funded.vault.balance(), required);
+
+    /* The organizer kept the part the sponsor covered rather than handing over
+    a full prize on top of it. */
+    assert_eq!(
+        TokenClient::new(&env, &funded.core.client.constitution().prize_asset)
+            .balance(&funded.core.organizer),
+        part,
+    );
+}
+
+/// The one call still asks who is pressing it. Everything it does was the
+/// organizer's alone before it was folded together, and folding it together
+/// must not be the way somebody else opens an event.
+#[test]
+fn nobody_but_the_organizer_can_set_a_hackathon_up() {
+    let funded = Funded::bound();
+    let env = funded.core.env.clone();
+
+    funded.mint.mint(
+        &funded.core.organizer,
+        &funded.core.client.required_funding(),
+    );
+
+    env.set_auths(&[]);
+
+    assert!(funded
+        .core
+        .client
+        .try_set_up(
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &BytesN::from_array(&env, &[3u8; 32]),
+        )
+        .is_err());
+
+    assert_eq!(funded.core.client.phase(), Phase::Funding);
 }
