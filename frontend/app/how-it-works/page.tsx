@@ -78,7 +78,7 @@ function Lifecycle() {
   return (
     <section className="hatch border-b border-rule">
       <Measure wide className="py-16 sm:py-20">
-        <SpecLabel index="01">Lifecycle</SpecLabel>
+        <SpecLabel index="1">Lifecycle</SpecLabel>
 
         <SpecHeading className="mt-3">The stages, in order</SpecHeading>
 
@@ -87,7 +87,11 @@ function Lifecycle() {
             {stages.map((what, index) => (
               <SpecRow
                 key={PHASES[index]}
-                index={String(index).padStart(2, "0")}
+                /* Counted from one, as a reading order rather than as the
+                   contract's phase numbers. Those start at zero, and a list
+                   opening on "0 Draft" spends its first row explaining an
+                   implementation detail. */
+                index={String(index + 1)}
                 label={PHASES[index] ?? ""}
               >
                 <p className="text-[0.9375rem] leading-relaxed">{what}</p>
@@ -100,7 +104,9 @@ function Lifecycle() {
             it, and putting it at the bottom of the same list would read as
             somewhere every hackathon eventually arrives. */}
         <div className="mt-10 max-w-[46rem] border-l-2 border-rule-strong pl-5">
-          <SpecLabel index="09">Cancelled</SpecLabel>
+          {/* No number. It is the way off the list, and numbering it puts it
+              back on the end of the one it is not part of. */}
+          <SpecLabel>Cancelled</SpecLabel>
 
           <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
             The one exit off that line. A hackathon can only end this way under a
@@ -181,7 +187,7 @@ function Roles() {
                     className="grid grid-cols-[1.75rem_1fr] gap-3 border-b border-rule py-4"
                   >
                     <span className="label pt-0.5 text-ink-faint">
-                      {String(index + 1).padStart(2, "0")}
+                      {index + 1}
                     </span>
 
                     <p className="text-[0.9375rem] leading-relaxed text-ink-soft">{step}</p>
@@ -218,7 +224,7 @@ function Checking() {
   return (
     <section className="hatch">
       <Measure wide className="py-16 sm:py-20">
-        <SpecLabel index="02">Without an account</SpecLabel>
+        <SpecLabel index="2">Without an account</SpecLabel>
 
         <SpecHeading className="mt-3">What you can check yourself</SpecHeading>
 
@@ -227,7 +233,7 @@ function Checking() {
             {checks.map(([label, how], index) => (
               <SpecRow
                 key={label}
-                index={String(index + 1).padStart(2, "0")}
+                index={String(index + 1)}
                 label={label ?? ""}
                 mark
               >

@@ -213,7 +213,7 @@ function Card({
 
   return (
     <section className="border-l-2 border-rule pl-6">
-      <SpecLabel index={String(entry.team).padStart(2, "0")}>{entry.track}</SpecLabel>
+      <SpecLabel index={String(entry.team)}>{entry.track}</SpecLabel>
 
       <p className="mt-2 tabular text-[0.875rem] break-all text-ink-soft">{entry.uri}</p>
 
@@ -266,19 +266,19 @@ function Card({
       ) : (
         <div className="mt-6">
           <SpecRows>
-            <SpecRow index="01" label="Leaf" mark>
+            <SpecRow index="1" label="Leaf" mark>
               <SpecValue>{held.leaf}</SpecValue>
             </SpecRow>
 
-            <SpecRow index="02" label="Receipt from">
+            <SpecRow index="2" label="Receipt from">
               <SpecValue>{held.receipt.sealer}</SpecValue>
             </SpecRow>
 
-            <SpecRow index="03" label="Signature">
+            <SpecRow index="3" label="Signature">
               <SpecValue>{held.receipt.signature}</SpecValue>
             </SpecRow>
 
-            <SpecRow index="04" label="Included" mark={included?.at === "omitted"}>
+            <SpecRow index="4" label="Included" mark={included?.at === "omitted"}>
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className={`label ${tone(included)}`}>
