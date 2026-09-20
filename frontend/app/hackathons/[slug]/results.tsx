@@ -8,6 +8,7 @@ import { useWallet } from "../../components/wallet-context";
 import { arg, send, type Sent } from "../../../lib/send";
 import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/results";
 import { rulesFor } from "../../../lib/rules";
+import { accept, assetOf, holds, type PrizeAsset } from "../../../lib/trustline";
 
 /**
  * Who won, and whether they have been paid.
@@ -40,6 +41,15 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
   */
   const [payable, setPayable] = useState<Set<string>>(new Set());
 
+  /* What the prize is paid in, and whether this wallet can receive it. Both
+     start unknown rather than false: a warning drawn before the answer is in
+     would flash on every load for the many events that pay in XLM and need no
+     warning at all. */
+  const [asset, setAsset] = useState<PrizeAsset | null>(null);
+  const [ready, setReady] = useState<boolean | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
 
@@ -50,9 +60,19 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
         rulesFor(contractId),
       ]);
 
-      if (alive) {
-        setResults(found);
-        setPayable(new Set((rules?.tiers ?? []).map((tier) => `${tier.track}-${tier.rank}`)));
+      if (!alive) {
+        return;
+      }
+
+      setResults(found);
+      setPayable(new Set((rules?.tiers ?? []).map((tier) => `${tier.track}-${tier.rank}`)));
+
+      if (rules?.prizeAsset != null) {
+        const which = await assetOf(rules.prizeAsset);
+
+        if (alive) {
+          setAsset(which);
+        }
       }
     })();
 
@@ -61,8 +81,65 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
     };
   }, [contractId]);
 
+  /* Asked again whenever the wallet changes, because somebody switching
+     accounts in their extension is switching to an account that may not be
+     prepared, and a stale yes is the one answer this must never give. */
+  const address = wallet?.address ?? null;
+
+  useEffect(() => {
+    let alive = true;
+
+    if (asset === null || address === null) {
+      setReady(null);
+
+      return;
+    }
+
+    void holds(address, asset).then((found) => {
+      if (alive) {
+        setReady(found);
+      }
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [asset, address]);
+
   if (results === null || results.length === 0) {
     return null;
+  }
+
+  /* Whether this wallet is on an unpaid place the prize table actually pays.
+     The board lists every ranked team, and most of them are owed nothing. */
+  const owed = results.some((result) =>
+    result.places.some(
+      (place) =>
+        !place.paid &&
+        payable.has(`${result.track}-${place.rank}`) &&
+        address !== null &&
+        place.members.includes(address),
+    ),
+  );
+
+  async function acceptAsset() {
+    if (address === null || asset === null) {
+      return;
+    }
+
+    setAccepting(true);
+    setRefused(null);
+
+    const done = await accept(address, asset);
+
+    /* Declining in the wallet is a decision, not a failure, and says nothing
+       back. Everything else does. */
+    setRefused(done.ok || done.refused ? null : done.why);
+    setAccepting(false);
+
+    if (done.ok) {
+      setReady(await holds(address, asset));
+    }
   }
 
   async function claim(track: string, rank: number, member: string) {
@@ -95,6 +172,39 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
         <SpecLabel index="4">Results</SpecLabel>
 
         <SpecHeading className="mt-3">Computed by the contract</SpecHeading>
+
+        {/*
+          Only when it is this wallet's problem, and only when it is a problem.
+
+          Every hackathon on the network today pays in XLM, which needs nothing
+          accepted, so `ready` comes back true and this never draws. It appears
+          for an issued asset the connected wallet has not accepted, and only
+          while that wallet is actually owed something: telling a spectator
+          their wallet is unprepared for a prize they did not win is noise about
+          a step they will never take.
+        */}
+        {ready === false && asset?.kind === "issued" && owed && (
+          <section className="mt-10 max-w-[46rem] rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
+            <h3 className="text-[1.25rem] text-ink">Accept {asset.code} to be paid</h3>
+
+            <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+              Stellar will not put an asset into a wallet that has not accepted
+              it. Your prize is waiting in the vault and the contract will not
+              release it until this is done. It is one signature and it moves no
+              money.
+            </p>
+
+            <div className="mt-6">
+              <Button disabled={accepting} onClick={() => void acceptAsset()}>
+                {accepting ? "Signing" : `Accept ${asset.code}`}
+              </Button>
+            </div>
+
+            {refused !== null && (
+              <p className="mt-4 text-[0.8125rem] leading-relaxed text-broken">{refused}</p>
+            )}
+          </section>
+        )}
 
         <div className="mt-10 space-y-12">
           {results.map((result) => (

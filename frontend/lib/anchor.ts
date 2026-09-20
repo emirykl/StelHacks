@@ -44,6 +44,19 @@ export interface Anchor {
  * the moment to add the dependency rather than now.
  */
 export async function discover(domain: string): Promise<Anchor> {
+  /*
+    Shape checked before it reaches a URL.
+
+    This is the only place a hostname enters a request, and the value should
+    only ever be the configured one. Checking it here means a caller that one
+    day reads a domain off a query string cannot turn that into a fetch to an
+    arbitrary host, and cannot smuggle a path or a port past the template with
+    a slash or a colon.
+  */
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(domain)) {
+    throw new Error("that is not a domain");
+  }
+
   const answer = await fetch(`https://${domain}/.well-known/stellar.toml`);
 
   if (!answer.ok) {
@@ -100,6 +113,12 @@ function currencies(toml: string): { code: string; issuer: string | null }[] {
  * The signature comes from the same wallet kit the rest of the product signs
  * with, so a person who has already connected does not meet a second, different
  * idea of what their wallet is.
+ *
+ * What comes back is a bearer token: whoever holds it is the account, for as
+ * long as it lasts. It is returned rather than stored, and callers are to keep
+ * it in memory and let it die with the page. Putting it in local storage would
+ * put it within reach of any script that ever runs on this origin, to buy back
+ * a signature that takes one press.
  */
 export async function authenticate(anchor: Anchor, address: string): Promise<string> {
   const asked = await fetch(`${anchor.auth}?account=${address}`);
@@ -193,6 +212,19 @@ async function check(
 
   if (first === undefined || first.type !== "manageData" || first.source !== address) {
     throw new Error("that challenge is for a different account");
+  }
+
+  /*
+    And it names the anchor, which is the half that catches a replay.
+
+    SEP-10 puts `<home domain> auth` in that operation's key. Without checking
+    it, a challenge the anchor signed for one domain it serves could be
+    presented as a login to another, and the signature check above would pass
+    because it really is their signature. The domain is what the person thought
+    they were signing into.
+  */
+  if (first.name !== `${anchor.domain} auth`) {
+    throw new Error(`that challenge is not for ${anchor.domain}`);
   }
 }
 

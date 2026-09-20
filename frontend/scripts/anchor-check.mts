@@ -53,15 +53,18 @@ const signedBy = tx.signatures.some((entry) => {
   }
 });
 
-const first = tx.operations[0];
+const first = tx.operations[0] as { type?: string; source?: string; name?: string } | undefined;
+const namesAnchor = first?.name === `${domain} auth`;
+
 console.log("3 checked", {
   sequence: tx.sequence,
   signedByAnchor: signedBy,
   namesMe: first?.source === me.publicKey(),
+  namesAnchor,
   operation: first?.type,
 });
 
-if (!signedBy || tx.sequence !== "0" || first?.source !== me.publicKey()) {
+if (!signedBy || !namesAnchor || tx.sequence !== "0" || first?.source !== me.publicKey()) {
   throw new Error("that challenge would not have been safe to sign");
 }
 
