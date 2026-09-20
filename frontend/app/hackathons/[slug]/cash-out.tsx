@@ -10,13 +10,16 @@ import {
   completeWithdraw,
   discover,
   listTransfers,
+  missingFields,
   readTransfer,
+  register,
   settled,
+  startDirectWithdraw,
   startWithdraw,
   type Anchor,
   type Transfer,
 } from "../../../lib/anchor";
-import type { PrizeAsset } from "../../../lib/trustline";
+import { balanceOf, type PrizeAsset } from "../../../lib/trustline";
 
 /**
  * Turning a prize that has been paid into money that can be spent.
@@ -31,10 +34,18 @@ import type { PrizeAsset } from "../../../lib/trustline";
  * when the anchor says it is ready, and reports what the anchor says. It never
  * sees a document and never holds the money.
  *
- * The anchor's page opens in a tab rather than an iframe, deliberately. Someone
- * is about to type an identity number and a bank account into it, and they
- * should be able to read the domain in the address bar while they do. Framing
- * it would teach exactly the habit that makes phishing work.
+ * Two standards do this and an anchor may publish either, so both are here.
+ *
+ * SEP-24 hosts the whole thing. Its page opens in a tab rather than an iframe,
+ * deliberately: someone is about to type an identity number and a bank account
+ * into it, and they should be able to read the domain in the address bar while
+ * they do. Framing it would teach exactly the habit that makes phishing work.
+ *
+ * SEP-6 has no page. The anchor answers with an account and a memo and the rest
+ * is a payment, so nothing opens and the panel says so rather than promising a
+ * tab that never appears. Whatever identity that anchor wants is asked for
+ * through SEP-12, and if it wants more than this page can ask for, it says so
+ * instead of half starting something.
  */
 
 type Stage =
@@ -44,7 +55,7 @@ type Stage =
   | { at: "sending"; transfer: Transfer }
   | { at: "failed"; why: string };
 
-export function CashOut({ asset }: { asset: PrizeAsset }) {
+export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; token: string }) {
   const { wallet } = useWallet();
   const address = wallet?.address ?? null;
 
@@ -157,10 +168,16 @@ export function CashOut({ asset }: { asset: PrizeAsset }) {
         (one) => !settled(one.status),
       );
 
-      const transfer = open ?? (await startWithdraw(anchor, token.current, code, address));
+      const transfer =
+        open ?? (await open_(anchor, token.current, code, address, assetContract));
 
       if (transfer.url !== undefined && opened !== null) {
         opened.location.href = transfer.url;
+      } else {
+        /* Nothing to show them there. The programmatic flow answers with an
+           account and a memo rather than a page, so a blank tab left open would
+           be this product's own dead end. */
+        opened?.close();
       }
 
       setStage({ at: "running", transfer });
@@ -206,9 +223,9 @@ export function CashOut({ asset }: { asset: PrizeAsset }) {
       <h3 className="text-[1.25rem] text-ink">Cash out</h3>
 
       <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
-        {anchor.domain} exchanges this back for money. They handle the identity
-        checks and the payout on their own site, which opens in a new tab. This
-        page never sees your documents.
+        {anchor.hosted === undefined
+          ? `${anchor.domain} exchanges this back for money and pays it to your bank. They decide who may withdraw; this page only sends them the asset.`
+          : `${anchor.domain} exchanges this back for money. They handle the identity checks and the payout on their own site, which opens in a new tab. This page never sees your documents.`}
       </p>
 
       <div className="mt-6">
@@ -221,6 +238,53 @@ export function CashOut({ asset }: { asset: PrizeAsset }) {
       </div>
     </section>
   );
+}
+
+/**
+ * Open a withdrawal by whichever standard this anchor speaks.
+ *
+ * The hosted flow sends somebody to the anchor's page and identity never
+ * touches this product. The programmatic one has no page, so the account is
+ * registered from here first — and what that registration needs is asked for
+ * rather than assumed, so an anchor that wants more than a sandbox does is
+ * refused honestly instead of half attempted.
+ */
+async function open_(
+  anchor: Anchor,
+  token: string,
+  code: string,
+  address: string,
+  assetContract: string,
+): Promise<Transfer> {
+  if (anchor.hosted !== undefined) {
+    return startWithdraw(anchor, token, code, address);
+  }
+
+  await register(anchor, token, address);
+
+  const wanted = await missingFields(anchor, token, address);
+
+  if (wanted.length > 0) {
+    throw new Error(`${anchor.domain} needs more than this page can ask for: ${wanted.join(", ")}`);
+  }
+
+  const opened = await startDirectWithdraw(anchor, token, code, address);
+
+  /*
+    The whole balance, because a prize is a number nobody chose.
+
+    The anchor takes whatever arrives and names no figure of its own, so the
+    amount has to come from somewhere and an input box would be asking a person
+    to decide something they have no reason to have an opinion about. What they
+    have is what they won.
+  */
+  const balance = await balanceOf(assetContract, address);
+
+  if (balance === null || Number(balance) <= 0) {
+    throw new Error("there is nothing in this wallet to cash out");
+  }
+
+  return { ...opened, amountIn: balance };
 }
 
 /**

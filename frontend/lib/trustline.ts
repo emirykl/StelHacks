@@ -219,3 +219,62 @@ function reason(raw: string): string {
 
   return raw.length > 160 ? `${raw.slice(0, 157)}…` : raw;
 }
+
+/**
+ * What this account holds of the prize asset, as a decimal string.
+ *
+ * Read from the token contract, which answers for a wrapped classic asset and a
+ * plain Soroban token alike, so this needs no branch on which kind it is.
+ *
+ * A string rather than a number all the way through. Seven decimal places at
+ * the top of an i128 is more precision than a double has, and this value is
+ * about to be put in a transaction: rounding it while formatting would send an
+ * amount nobody asked for.
+ */
+export async function balanceOf(contractId: string, address: string): Promise<string | null> {
+  if (rpcUrl === undefined || passphrase === undefined) {
+    return null;
+  }
+
+  try {
+    const [{ Account, Address, BASE_FEE, Contract, TransactionBuilder, scValToNative }, rpc] =
+      await Promise.all([
+        import("@stellar/stellar-sdk/base"),
+        import("@stellar/stellar-sdk/rpc"),
+      ]);
+
+    const server = new rpc.Server(rpcUrl);
+    const nobody = new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0");
+
+    const built = new TransactionBuilder(nobody, { fee: BASE_FEE, networkPassphrase: passphrase })
+      .addOperation(new Contract(contractId).call("balance", new Address(address).toScVal()))
+      .setTimeout(30)
+      .build();
+
+    const simulated = await server.simulateTransaction(built);
+
+    if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
+      return null;
+    }
+
+    return decimal(BigInt(scValToNative(simulated.result.retval) as bigint | number | string));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stroops as the decimal string the ledger reads back.
+ *
+ * Seven places, always, and trailing zeros trimmed only down to a whole number.
+ * Built by hand from the integer rather than divided, because dividing is where
+ * a value that has to survive a round trip stops being exact.
+ */
+function decimal(stroops: bigint): string {
+  const negative = stroops < BigInt(0);
+  const digits = (negative ? -stroops : stroops).toString().padStart(8, "0");
+  const whole = digits.slice(0, -7);
+  const fraction = digits.slice(-7).replace(/0+$/, "");
+
+  return `${negative ? "-" : ""}${whole}${fraction.length > 0 ? `.${fraction}` : ""}`;
+}

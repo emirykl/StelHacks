@@ -24,13 +24,26 @@ const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
 /** The anchor's home domain. The only thing about it we are told. */
 export const ANCHOR_DOMAIN = process.env["NEXT_PUBLIC_ANCHOR_DOMAIN"];
 
-/** What an anchor says it can do, read from its own file. */
+/**
+ * What an anchor says it can do, read from its own file.
+ *
+ * Two ways to withdraw and an anchor may publish either. SEP-24 hosts the whole
+ * thing on the anchor's own page; SEP-6 hands back an account and a memo and
+ * leaves the rest to the client. Which one is not our choice, so both are read
+ * and the caller uses whichever is there.
+ */
 export interface Anchor {
   domain: string;
   /** SEP-10, where a wallet proves it holds an address. */
   auth: string;
-  /** SEP-24, where a transfer is started. */
-  transfer: string;
+  /** SEP-24, the hosted flow. Absent on an anchor that only speaks SEP-6. */
+  hosted?: string;
+  /** SEP-6, the programmatic flow. Absent on an anchor that only speaks SEP-24. */
+  direct?: string;
+  /** SEP-12, where a customer is registered. Only SEP-6 needs it. */
+  kyc?: string;
+  /** SEP-38, where a rate is quoted. What turns an amount into a local one. */
+  quotes?: string;
   /** The key whose signature makes a challenge genuine. */
   signingKey: string;
   currencies: { code: string; issuer: string | null }[];
@@ -68,11 +81,12 @@ export async function discover(domain: string): Promise<Anchor> {
   const one = (key: string) => /^\s*([^"']+)["']?/.exec(value(toml, key) ?? "")?.[1]?.trim() ?? null;
 
   const auth = one("WEB_AUTH_ENDPOINT");
-  const transfer = one("TRANSFER_SERVER_SEP0024");
+  const hosted = one("TRANSFER_SERVER_SEP0024");
+  const direct = one("TRANSFER_SERVER");
   const signingKey = one("SIGNING_KEY");
 
-  if (auth === null || transfer === null || signingKey === null) {
-    throw new Error(`${domain} does not offer hosted withdrawals`);
+  if (auth === null || signingKey === null || (hosted === null && direct === null)) {
+    throw new Error(`${domain} does not offer withdrawals`);
   }
 
   /* Checked rather than assumed. An anchor on the other network issues assets
@@ -84,7 +98,16 @@ export async function discover(domain: string): Promise<Anchor> {
     throw new Error(`${domain} is on a different network`);
   }
 
-  return { domain, auth, transfer, signingKey, currencies: currencies(toml) };
+  return {
+    domain,
+    auth,
+    signingKey,
+    currencies: currencies(toml),
+    ...(hosted === null ? {} : { hosted }),
+    ...(direct === null ? {} : { direct }),
+    ...(one("KYC_SERVER") === null ? {} : { kyc: one("KYC_SERVER")! }),
+    ...(one("ANCHOR_QUOTE_SERVER") === null ? {} : { quotes: one("ANCHOR_QUOTE_SERVER")! }),
+  };
 }
 
 function value(toml: string, key: string): string | null {
@@ -279,7 +302,11 @@ export async function startWithdraw(
   account: string,
   amount?: string,
 ): Promise<Transfer> {
-  const started = await fetch(`${anchor.transfer}/transactions/withdraw/interactive`, {
+  if (anchor.hosted === undefined) {
+    throw new Error(`${anchor.domain} does not host withdrawals`);
+  }
+
+  const started = await fetch(`${anchor.hosted}/transactions/withdraw/interactive`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -319,7 +346,7 @@ export async function readTransfer(
   token: string,
   id: string,
 ): Promise<Transfer> {
-  const asked = await fetch(`${anchor.transfer}/transaction?id=${id}`, {
+  const asked = await fetch(`${where(anchor)}/transaction?id=${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -368,7 +395,7 @@ export async function listTransfers(
   assetCode: string,
 ): Promise<Transfer[]> {
   const asked = await fetch(
-    `${anchor.transfer}/transactions?asset_code=${encodeURIComponent(assetCode)}&kind=withdrawal`,
+    `${where(anchor)}/transactions?asset_code=${encodeURIComponent(assetCode)}&kind=withdrawal`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
 
@@ -506,6 +533,187 @@ export async function completeWithdraw(
       why: said.slice(0, 160),
       refused: /reject|denied|declined|cancel|user closed/i.test(said),
     };
+  }
+}
+
+
+/**
+ * Which server answers about transfers.
+ *
+ * Both standards serve `/transaction` and `/transactions` the same way, so
+ * reading a transfer's progress does not care which one opened it. Only the
+ * opening differs, and that is the one place the two are told apart.
+ */
+function where(anchor: Anchor): string {
+  return anchor.hosted ?? anchor.direct ?? "";
+}
+
+/**
+ * Register the person with the anchor, which SEP-6 requires and SEP-24 does not.
+ *
+ * The hosted flow collects identity on the anchor's own page and this product
+ * never sees it. The programmatic one has no such page, so whatever the anchor
+ * asks for is asked for here — and what it asks for is read from the anchor
+ * rather than assumed, because it varies by country and by anchor and changes
+ * without warning.
+ *
+ * What is sent is only what the caller passed. Nothing is collected that the
+ * anchor did not name, and nothing is kept after it is sent: this is a relay,
+ * not a record.
+ */
+export async function register(
+  anchor: Anchor,
+  token: string,
+  address: string,
+  fields: Record<string, string> = {},
+): Promise<void> {
+  if (anchor.kyc === undefined) {
+    return;
+  }
+
+  const answered = await fetch(`${anchor.kyc}/customer`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ account: address, ...fields }),
+  });
+
+  if (!answered.ok) {
+    throw new Error(`${anchor.domain} would not register this account`);
+  }
+}
+
+/**
+ * What the anchor still needs before it will pay out.
+ *
+ * Asked rather than guessed. An empty list is a real answer and the common one
+ * in a sandbox; a list with entries is the form somebody has to fill in, and it
+ * belongs to the anchor rather than to us.
+ */
+export async function missingFields(
+  anchor: Anchor,
+  token: string,
+  address: string,
+): Promise<string[]> {
+  if (anchor.kyc === undefined) {
+    return [];
+  }
+
+  const asked = await fetch(`${anchor.kyc}/customer?account=${address}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!asked.ok) {
+    return [];
+  }
+
+  const { status, fields } = (await asked.json()) as {
+    status?: string;
+    fields?: Record<string, { optional?: boolean }>;
+  };
+
+  if (status === "ACCEPTED") {
+    return [];
+  }
+
+  return Object.entries(fields ?? {})
+    .filter(([, field]) => field.optional !== true)
+    .map(([name]) => name);
+}
+
+/**
+ * Open a withdrawal the programmatic way.
+ *
+ * No page to send anybody to: the anchor answers with the account and memo to
+ * pay, and the payment is the whole of the rest. `completeWithdraw` takes it
+ * from here unchanged, because what it validates is the same three values
+ * whichever standard produced them.
+ */
+export async function startDirectWithdraw(
+  anchor: Anchor,
+  token: string,
+  assetCode: string,
+  amount: string,
+): Promise<Transfer> {
+  if (anchor.direct === undefined) {
+    throw new Error(`${anchor.domain} does not offer direct withdrawals`);
+  }
+
+  /* The amount is not sent, and that is not an omission. An anchor asked
+     without one answers with an account that takes whatever arrives, which is
+     what a prize is: a number nobody chose. Asked with one, it holds us to a
+     figure this page would have had to invent. */
+  const asked = await fetch(
+    `${anchor.direct}/withdraw?asset_code=${encodeURIComponent(assetCode)}&type=bank_account`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  if (!asked.ok) {
+    throw new Error(`${anchor.domain} refused the withdrawal: ${(await asked.text()).slice(0, 200)}`);
+  }
+
+  const opened = (await asked.json()) as Record<string, unknown>;
+  const id = text(opened["id"]);
+
+  if (id === undefined) {
+    throw new Error(`${anchor.domain} started nothing`);
+  }
+
+  /*
+    Reported as already waiting, because it is.
+
+    SEP-6 hands back the account and the memo in this same answer rather than
+    moving through `incomplete` first the way the hosted flow does. Leaving the
+    status as whatever it happened to send would put the panel in a waiting
+    state for a step that is this caller's to take.
+  */
+  return {
+    id,
+    status: "pending_user_transfer_start",
+    withdrawAnchorAccount: text(opened["account_id"]),
+    withdrawMemo: text(opened["memo"]),
+    withdrawMemoType: text(opened["memo_type"]),
+    amountIn: amount,
+  };
+}
+
+/**
+ * What an amount is worth in the anchor's local money.
+ *
+ * Indicative rather than firm: it is shown so somebody can see what they are
+ * about to receive, and a rate held for two minutes would go stale while they
+ * read it. The anchor's own answer at payout time is the one that counts, and
+ * this says as much wherever it is drawn.
+ */
+export async function quote(
+  anchor: Anchor,
+  sellAsset: string,
+  buyAsset: string,
+  sellAmount: string,
+): Promise<{ amount: string; rate: string } | null> {
+  if (anchor.quotes === undefined) {
+    return null;
+  }
+
+  try {
+    const asked = await fetch(
+      `${anchor.quotes}/price?sell_asset=${encodeURIComponent(sellAsset)}` +
+        `&buy_asset=${encodeURIComponent(buyAsset)}` +
+        `&sell_amount=${encodeURIComponent(sellAmount)}` +
+        `&context=sep6&buy_delivery_method=bank_account`,
+    );
+
+    if (!asked.ok) {
+      return null;
+    }
+
+    const { buy_amount: amount, price: rate } = (await asked.json()) as {
+      buy_amount?: string;
+      price?: string;
+    };
+
+    return amount === undefined || rate === undefined ? null : { amount, rate };
+  } catch {
+    return null;
   }
 }
 

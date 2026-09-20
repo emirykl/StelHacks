@@ -6,6 +6,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    /* The scripts run through node's own type stripping, which resolves the
+       real file and so needs the extension written out. Safe here because
+       nothing is emitted: the extension only has to survive type checking. */
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

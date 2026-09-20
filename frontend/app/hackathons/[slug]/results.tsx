@@ -47,6 +47,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
      would flash on every load for the many events that pay in XLM and need no
      warning at all. */
   const [asset, setAsset] = useState<PrizeAsset | null>(null);
+  const [prizeAsset, setPrizeAsset] = useState<string | null>(null);
   const [ready, setReady] = useState<boolean | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -72,6 +73,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
         const which = await assetOf(rules.prizeAsset);
 
         if (alive) {
+          setPrizeAsset(rules.prizeAsset);
           setAsset(which);
         }
       }
@@ -219,7 +221,9 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
             same person and follows the same money: accept the asset, be paid,
             take it out. It draws only once this wallet has actually been paid
             here — an offer to cash out nothing is an offer to nobody. */}
-        {asset !== null && paidHere && <CashOut asset={asset} />}
+        {asset !== null && paidHere && prizeAsset !== null && (
+          <CashOut asset={asset} token={prizeAsset} />
+        )}
 
         <div className="mt-10 space-y-12">
           {results.map((result) => (

@@ -25,10 +25,18 @@ const read = (key: string) =>
   new RegExp(`^\\s*${key}\\s*=\\s*(.+)$`, "m").exec(toml)?.[1]?.replace(/^["']|["'].*$/g, "") ?? null;
 
 const auth = read("WEB_AUTH_ENDPOINT")!;
-const transfer = read("TRANSFER_SERVER_SEP0024")!;
+const hosted = read("TRANSFER_SERVER_SEP0024");
+const direct = read("TRANSFER_SERVER");
+const kyc = read("KYC_SERVER");
+const transfer = (hosted ?? direct)!;
 const signingKey = read("SIGNING_KEY")!;
 
-console.log("\n1 toml   ✓", { auth, transfer, signingKey: signingKey.slice(0, 8) + "…" });
+console.log("\n1 toml   ✓", {
+  flow: hosted !== null ? "SEP-24 hosted" : "SEP-6 direct",
+  auth,
+  transfer,
+  signingKey: signingKey.slice(0, 8) + "…",
+});
 
 /* Funded, because SEP-10 checks the account exists on some anchors and the
    withdrawal needs somewhere for the asset to sit either way. */
@@ -86,11 +94,28 @@ if (!token) {
 const info = await (await fetch(`${transfer}/info`)).json();
 console.log("5 info   ✓ withdraw:", JSON.stringify(info.withdraw?.[asset] ?? info.withdraw));
 
-const started = await fetch(`${transfer}/transactions/withdraw/interactive`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-  body: JSON.stringify({ asset_code: asset, account: me.publicKey(), lang: "en" }),
-});
+/* The programmatic flow registers the account first; the hosted one collects
+   whatever it needs on its own page and this step does not exist there. */
+if (kyc !== null && hosted === null) {
+  const put = await fetch(`${kyc}/customer`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ account: me.publicKey() }),
+  });
+
+  console.log("5b kyc   ", put.ok ? "✓ registered" : `✗ ${put.status}`);
+}
+
+const started =
+  hosted !== null
+    ? await fetch(`${transfer}/transactions/withdraw/interactive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ asset_code: asset, account: me.publicKey(), lang: "en" }),
+      })
+    : await fetch(`${transfer}/withdraw?asset_code=${asset}&type=bank_account`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
 const opened = await started.json();
 console.log("6 started", started.ok ? "✓" : `✗ ${started.status}`, JSON.stringify(opened).slice(0, 300));
