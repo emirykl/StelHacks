@@ -228,7 +228,7 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
               >
                 <span className="relative z-10 inline-flex items-center gap-2">
                   <Coin />
-                  Donate
+                  Sponsor
                 </span>
               </Link>
             )}
