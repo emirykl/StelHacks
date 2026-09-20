@@ -46,22 +46,26 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
 
             <div className="flex flex-1 flex-wrap items-end justify-between gap-x-8 gap-y-5">
               <div className="min-w-0">
-                <div className="flex items-center gap-3">
+                {/* The mark and the name grew together rather than the name
+                    alone. A logo held at its old size beside a larger title
+                    stops reading as the thing's mark and starts reading as an
+                    icon in front of it. */}
+                <div className="flex items-center gap-4">
                   {hackathon.logo_url !== null && (
                     <img
                       src={hackathon.logo_url}
                       alt=""
-                      width={44}
-                      height={44}
-                      className="size-11 shrink-0 rounded-[0.4rem] object-cover ring-1 ring-rule"
+                      width={64}
+                      height={64}
+                      className="size-16 shrink-0 rounded-[0.55rem] object-cover ring-1 ring-rule"
                     />
                   )}
 
-                  <h1 className="min-w-0 text-[clamp(1.75rem,3.4vw,2.5rem)]">{hackathon.name}</h1>
+                  <h1 className="min-w-0 text-[clamp(2.25rem,4.2vw,3.25rem)]">{hackathon.name}</h1>
                 </div>
 
                 {hackathon.tagline !== null && (
-                  <p className="mt-3 max-w-[42rem] text-[1.0625rem] leading-relaxed text-ink-soft">
+                  <p className="mt-4 max-w-[46rem] text-[1.1875rem] leading-relaxed text-ink-soft">
                     {hackathon.tagline}
                   </p>
                 )}
