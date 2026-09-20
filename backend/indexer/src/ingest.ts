@@ -1,3 +1,4 @@
+import { fellOffTheWindow } from "./errors.js";
 import { rpc, xdr } from "@stellar/stellar-sdk";
 
 import { settings } from "./config.js";
@@ -32,6 +33,52 @@ export interface Pass {
  * knowing rather than discovering: the log in Postgres is the archive, and this
  * is only how it gets filled.
  */
+/**
+ * Ask for a page, and start again at the edge if the cursor fell off it.
+ *
+ * A first pass starts at the oldest ledger RPC still serves, and that edge
+ * moves forward as fast as the chain does. A contract that advances more slowly
+ * than that — a quiet one, or one sharing the loop with ten others — has its
+ * cursor overtaken by the window, and every pass after that fails on a range
+ * the server will not answer for. Left alone it never moves again.
+ *
+ * Jumping to the edge is the only way forward, and for a contract deployed
+ * today it costs nothing: the ledgers being skipped are older than the contract
+ * and hold none of its events. Where it does cost something, `health` reports
+ * the gap, so a skipped range is said out loud rather than papered over.
+ */
+async function ask(contract: string, startLedger: number) {
+  const filters = [{ type: "contract" as const, contractIds: [contract] }];
+
+  try {
+    return {
+      page: await server.getEvents({ startLedger, filters, limit: settings.pageSize }),
+      from: startLedger,
+    };
+  } catch (thrown) {
+    if (!fellOffTheWindow(thrown)) {
+      throw thrown;
+    }
+
+    const edge = (await server.getHealth()).oldestLedger;
+
+    console.warn(`${contract}: cursor fell behind the window, resuming at ${edge}`);
+
+    /*
+      The ledger it actually started at, not the one it was asked for.
+
+      How far a pass scanned is worked out from where it began, and returning
+      only the page left that sum using the stale number: the cursor crept
+      forward from a point the server had already refused, fell behind the
+      window again on the next lap, and the contract never moved.
+    */
+    return {
+      page: await server.getEvents({ startLedger: edge, filters, limit: settings.pageSize }),
+      from: edge,
+    };
+  }
+}
+
 export async function read(contract: string, after: number): Promise<Pass> {
   // A cursor of zero means the indexer has never run against this contract, and
   // there is no ledger zero to ask for. RPC serves a retention window and
@@ -41,11 +88,7 @@ export async function read(contract: string, after: number): Promise<Pass> {
   // it gets filled.
   const startLedger = after === 0 ? (await server.getHealth()).oldestLedger : after + 1;
 
-  const page = await server.getEvents({
-    startLedger,
-    filters: [{ type: "contract", contractIds: [contract] }],
-    limit: settings.pageSize,
-  });
+  const { page, from } = await ask(contract, startLedger);
 
   const events = page.events.map(toStored);
 
@@ -63,7 +106,7 @@ export async function read(contract: string, after: number): Promise<Pass> {
     // cursor past ledgers nobody ever looked at, and a skipped range is a gap
     // no later pass would think to look for. Measured against a live contract
     // that was seven thousand ledgers wide.
-    through: scannedThrough(page.cursor, startLedger, events),
+    through: scannedThrough(page.cursor, from, events),
   };
 }
 

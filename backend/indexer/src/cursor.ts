@@ -27,8 +27,18 @@ export async function resumeFrom(contract: string): Promise<number> {
  * Written after the events it covers, never before. A cursor ahead of the rows
  * it claims would skip a range on the next restart, and a skipped range is a
  * gap no later pass would think to look for.
+ *
+ * Forwards is enforced here rather than promised. It only said so until a pass
+ * that had fallen behind the server's window resumed at the window's edge and
+ * wrote that back: an edge is behind a caught up cursor, so the contract was
+ * dragged back a hundred thousand ledgers, fell off the window again, and did
+ * that forever. `rewind` is the one way back, and it says so in its name.
  */
 export async function advanceTo(contract: string, ledger: number): Promise<void> {
+  if (ledger <= (await resumeFrom(contract))) {
+    return;
+  }
+
   const { error } = await db
     .from("indexer_cursor")
     .upsert(

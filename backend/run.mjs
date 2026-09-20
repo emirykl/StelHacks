@@ -19,11 +19,12 @@ import { readFileSync } from "node:fs";
 const root = new URL(".", import.meta.url).pathname;
 
 /**
- * Which hackathon the indexer follows.
+ * Which hackathon the indexer follows, when somebody wants only one.
  *
- * It takes one contract and follows one event: that is a real limit of the
- * indexer rather than of this script, and naming it in the environment is how a
- * person switches which event they are working on without editing anything.
+ * It used to be required, because the indexer took one contract and there was
+ * no way to name several. It follows every hackathon in the database now, so
+ * this narrows rather than enables: set it while working on a single event and
+ * leave it empty the rest of the time.
  */
 const contract = watched();
 
@@ -43,25 +44,20 @@ function watched() {
   }
 }
 
-if (contract === null || contract === "") {
-  console.error(
-    [
-      "WATCH_CONTRACT is not set, so there is no hackathon to index.",
-      "",
-      "Add it to backend/.env.local:",
-      "",
-      '  WATCH_CONTRACT="C…"   # the hackathon-core address to follow',
-      "",
-      "The sealer needs no such setting; it serves every event. If you only",
-      "want the sealer, run `npm run dev:sealer`.",
-    ].join("\n"),
-  );
-
-  process.exit(1);
-}
+console.log(
+  contract === null || contract === ""
+    ? "indexer: following every hackathon in the database"
+    : `indexer: following ${contract} only, because WATCH_CONTRACT names it`,
+);
 
 const services = [
-  { name: "indexer", args: ["start", "--prefix", "indexer", "--", contract] },
+  {
+    name: "indexer",
+    args:
+      contract === null || contract === ""
+        ? ["start", "--prefix", "indexer"]
+        : ["start", "--prefix", "indexer", "--", contract],
+  },
   { name: "sealer", args: ["start", "--prefix", "sealer"] },
 ];
 
