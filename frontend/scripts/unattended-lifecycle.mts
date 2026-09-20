@@ -15,12 +15,22 @@
  * It proves that the frontend's readers and encoders agree with a live contract
  * at every stage, which is the part no unit test can reach.
  *
- * This variant hands the card to the collection service instead of the
- * organizer publishing a root themselves, which is the arrangement the judge
- * console uses. It is the only way to find out whether the service, the SDK and
- * the contract agree about what a leaf is and what a signature covers.
+ * This variant presses nothing it does not have to. Every mechanical step is
+ * left to the two services that now do them unattended — the clock moves the
+ * phases, opens settlement and closes the event, and the sealer publishes the
+ * root and opens every scorecard under it — so what the script performs is only
+ * what a person actually performs: creating the event, letting somebody in,
+ * entering, scoring, ranking and paying.
  *
- *   node --experimental-strip-types scripts/sealed-lifecycle.mts
+ * Which makes it the one test of the handover between the two. The root can
+ * only be published while the hackathon is in Judging, and the clock is what
+ * moves it out, so a clock that ran a lap too early would strand the scores in
+ * a service that could no longer publish them. Nothing in the contract prevents
+ * that; this run is what proves the clock holds the door.
+ *
+ * Both services have to be running.
+ *
+ *   node --experimental-strip-types scripts/unattended-lifecycle.mts
  */
 
 import { execFileSync } from "node:child_process";
@@ -50,12 +60,7 @@ const XLM = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 /* The address the rules name as allowed to publish a root, which has to be the
    service's own or the seal is refused. */
 const SEALER = "GDTQSU3L2UVUEFOHEGDO5FNICW2URPWNFEQVZYK46LX6ZPNCYDUNEVGC";
-const SEALER_URL = "http://localhost:8787";
-
-/* The judge is a person with a wallet rather than a key in this script, which
-   is the whole point: the one link never proved is whether a wallet's message
-   signing produces what the service verifies. */
-const JUDGE = "GCJT4JWWRGHJDBH6WEKTWNQFOXELHKMCSZ7PDREFWE547RIX7A4KJS2G";
+const SEALER_URL = process.env["SEALER_URL"] ?? "http://localhost:8787";
 
 const server = new Server(RPC);
 const spec = new Spec(JSON.parse(readFileSync("lib/contract-spec.json", "utf8")));
@@ -171,7 +176,7 @@ const constitution = {
       no_award_allowed: false,
     },
   ],
-  judges: [{ judge: JUDGE, tracks: ["payments"] }],
+  judges: [{ judge: organizer.publicKey(), tracks: ["payments"] }],
   judge_quorum: 1,
   judging_mode: { tag: "Easy", values: [SEALER] },
   vote: { judge_bps: 10_000, community_bps: 0 },
@@ -215,11 +220,9 @@ const constitution = {
     submission_opens_at: BigInt(now),
     submission_closes_at: BigInt(now + minute),
     screening_closes_at: BigInt(now + 2 * minute),
-    /* Hours, not a minute. Somebody has to open a page, connect a wallet and
-       actually think about two scores. */
-    judging_closes_at: BigInt(now + 240 * minute),
-    community_vote_opens_at: BigInt(now + 240 * minute),
-    community_vote_closes_at: BigInt(now + 240 * minute),
+    judging_closes_at: BigInt(now + 3 * minute),
+    community_vote_opens_at: BigInt(now + 3 * minute),
+    community_vote_closes_at: BigInt(now + 3 * minute),
   },
   extensions: { max_extensions_per_deadline: 1, max_total_seconds_per_deadline: BigInt(minute) },
 };
@@ -304,12 +307,10 @@ function catchUp(): void {
 catchUp();
 
 await waitFor(now + minute, "submissions to close");
-await call(organizer, core, "advance_phase");
-console.log("screening ✓");
+await reaches(3, "screening");
 
 await waitFor(now + 2 * minute, "screening to close");
-await call(organizer, core, "advance_phase");
-console.log("judging  ✓");
+await reaches(4, "judging");
 
 /* Again, because the service reads the phase from our database and the move
    just made is not in it yet. The cursor is at the tip by now, so this is one
@@ -324,10 +325,175 @@ catchUp();
   root is the leaf and the inclusion proof is empty, which is what makes this a
   usable end to end check without standing the sealer up.
 */
-console.log("\nready. the judge scores at:");
-console.log(`  http://localhost:3000/judge/${core}`);
-console.log("core :", core);
+const scorecard = {
+  judge: organizer.publicKey(),
+  team,
+  scores: [
+    { criterion: "impact", score: 90 },
+    { criterion: "technical", score: 80 },
+  ],
+};
+
+const [encodedScorecard] = spec.funcArgsToScVals("reveal_score", { scorecard, proof: [] });
+const domain = new TextEncoder().encode("stelhacks.v1.scorecard");
+const leaf = hash(
+  Buffer.concat([
+    Buffer.from([0x00]),
+    Buffer.from(domain),
+    Buffer.from(encodedScorecard!.toXDR()),
+  ]),
+);
+
+/*
+  The signature covers the leaf as hexadecimal text, wrapped the way SEP-53
+  wraps anything signed as a message: the prefix, then the text, hashed, and
+  the digest is what is signed. That is what a wallet's message signing
+  interface does, so it is what the collection service verifies.
+
+  Signing the hex directly is the plausible wrong version and it was this
+  script's, from before the SDK followed the standard. The service rejects it
+  as a signature that does not cover the card, which reads as a mangled
+  scorecard rather than as two sides disagreeing about the envelope.
+*/
+const leafHex = Buffer.from(leaf).toString("hex");
+const wrapped = hash(
+  Buffer.concat([
+    Buffer.from(new TextEncoder().encode("Stellar Signed Message:\n")),
+    Buffer.from(new TextEncoder().encode(leafHex)),
+  ]),
+);
+/* Wrapped before stringifying. Version 17 of the SDK returns a plain
+   Uint8Array from `sign`, and `Uint8Array.toString("hex")` is not hex at all:
+   it is the comma separated decimals, which decode to one byte and produce a
+   signature the service rejects for its length rather than its contents. */
+const signature = Buffer.from(organizer.sign(Buffer.from(wrapped))).toString("hex");
+
+const taken = await fetch(`${SEALER_URL}/scorecard`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ contract: core, scorecard, signature }),
+});
+
+const receipt = await taken.json();
+
+if (!taken.ok) {
+  throw new Error(`service refused the card: ${JSON.stringify(receipt).slice(0, 200)}`);
+}
+
+console.log("receipt  ✓ from", receipt.sealer);
+
+await waitFor(now + 3 * minute, "scoring to close");
+
+/*
+  Nothing is pressed here, and that is the whole point of this script.
+
+  The sealer publishes the root while the event is still in Judging, the clock
+  waits for that root before moving on, and the sealer opens the card once the
+  reveal is entered. Three steps, two services, no person — and if the order
+  ever slips, `reaches` gives up here rather than somewhere further down where
+  the cause would be harder to see.
+*/
+await sealedOnChain();
+await reaches(5, "reveal");
+await scoreOnChain();
+
+await ranked();
+
+await reaches(7, "settlement");
+
+const paid = await call(
+  organizer,
+  core,
+  "settle_prize",
+  nativeToScVal("payments", { type: "symbol" }),
+  nativeToScVal(1, { type: "u32" }),
+  new Address(builder.publicKey()).toScVal(),
+);
+console.log("paid     ✓", paid);
+
+/* Zero at this rate, and still a call that has to happen: `complete` refuses an
+   event whose fee has not been settled, so owing nothing is something the
+   contract wants said rather than skipped. It goes out with the prizes on the
+   results page, so the script sends it the same way. */
+const fee = await call(organizer, core, "settle_platform_fee");
+console.log("fee      ✓", fee);
+
+await reaches(8, "closed");
+
+console.log("\ncore :", core);
 console.log("vault:", vault);
+
+/**
+ * Reads one value off the contract without sending anything.
+ *
+ * The getters take no arguments and change nothing, so a simulation is the
+ * whole answer and no account has to pay for asking.
+ */
+async function read(method: string, ...args: xdr.ScVal[]): Promise<unknown> {
+  const source = await server.getAccount(organizer.publicKey());
+  const built = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: PASSPHRASE })
+    .addOperation(new Contract(core).call(method, ...args))
+    .setTimeout(60)
+    .build();
+
+  const simulated = await server.simulateTransaction(built);
+
+  if (Api.isSimulationError(simulated) || simulated.result === undefined) {
+    return null;
+  }
+
+  return scValToNative(simulated.result.retval);
+}
+
+/**
+ * Waits for somebody else to do something, and says who it is waiting on.
+ *
+ * Every use of this is a step no person performs any more, so a run that stops
+ * here has found the services disagreeing about an order rather than a contract
+ * refusing a call. Three minutes is six of the clock's laps: long enough that a
+ * slow testnet is not mistaken for a service that is down.
+ */
+async function until(what: string, done: () => Promise<boolean>): Promise<void> {
+  const giveUp = Date.now() + 180_000;
+
+  console.log(`  waiting on the services for ${what}`);
+
+  for (;;) {
+    if (await done()) {
+      console.log(`${what.padEnd(9)}✓ by itself`);
+
+      return;
+    }
+
+    if (Date.now() > giveUp) {
+      throw new Error(`nothing ${what} it in three minutes`);
+    }
+
+    await new Promise((wake) => setTimeout(wake, 5000));
+  }
+}
+
+async function reaches(phase: number, what: string): Promise<void> {
+  await until(what, async () => Number(await read("phase")) >= phase);
+}
+
+async function sealedOnChain(): Promise<void> {
+  await until("sealed", async () => (await read("score_root")) !== null);
+}
+
+async function ranked(): Promise<void> {
+  await until("ranked", async () => Number(await read("phase")) >= 6);
+}
+
+async function scoreOnChain(): Promise<void> {
+  await until("scored", async () => {
+    const tally = (await read("score_tally", nativeToScVal(team, { type: "u32" }))) as {
+      count?: number;
+    } | null;
+
+    return (tally?.count ?? 0) > 0;
+  });
+}
 
 async function waitFor(deadline: number, what: string): Promise<void> {
   const left = deadline - Math.floor(Date.now() / 1000) + 5;

@@ -37,7 +37,7 @@ import { Spec } from "@stellar/stellar-sdk/contract";
 
 const RPC = "https://soroban-testnet.stellar.org";
 const PASSPHRASE = "Test SDF Network ; September 2015";
-const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
+const CORE_WASM = "bcea11748fa535ea311ca7d0548274f4828143b70f9f85294b3b6c32749c9c78";
 const VAULT_WASM = "afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb";
 const XLM = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
@@ -142,7 +142,7 @@ const now = Math.floor(Date.now() / 1000);
 const minute = 60;
 
 const constitution = {
-  version: 2,
+  version: 4,
   metadata_hash: Buffer.alloc(32),
   prize_asset: XLM,
   tracks: [
@@ -161,10 +161,15 @@ const constitution = {
   vote: { judge_bps: 10_000, community_bps: 0 },
   visibility: 0,
   submission_requirements: {
-    repository_required: true,
-    demo_video_required: false,
-    live_url_required: false,
+    repository: 2,
+    demo_video: 1,
+    live_url: 1,
+    pitch_deck: 1,
+    deployed_contract: 1,
   },
+  /* Reviewed, which is what these scripts drive: they approve their own
+     applicant a line later and that is the path worth exercising. */
+  registration: 0,
   teams: { max_size: 5, multi_team_allowed: false },
   prize_tiers: [{ track: "payments", rank: 1, amount: BigInt(100_000_000) }],
   /* Nothing charged, and the organizer's own key named as the collector. The
@@ -209,23 +214,26 @@ await call(
 );
 console.log("create   ✓");
 
-await call(organizer, core, "lock_rules");
-console.log("lock     ✓");
+/*
+  One call where there were six.
 
-const vault = await deploy(organizer, VAULT_WASM);
-await call(organizer, vault, "create", new Address(core).toScVal(), new Address(XLM).toScVal());
-await call(organizer, core, "bind_vault", new Address(vault).toScVal());
-console.log("vault    ✓", vault);
-
+  Freezing, standing the vault up, binding it, moving the prize in and
+  publishing all happen inside `set_up`, which is the whole reason it exists:
+  Soroban allows one contract call per transaction, so six calls was six
+  signatures for what an organizer thinks of as one decision. Driving it here is
+  what proves the deploy branch, which no unit test can reach without a built
+  wasm to upload.
+*/
 await call(
   organizer,
-  vault,
-  "deposit",
-  new Address(organizer.publicKey()).toScVal(),
-  nativeToScVal(BigInt(100_000_000), { type: "i128" }),
+  core,
+  "set_up",
+  nativeToScVal(Buffer.from(VAULT_WASM, "hex"), { type: "bytes" }),
+  nativeToScVal(Buffer.from(crypto.getRandomValues(new Uint8Array(32))), { type: "bytes" }),
 );
-await call(organizer, core, "publish");
-console.log("publish  ✓");
+
+const vault = (await call(organizer, core, "vault")) as string;
+console.log("set up   ✓", vault);
 
 await call(builder, core, "apply", new Address(builder.publicKey()).toScVal());
 await call(

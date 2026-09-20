@@ -34,7 +34,7 @@ const RPC = "https://soroban-testnet.stellar.org";
 const PASSPHRASE = "Test SDF Network ; September 2015";
 
 /** From `docs/deployments.md`. Both are already uploaded to testnet. */
-const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
+const CORE_WASM = "bcea11748fa535ea311ca7d0548274f4828143b70f9f85294b3b6c32749c9c78";
 const VAULT_WASM = "afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb";
 
 /** The native lumen, wrapped as a Soroban token. */
@@ -128,7 +128,7 @@ const now = Math.floor(Date.now() / 1000);
 const hour = 3_600;
 
 const constitution = {
-  version: 2,
+  version: 4,
   metadata_hash: Buffer.alloc(32),
   prize_asset: XLM,
   tracks: [
@@ -149,10 +149,15 @@ const constitution = {
   vote: { judge_bps: 10_000, community_bps: 0 },
   visibility: 0,
   submission_requirements: {
-    repository_required: true,
-    demo_video_required: false,
-    live_url_required: false,
+    repository: 2,
+    demo_video: 1,
+    live_url: 1,
+    pitch_deck: 1,
+    deployed_contract: 1,
   },
+  /* Reviewed, which is what these scripts drive: they approve their own
+     applicant a line later and that is the path worth exercising. */
+  registration: 0,
   teams: { max_size: 5, multi_team_allowed: false },
   /* Ten lumens, which friendbot's ten thousand covers with room for fees. */
   prize_tiers: [{ track: "payments", rank: 1, amount: BigInt(100_000_000) }],
