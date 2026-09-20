@@ -1,6 +1,7 @@
+import { EXPLORER } from "../../../lib/explorer";
 import { Measure } from "../../components/primitives";
 import { SpecButton, SpecRow, SpecRows, SpecValue } from "../../components/spec";
-import { VISIBILITY, windowsOf, type Window } from "../../../lib/rules";
+import { windowsOf } from "../../../lib/rules";
 import { WEIGHT_TOTAL_BPS } from "../../../lib/constitution";
 import { prizeLabel, worthOf } from "../../../lib/money";
 import type { HackathonDetail } from "../../../lib/chain";
@@ -86,58 +87,70 @@ export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
           )}
 
           <Part id="on-chain" title="On chain">
-            <p className="max-w-[46rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-              Every address below can be opened in a block explorer. Nothing on
-              this page has to be taken on our word, including this page.
-            </p>
-
             {/* The one place the chain's own voice belongs, because these are
-                the values somebody compares character by character. */}
-            <div className="mt-6">
-              <SpecRows>
-                <SpecRow index="01" label="Rules digest" mark>
-                  <SpecValue>{hackathon.constitution_hash ?? "not locked yet"}</SpecValue>
-                </SpecRow>
+                the values somebody compares character by character.
 
-                <SpecRow index="02" label="Hackathon" mark>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <SpecValue>{hackathon.contract_id}</SpecValue>
-                    <SpecButton
-                      href={`https://stellar.expert/explorer/testnet/contract/${hackathon.contract_id}`}
-                    >
-                      Explorer
-                    </SpecButton>
-                  </div>
-                </SpecRow>
+                Everything that has a page on an explorer links to it. Two rows
+                used to and three did not, which read as the other three being
+                somehow less checkable rather than as nobody having wired them
+                up. The digest still does not: it is a hash of a document, not
+                an address, and there is nothing at the far end to open. */}
+            <SpecRows>
+              <SpecRow index="1" label="Rules digest" mark>
+                <SpecValue>{hackathon.constitution_hash ?? "not locked yet"}</SpecValue>
+              </SpecRow>
 
-                <SpecRow index="03" label="Prize vault" mark={hackathon.vault_id !== null}>
-                  {hackathon.vault_id === null ? (
-                    <span className="text-[0.875rem] text-ink-faint">not bound yet</span>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-4">
-                      <SpecValue>{hackathon.vault_id}</SpecValue>
-                      <SpecButton
-                        href={`https://stellar.expert/explorer/testnet/contract/${hackathon.vault_id}`}
-                      >
-                        Explorer
-                      </SpecButton>
-                    </div>
-                  )}
-                </SpecRow>
+              <SpecRow index="2" label="Hackathon" mark>
+                <Explorable value={hackathon.contract_id} kind="contract" />
+              </SpecRow>
 
-                <SpecRow index="04" label="Organizer">
-                  <SpecValue>{hackathon.organizer ?? "not published yet"}</SpecValue>
-                </SpecRow>
+              <SpecRow index="3" label="Prize vault" mark={hackathon.vault_id !== null}>
+                <Explorable value={hackathon.vault_id} kind="contract" missing="not bound yet" />
+              </SpecRow>
 
-                <SpecRow index="05" label="Prize asset">
-                  <SpecValue>{hackathon.prize_asset ?? "not published yet"}</SpecValue>
-                </SpecRow>
-              </SpecRows>
-            </div>
+              <SpecRow index="4" label="Organizer">
+                <Explorable value={hackathon.organizer} kind="account" missing="not published yet" />
+              </SpecRow>
+
+              <SpecRow index="5" label="Prize asset">
+                <Explorable
+                  value={hackathon.prize_asset}
+                  kind="contract"
+                  missing="not published yet"
+                />
+              </SpecRow>
+            </SpecRows>
+
           </Part>
         </div>
       </div>
     </Measure>
+  );
+}
+
+/** An address, and the way to go and check it. */
+function Explorable({
+  value,
+  kind,
+  missing,
+}: {
+  value: string | null;
+  /** An account and a contract are different pages on the explorer. */
+  kind: "contract" | "account";
+  missing?: string;
+}) {
+  if (value === null) {
+    return <span className="text-[0.875rem] text-ink-faint">{missing ?? "not published yet"}</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <SpecValue>{value}</SpecValue>
+
+      <SpecButton href={`https://stellar.expert/explorer/${EXPLORER}/${kind}/${value}`}>
+        Explorer
+      </SpecButton>
+    </div>
   );
 }
 
@@ -192,7 +205,16 @@ function Part({ id, title, children }: { id: string; title: string; children: Re
   );
 }
 
-/** The windows, spelled out in words rather than compressed into a rail. */
+/**
+ * The deadlines, one line each.
+ *
+ * Only the closing moment is shown. A window was printed as "opens → closes",
+ * which is twice the text for one fact somebody acts on: what they have to be
+ * done by. When it opened matters on the day it opens and never again.
+ *
+ * Set in the interface face rather than the chain's. Mono figures are for a
+ * digest compared character by character; a date is read, not compared.
+ */
 function Timeline({ rules }: { rules: Rules }) {
   const windows = windowsOf(rules);
 
@@ -201,109 +223,115 @@ function Timeline({ rules }: { rules: Rules }) {
       {windows.map((span, at) => (
         <li
           key={span.label}
-          className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3.5 ${
+          className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3 ${
             at === windows.length - 1 ? "" : "border-b border-rule"
           }`}
         >
           <span
             className={`text-[0.9375rem] ${
               span.standing === "now"
-                ? "font-bold text-ink"
+                ? "text-ink"
                 : span.standing === "past"
                   ? "text-ink-faint"
                   : "text-ink"
             }`}
           >
             {span.label}
-            {span.standing === "now" && (
-              <span className="ml-3 bg-verified px-2 py-0.5 align-middle text-[0.75rem] font-bold text-paper">
-                now
-              </span>
-            )}
+            {span.standing === "now" && <span className="ml-2.5 text-verified">·</span>}
           </span>
 
           <span
-            className={`tabular text-[0.875rem] ${
+            className={`text-[0.9375rem] ${
               span.standing === "past" ? "text-ink-faint" : "text-ink-soft"
             }`}
           >
-            <When span={span} />
+            <When at={span.to ?? span.from} />
           </span>
         </li>
       ))}
-
-      <li className="pt-4 text-[0.8125rem] text-ink-faint">
-        All times UTC, from the schedule the contract froze.
-      </li>
     </ul>
   );
 }
 
-function When({ span }: { span: Window }) {
-  const full = (at: number) => {
-    const when = new Date(at * 1_000);
-    const pad = (value: number) => String(value).padStart(2, "0");
-
-    return `${when.getUTCDate()} ${MONTHS[when.getUTCMonth()]} ${when.getUTCFullYear()} ${pad(
-      when.getUTCHours(),
-    )}:${pad(when.getUTCMinutes())}`;
-  };
-
-  return span.to === null ? (
-    <>{full(span.from)}</>
-  ) : (
-    <>
-      {full(span.from)} <span className="text-ink-faint">→</span> {full(span.to)}
-    </>
+/**
+ * A deadline in the reader's own clock.
+ *
+ * It was UTC, with a line under the table explaining so. UTC is right for a
+ * digest and wrong for a person working out whether they can finish by Sunday
+ * evening, and a footnote explaining a timezone is a footnote that exists
+ * because the number above it was the wrong one.
+ *
+ * Hydration is suppressed because the server and the browser are in different
+ * places, and the browser is the one that is right.
+ */
+function When({ at }: { at: number }) {
+  return (
+    <span suppressHydrationWarning>
+      {new Date(at * 1_000).toLocaleString(undefined, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}
+    </span>
   );
 }
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
- * What is payable, per position.
+ * What each place pays, per track.
  *
- * Ranked within a track, because that is how the contract holds it and how it
- * will pay. The total sits under the table rather than over it: a reader wants
- * to know what first place gets before they want to know what the pool is.
+ * The table used to carry a pool total under it and a paragraph under that
+ * about the vault. Both are true and neither is what somebody reads a prize
+ * table for: they want to know what winning gets them. The pool is already the
+ * headline figure in the rail at the top of the page, and how the vault works
+ * is the whole of the how-it-works page.
  */
-async function Prizes({ rules, asset }: { rules: Rules; asset: string | null }) {
-  const total = await worthOf(asset, rules.total);
-  const shown = prizeLabel(total, rules.total);
+function Prizes({ rules, asset }: { rules: Rules; asset: string | null }) {
+  /* Grouped under the category that pays them rather than repeating its name on
+     every row. A track with three places said "in payments" three times. */
+  const tracks = [...new Set(rules.tiers.map((tier) => tier.track))];
 
   return (
-    <>
-      <ul className="grid gap-0">
-        {rules.tiers.map((tier) => (
-          <li
-            key={`${tier.track}-${tier.rank}`}
-            className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-rule py-3.5"
-          >
-            <span className="text-[0.9375rem] text-ink">
-              <span className="font-bold">{ordinal(tier.rank)}</span>
-              <span className="text-ink-soft"> in {tier.track}</span>
-            </span>
+    <div className="grid gap-6">
+      {tracks.map((track) => {
+        const tiers = rules.tiers.filter((tier) => tier.track === track);
 
-            <Amount amount={tier.amount} asset={asset} />
-          </li>
-        ))}
-      </ul>
+        return (
+          <div key={track}>
+            <h3 className="mb-1 text-[0.9375rem] text-ink-soft">{track}</h3>
 
-      <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <span className="text-[0.9375rem] font-semibold text-ink">Total in the vault</span>
+            <ul className="grid gap-0">
+              {tiers.map((tier, at) => (
+                <li
+                  key={tier.rank}
+                  className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3 ${
+                    at === tiers.length - 1 ? "" : "border-b border-rule"
+                  }`}
+                >
+                  <span className="flex items-baseline gap-2.5 text-[0.9375rem] text-ink">
+                    {/* A medal for the three places that have one. Hidden from
+                        a screen reader: the word beside it already says which
+                        place this is, and "first place medal, First" is the
+                        same fact twice. */}
+                    <span aria-hidden className="text-[1.0625rem]">
+                      {MEDALS[tier.rank] ?? ""}
+                    </span>
+                    {ordinal(tier.rank)}
+                  </span>
 
-        <span className="tabular text-[1.25rem] font-bold text-verified">
-          {shown.figure} <span className="text-[0.875rem] font-bold text-ink-soft">{shown.code}</span>
-        </span>
-      </div>
-
-      <p className="mt-4 text-[0.8125rem] leading-relaxed text-ink-faint">
-        The vault was funded before registration opened and no one can withdraw
-        from it. It pays out when the contract says the result is final.
-      </p>
-    </>
+                  <Amount amount={tier.amount} asset={asset} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
   );
 }
+
+/** Gold, silver and bronze. Fourth place onwards has no medal and gets none. */
+const MEDALS: Record<number, string> = { 1: "\u{1F947}", 2: "\u{1F948}", 3: "\u{1F949}" };
 
 /** One tier, in the asset it will actually be paid in. */
 async function Amount({ amount, asset }: { amount: bigint; asset: string | null }) {
@@ -311,8 +339,8 @@ async function Amount({ amount, asset }: { amount: bigint; asset: string | null 
   const shown = prizeLabel(worth, amount);
 
   return (
-    <span className="tabular text-[0.9375rem] font-bold text-verified">
-      {shown.figure} <span className="text-[0.8125rem] font-bold text-ink-soft">{shown.code}</span>
+    <span className="text-[0.9375rem] text-ink">
+      {shown.figure} <span className="font-bold text-ink">{shown.code}</span>
     </span>
   );
 }
@@ -328,18 +356,25 @@ function Judging({ rules }: { rules: Rules }) {
   return (
     <>
       {rules.tracks.map((track) => (
-        <div key={track.id} className="mb-8 last:mb-0">
-          <h3 className="text-[1rem] font-semibold text-ink">{track.id}</h3>
+        <div key={track.id} className="mb-7 last:mb-0">
+          {/* Named only when there is more than one. A heading over the single
+              category every small event has is a heading that labels the whole
+              section twice. */}
+          {rules.tracks.length > 1 && (
+            <h3 className="mb-2 text-[0.9375rem] text-ink-soft">{track.id}</h3>
+          )}
 
-          <ul className="mt-3 grid gap-0">
-            {track.criteria.map((criterion) => (
+          <ul className="grid gap-0">
+            {track.criteria.map((criterion, at) => (
               <li
                 key={criterion.id}
-                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-rule py-3"
+                className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3 ${
+                  at === track.criteria.length - 1 ? "" : "border-b border-rule"
+                }`}
               >
                 <span className="text-[0.9375rem] text-ink">{criterion.id}</span>
 
-                <span className="tabular text-[0.9375rem] font-bold text-ink">
+                <span className="text-[0.9375rem] text-ink-soft">
                   {percent(criterion.weightBps)}
                 </span>
               </li>
@@ -348,21 +383,13 @@ function Judging({ rules }: { rules: Rules }) {
         </div>
       ))}
 
-      <dl className="mt-6 grid gap-3 border-t border-rule pt-5 sm:grid-cols-2">
-        <Fact
-          term="Who decides"
-          said={
-            rules.communityBps > 0
-              ? `Judges ${percent(rules.judgeBps)}, the crowd ${percent(rules.communityBps)}`
-              : `Judges ${percent(rules.judgeBps)}`
-          }
-        />
-
-        <Fact
-          term="Judges"
-          said={`${rules.judges} authorized, ${rules.judgeQuorum} needed on every project`}
-        />
-      </dl>
+      {/* Only when the crowd has a share. "Judges 100%" is the answer to a
+          question nobody asked about an event with no community vote. */}
+      {rules.communityBps > 0 && (
+        <p className="mt-5 border-t border-rule pt-4 text-[0.875rem] text-ink-soft">
+          Judges decide {percent(rules.judgeBps)}, the crowd {percent(rules.communityBps)}.
+        </p>
+      )}
     </>
   );
 }
@@ -378,21 +405,10 @@ function TakingPart({ rules }: { rules: Rules }) {
 
       <Fact
         term="More than one team"
-        said={rules.multiTeamAllowed ? "Allowed" : "One team each, and the contract enforces it"}
+        said={rules.multiTeamAllowed ? "Allowed" : "One team each"}
       />
 
       <Fact term="A build must have" said={needed(rules)} />
-
-      <Fact
-        term="Who reads the builds"
-        said={
-          [
-            "Anybody, signed in or not",
-            "Only entrants the organizer approved",
-            "The organizer only, until the result",
-          ][rules.visibility] ?? `Frozen as ${VISIBILITY[rules.visibility] ?? "unknown"}`
-        }
-      />
     </dl>
   );
 }
@@ -430,9 +446,22 @@ function upper(said: string): string {
   return said.charAt(0).toUpperCase() + said.slice(1);
 }
 
-/** First, second, third: the way a prize table is read aloud. */
+/**
+ * A payable position, said the way somebody would say it out loud.
+ *
+ * "First place" rather than "First" or "1st". This is the line a person reads
+ * to work out what winning is worth, and the compact forms are for a badge
+ * beside a result that is already labelled, not for the prize table itself.
+ */
 function ordinal(rank: number): string {
-  const names = ["", "First", "Second", "Third", "Fourth", "Fifth"];
+  const names = [
+    "",
+    "First place winner",
+    "Second place winner",
+    "Third place winner",
+    "Fourth place winner",
+    "Fifth place winner",
+  ];
 
-  return names[rank] ?? `Rank ${rank}`;
+  return names[rank] ?? `Place ${rank} winner`;
 }
