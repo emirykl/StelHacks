@@ -191,19 +191,23 @@ export default async function ProjectPage({
               </div>
             )}
 
-            <div className="border-t border-rule pt-6">
-              <p className="label text-ink-faint">Team</p>
+            {/* In the same card the write up and the deck are in, because the
+                people are part of the pitch rather than a footnote under it. A
+                rule and a grey caption was the weight of a caption, and it read
+                as one beside two headings the same size as the project's name. */}
+            <section className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule">
+              <h2 className="text-[1.25rem] text-ink">Team</h2>
 
               {project?.teamName != null && (
-                <p className="mt-2 text-[0.9375rem] text-ink">{project.teamName}</p>
+                <p className="mt-1 text-[0.9375rem] text-ink-soft">{project.teamName}</p>
               )}
 
-              <ul className="mt-4 grid gap-3">
+              <ul className="mt-5 grid gap-4">
                 {people.map((person) => (
                   <Person key={person.address} person={person} />
                 ))}
               </ul>
-            </div>
+            </section>
           </aside>
 
           {/* Each part of the pitch in its own card, the shape the submission
@@ -287,7 +291,7 @@ function Person({ person }: { person: Member }) {
 
   const inside = (
     <>
-      <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-sunk text-[0.75rem] text-ink-soft ring-1 ring-inset ring-rule">
+      <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-sunk text-[0.875rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
         {person.avatarUrl === null ? (
           (name ?? person.address).slice(0, 1).toUpperCase()
         ) : (
@@ -296,7 +300,14 @@ function Person({ person }: { person: Member }) {
       </span>
 
       <span className="min-w-0">
-        <span className="block truncate text-[0.9375rem] text-ink">
+        {/* A name at full ink when there is one, and the address in the type
+            addresses are set in when there is not. The two are different kinds
+            of fact and reading them at the same weight hides which is which. */}
+        <span
+          className={`block truncate text-[0.9375rem] text-ink ${
+            name === null ? "tabular text-[0.875rem]" : "font-medium"
+          }`}
+        >
           {name ?? `${person.address.slice(0, 4)}…${person.address.slice(-4)}`}
         </span>
 
