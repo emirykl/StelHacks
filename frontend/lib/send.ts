@@ -22,6 +22,15 @@
 const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
 const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 
+/**
+ * The one failure a surface is expected to recognise and act on.
+ *
+ * Compared by identity rather than by matching words, so the sentence can be
+ * reworded without silently turning the offer to fix it off.
+ */
+export const UNFUNDED =
+  "This wallet has no account on this network yet. On testnet that is one press away.";
+
 /** What happened, in a shape a surface can render without guessing. */
 export type Sent =
   | { ok: true; hash: string }
@@ -58,8 +67,25 @@ export async function send(
       The sequence number comes from the network rather than from a guess. A
       stale one fails at submission with an error about sequence numbers, which
       tells the person nothing about what they were trying to do.
+
+      A wallet with no account on this network fails here, and it used to fail
+      as the SDK's own words: "Account not found: G…". That is the first thing
+      anybody hits with a fresh wallet, and it reads as the product being broken
+      rather than as the one thing they have to do. It is also the same message
+      whether the account was never funded or the wallet is pointed at the wrong
+      network, so the sentence has to cover both.
     */
-    const account = await server.getAccount(from);
+    let account;
+
+    try {
+      account = await server.getAccount(from);
+    } catch (thrown) {
+      if (/not found/i.test(thrown instanceof Error ? thrown.message : String(thrown))) {
+        return { ok: false, why: UNFUNDED, refused: false };
+      }
+
+      throw thrown;
+    }
 
     const built = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -138,7 +164,18 @@ export async function deploy(
       ]);
 
     const server = new rpc.Server(rpcUrl);
-    const account = await server.getAccount(from);
+
+    let account;
+
+    try {
+      account = await server.getAccount(from);
+    } catch (thrown) {
+      if (/not found/i.test(thrown instanceof Error ? thrown.message : String(thrown))) {
+        return { ok: false, why: UNFUNDED, refused: false };
+      }
+
+      throw thrown;
+    }
 
     const salt = crypto.getRandomValues(new Uint8Array(32));
 
@@ -285,3 +322,35 @@ export const arg = {
     return { value: xdr.ScVal.scvBytes(Buffer.from(value)) };
   },
 };
+
+/**
+ * Ask friendbot for an account, which is how a testnet wallet becomes usable.
+ *
+ * Only ever reachable from the message above, so a wallet that already has an
+ * account never sees it offered. Friendbot exists on testnet and nowhere else;
+ * on any other network the offer is not made, because there is nothing this
+ * could call.
+ */
+export async function fund(address: string): Promise<Sent> {
+  if (!onTestnet()) {
+    return { ok: false, why: "this network has no faucet", refused: false };
+  }
+
+  try {
+    const answer = await fetch(`https://friendbot.stellar.org?addr=${address}`);
+
+    /* Already funded comes back as 400, and it is the outcome the caller wanted
+       rather than a failure to report. */
+    if (!answer.ok && answer.status !== 400) {
+      return { ok: false, why: `the faucet refused: ${answer.status}`, refused: false };
+    }
+
+    return { ok: true, hash: "" };
+  } catch (thrown) {
+    return refusal(thrown);
+  }
+}
+
+export function onTestnet(): boolean {
+  return passphrase === "Test SDF Network ; September 2015";
+}
