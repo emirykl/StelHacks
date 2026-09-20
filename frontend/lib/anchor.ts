@@ -19,6 +19,7 @@
  */
 
 const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
+const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
 
 /** The anchor's home domain. The only thing about it we are told. */
 export const ANCHOR_DOMAIN = process.env["NEXT_PUBLIC_ANCHOR_DOMAIN"];
@@ -332,16 +333,7 @@ export async function readTransfer(
     throw new Error("the anchor has no such transfer");
   }
 
-  return {
-    id: String(transaction["id"]),
-    status: String(transaction["status"]),
-    withdrawAnchorAccount: text(transaction["withdraw_anchor_account"]),
-    withdrawMemo: text(transaction["withdraw_memo"]),
-    withdrawMemoType: text(transaction["withdraw_memo_type"]),
-    amountIn: text(transaction["amount_in"]),
-    amountOut: text(transaction["amount_out"]),
-    message: text(transaction["message"]),
-  };
+  return shape(transaction);
 }
 
 /**
@@ -358,6 +350,167 @@ export function settled(status: string): boolean {
 /** The one status that is our turn: the anchor is waiting to be paid. */
 export function awaitingTransfer(status: string): boolean {
   return status === "pending_user_transfer_start";
+}
+
+
+/**
+ * Every transfer this account has with this anchor.
+ *
+ * How a person who closed the tab picks up where they left off. The alternative
+ * was a table of our own holding transfer ids, and this is better than that in
+ * the way that matters: the anchor is the authority on its own transfers, so
+ * asking it cannot go stale, cannot disagree with itself, and cannot be edited
+ * by anybody who reaches our database.
+ */
+export async function listTransfers(
+  anchor: Anchor,
+  token: string,
+  assetCode: string,
+): Promise<Transfer[]> {
+  const asked = await fetch(
+    `${anchor.transfer}/transactions?asset_code=${encodeURIComponent(assetCode)}&kind=withdrawal`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  if (!asked.ok) {
+    return [];
+  }
+
+  const { transactions } = (await asked.json()) as { transactions?: Record<string, unknown>[] };
+
+  return (transactions ?? []).map(shape);
+}
+
+/**
+ * Pay the anchor what it is waiting for, so it can pay out.
+ *
+ * This is the one step where the money actually leaves, and the one place a
+ * mistake cannot be undone. The anchor names an account, a memo and an amount;
+ * a payment to the right account with the wrong memo is a payment the anchor
+ * cannot match to anybody, and it is gone.
+ *
+ * So nothing here is trusted as it arrives. The destination is checked to be an
+ * account, the amount to be a positive decimal, the memo to be one of the three
+ * kinds the standard defines, and the whole thing is refused unless the anchor
+ * has actually said it is waiting. Those are not defensive habits: this reads
+ * values off a third party's HTTP response and turns them into an irreversible
+ * transfer.
+ */
+export async function completeWithdraw(
+  transfer: Transfer,
+  asset: { code: string; issuer: string } | "native",
+  from: string,
+): Promise<{ ok: true; hash: string } | { ok: false; why: string; refused: boolean }> {
+  if (!awaitingTransfer(transfer.status)) {
+    return { ok: false, why: "the anchor is not waiting for a transfer yet", refused: false };
+  }
+
+  const to = transfer.withdrawAnchorAccount;
+  const amount = transfer.amountIn;
+
+  if (to === undefined || !/^G[A-Z2-7]{55}$/.test(to)) {
+    return { ok: false, why: "the anchor named no account to pay", refused: false };
+  }
+
+  /* Seven decimal places, which is what the ledger holds. More than that is not
+     a rounding question, it is a value this cannot send faithfully. */
+  if (amount === undefined || !/^\d+(\.\d{1,7})?$/.test(amount) || Number(amount) <= 0) {
+    return { ok: false, why: "the anchor named no amount to send", refused: false };
+  }
+
+  /*
+    The memo is checked here, with the rest of what the anchor said, rather than
+    where it is built further down.
+
+    It used to be validated after the network configuration was, which made the
+    test for it pass on a machine that simply had no RPC configured — the guard
+    was never reached and nobody could tell. Everything the anchor sent is now
+    judged before anything about this deployment is.
+  */
+  const memoType = transfer.withdrawMemoType;
+
+  if (
+    memoType !== undefined &&
+    memoType !== "text" &&
+    memoType !== "id" &&
+    memoType !== "hash"
+  ) {
+    return { ok: false, why: "the anchor asked for a memo this cannot write", refused: false };
+  }
+
+  /* No memo at all is legitimate — some anchors give each person their own
+     account. A memo with no type saying how to write it is not, and sending it
+     as the wrong kind puts the wrong bytes in the transaction. */
+  if (memoType === undefined && transfer.withdrawMemo !== undefined) {
+    return { ok: false, why: "the anchor sent a memo without saying its kind", refused: false };
+  }
+
+  if (rpcUrl === undefined || passphrase === undefined) {
+    return { ok: false, why: "this deployment is not pointed at a network", refused: false };
+  }
+
+  try {
+    const [{ Asset, BASE_FEE, Memo, Operation, TransactionBuilder }, rpc, { signTransaction }] =
+      await Promise.all([
+        import("@stellar/stellar-sdk/base"),
+        import("@stellar/stellar-sdk/rpc"),
+        import("./wallet"),
+      ]);
+
+    const memo =
+      memoType === "hash"
+        ? Memo.hash(Buffer.from(transfer.withdrawMemo ?? "", "base64").toString("hex"))
+        : memoType === "id"
+          ? Memo.id(transfer.withdrawMemo ?? "")
+          : memoType === "text"
+            ? Memo.text(transfer.withdrawMemo ?? "")
+            : Memo.none();
+
+    const server = new rpc.Server(rpcUrl);
+    const account = await server.getAccount(from);
+
+    const built = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: passphrase })
+      .addOperation(
+        Operation.payment({
+          destination: to,
+          asset: asset === "native" ? Asset.native() : new Asset(asset.code, asset.issuer),
+          amount,
+        }),
+      )
+      .addMemo(memo)
+      .setTimeout(180)
+      .build();
+
+    const signed = await signTransaction(built.toXDR());
+    const sent = await server.sendTransaction(TransactionBuilder.fromXDR(signed, passphrase));
+
+    if (sent.status === "ERROR") {
+      return { ok: false, why: String(JSON.stringify(sent.errorResult)).slice(0, 160), refused: false };
+    }
+
+    const settled = await server.pollTransaction(sent.hash, {
+      attempts: 30,
+      sleepStrategy: () => 1000,
+    });
+
+    if (settled.status !== "SUCCESS") {
+      return { ok: false, why: `the network returned ${settled.status}`, refused: false };
+    }
+
+    return { ok: true, hash: sent.hash };
+  } catch (thrown) {
+    const said = thrown instanceof Error ? thrown.message : String(thrown);
+
+    return {
+      ok: false,
+      why: said.slice(0, 160),
+      refused: /reject|denied|declined|cancel|user closed/i.test(said),
+    };
+  }
+}
+
+function shape(transaction: Record<string, unknown>): Transfer {
+  return shape(transaction);
 }
 
 function text(value: unknown): string | undefined {

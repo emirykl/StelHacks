@@ -8,6 +8,7 @@ import { useWallet } from "../../components/wallet-context";
 import { arg, send, type Sent } from "../../../lib/send";
 import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/results";
 import { rulesFor } from "../../../lib/rules";
+import { CashOut } from "./cash-out";
 import { accept, assetOf, holds, type PrizeAsset } from "../../../lib/trustline";
 
 /**
@@ -110,6 +111,14 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
     return null;
   }
 
+  /* Whether this wallet has already been paid at this event, which is what
+     makes cashing out a thing it can do. */
+  const paidHere = results.some((result) =>
+    result.places.some(
+      (place) => place.paid && address !== null && place.members.includes(address),
+    ),
+  );
+
   /* Whether this wallet is on an unpaid place the prize table actually pays.
      The board lists every ranked team, and most of them are owed nothing. */
   const owed = results.some((result) =>
@@ -205,6 +214,12 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
             )}
           </section>
         )}
+
+        {/* Under the warning and above the board, because it belongs to the
+            same person and follows the same money: accept the asset, be paid,
+            take it out. It draws only once this wallet has actually been paid
+            here — an offer to cash out nothing is an offer to nobody. */}
+        {asset !== null && paidHere && <CashOut asset={asset} />}
 
         <div className="mt-10 space-y-12">
           {results.map((result) => (
