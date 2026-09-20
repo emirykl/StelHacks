@@ -1,6 +1,6 @@
 import { ButtonLink, Measure } from "../../components/primitives";
-import { CommitButton } from "../../components/commit-button";
-import { VISIBILITY, windowsOf, type Window } from "../../../lib/rules";
+import { Register } from "./register";
+import { windowsOf, type Window } from "../../../lib/rules";
 import { prizeLabel, worthOf } from "../../../lib/money";
 import { phaseName } from "../../../lib/phase";
 import type { HackathonDetail } from "../../../lib/chain";
@@ -62,24 +62,30 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
                 )}
               </div>
 
-              <Action phase={hackathon.phase} />
             </div>
           </div>
 
-          <div className="border border-rule">
+          {/* Held to its own height. As a grid child it stretched to match the
+              banner column beside it, which left a tall empty box under the
+              last panel on any event without tags. */}
+          <div className="self-start border border-rule">
             <Panel label="Prize pool">
               {hackathon.prize === null ? (
                 <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>
               ) : (
                 <p className="tabular text-[2rem] font-bold leading-none text-verified">
                   {prize.figure}{" "}
-                  <span className="label align-middle font-bold text-ink-soft">{prize.code}</span>
+                  <span className="align-middle font-bold text-ink">{prize.code}</span>
                 </p>
               )}
             </Panel>
 
             <Panel label="Timeline · UTC">
-              <Countdown closesAt={hackathon.closesAt} phase={hackathon.phase} />
+              <Countdown
+                closesAt={hackathon.closesAt}
+                registrationClosesAt={hackathon.rules?.schedule.registrationCloses ?? null}
+                phase={hackathon.phase}
+              />
 
               {windows.length === 0 ? (
                 <p className="mt-3 text-[0.875rem] text-ink-faint">no schedule readable</p>
@@ -116,12 +122,18 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               </Panel>
             )}
 
-            {/* Said in the rail rather than buried on the builds tab, because
-                it changes what somebody is agreeing to when they enter. A team
-                deciding whether to submit should not have to go looking for who
-                will be able to read their work. */}
-            <Panel label="Who can read the builds" last>
-              <Gallery visibility={hackathon.rules?.visibility ?? null} />
+            {/* The way in, at the foot of the column that argues for it. It sat
+                beside the name, which is the one place on the page with nothing
+                to its right, so it read as floating rather than as the end of
+                anything. Under the prize and the deadline it is the answer to
+                the two facts above it. */}
+            <Panel label="Taking part" last>
+              <Action
+                phase={hackathon.phase}
+                contractId={hackathon.contract_id}
+                slug={hackathon.slug}
+                registrationClosesAt={hackathon.rules?.schedule.registrationCloses ?? null}
+              />
             </Panel>
           </div>
         </div>
@@ -138,6 +150,14 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
  * the picture would be.
  */
 function Picture({ hackathon }: { hackathon: HackathonDetail }) {
+  /* Registration, not submission, and the same reading as the card's badge.
+     They disagreed: an event whose sign up window had closed while its teams
+     still had time to build said CLOSED in the listing and OPEN on its own
+     page. The badge answers "can I get in", and there is one answer. */
+  const shut =
+    hackathon.registrationClosesAt !== null &&
+    hackathon.registrationClosesAt <= Math.floor(Date.now() / 1000);
+
   return (
     <div className="relative aspect-[5/2] shrink-0 overflow-hidden border border-rule">
       {hackathon.banner_url === null ? (
@@ -146,8 +166,25 @@ function Picture({ hackathon }: { hackathon: HackathonDetail }) {
         <img src={hackathon.banner_url} alt="" className="absolute inset-0 size-full object-cover" />
       )}
 
-      <span className="label absolute left-3 top-3 bg-paper px-2.5 py-1.5 text-ink ring-1 ring-inset ring-rule">
-        {phaseName(hackathon.phase)}
+      {/*
+        What the badge answers is whether somebody can still get in, not what
+        the phase is called.
+
+        A phase only moves when somebody calls `advance_phase`, so an event
+        whose submission deadline went an hour ago still says `Open` on chain.
+        This said "Open" over a strip that said "deadline passed", which is the
+        page arguing with itself in two places a reader sees at once.
+      */}
+      <span
+        className={`label absolute left-3 top-3 px-2.5 py-1.5 ${
+          shut
+            ? "bg-broken text-paper"
+            : "bg-paper text-ink ring-1 ring-inset ring-rule"
+        }`}
+      >
+        {shut && (hackathon.phase === null || hackathon.phase < 8)
+          ? "Closed"
+          : phaseName(hackathon.phase)}
       </span>
     </div>
   );
@@ -179,26 +216,61 @@ function Panel({
  * rather than a ticking clock. A counter updating every second would make this
  * page re-render forever for a number nobody watches change.
  */
-function Countdown({ closesAt, phase }: { closesAt: number | null; phase: number | null }) {
+function Countdown({
+  closesAt,
+  registrationClosesAt,
+  phase,
+}: {
+  closesAt: number | null;
+  /** When signing up stops, which closes before the build deadline does. */
+  registrationClosesAt: number | null;
+  phase: number | null;
+}) {
   const finished = phase !== null && phase >= 8;
-  const left = closesAt === null ? 0 : closesAt - Math.floor(Date.now() / 1000);
+  const now = Math.floor(Date.now() / 1000);
 
-  if (finished || closesAt === null || left <= 0) {
+  /*
+    The deadline the reader is actually up against, which is not always the one
+    the event ends on.
+
+    Registration closes before submissions do, and this counted only the second.
+    So a visitor arriving in the gap was met with a loud green "1 hour left to
+    submit" over a rail that said registration had closed: the page shouting
+    about a door they could no longer walk through.
+
+    Whoever is still able to sign up is deciding whether to, so that is the
+    clock. Once that has gone, the people left are the ones already in, and
+    theirs is the build deadline.
+  */
+  const registering = registrationClosesAt !== null && registrationClosesAt > now;
+  const deadline = registering ? registrationClosesAt : closesAt;
+  const left = deadline === null ? 0 : deadline - now;
+
+  if (finished || deadline === null || left <= 0) {
     return (
       <p className="bg-paper-sunk px-3 py-2 text-[0.875rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
-        {closesAt === null ? "No deadline set" : "Submissions closed"}
+        {deadline === null ? "No deadline set" : "Submissions closed"}
       </p>
     );
   }
 
+  const what = registering ? "to register" : "to submit";
   const days = Math.floor(left / 86_400);
   const hours = Math.floor((left % 86_400) / 3_600);
+  const minutes = Math.floor((left % 3_600) / 60);
+
+  const span =
+    days > 0
+      ? `${days} ${days === 1 ? "day" : "days"}`
+      : hours > 0
+        ? `${hours} ${hours === 1 ? "hour" : "hours"}`
+        /* Minutes in the last hour. Rounded to hours it read "0 hours left" for
+           the whole of it, on the one page where that hour still counts. */
+        : `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
 
   return (
     <p className="bg-verified px-3 py-2 text-[0.9375rem] font-bold text-paper">
-      {days > 0
-        ? `${days} ${days === 1 ? "day" : "days"} left to submit`
-        : `${hours} ${hours === 1 ? "hour" : "hours"} left to submit`}
+      {span} left {what}
     </p>
   );
 }
@@ -272,36 +344,6 @@ function stamp(at: number): string {
 }
 
 /**
- * Who may read the submitted projects, in the contract's own three levels.
- *
- * This is not a setting on our side. It was chosen before the lock, it is in
- * the digest, and the database enforces the same three levels in
- * `may_see_gallery`, so what this line says and what a request actually returns
- * cannot come apart.
- */
-function Gallery({ visibility }: { visibility: number | null }) {
-  if (visibility === null) {
-    return <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>;
-  }
-
-  const said = [
-    ["Anybody", "Every submitted build is public while the event runs."],
-    ["Entrants only", "Only people the organizer approved can open the builds."],
-    ["The organizer only", "Nobody but the organizer reads a build before the result."],
-  ][visibility] ?? ["Unknown", "The contract answered with a level this page does not know."];
-
-  return (
-    <>
-      <p className="text-[0.9375rem] font-bold text-ink">{said[0]}</p>
-
-      <p className="mt-2 text-[0.875rem] leading-relaxed text-ink-soft">{said[1]}</p>
-
-      <p className="label mt-3 text-ink-faint">frozen as {VISIBILITY[visibility] ?? "unknown"}</p>
-    </>
-  );
-}
-
-/**
  * The one thing to press, and it changes with the phase.
  *
  * Only one, because there is only ever one next step: you cannot submit before
@@ -309,7 +351,18 @@ function Gallery({ visibility }: { visibility: number | null }) {
  * buttons where one of them always fails is how a reader learns to distrust
  * both.
  */
-function Action({ phase }: { phase: number | null }) {
+function Action({
+  phase,
+  contractId,
+  slug,
+  registrationClosesAt,
+}: {
+  phase: number | null;
+  contractId: string;
+  slug: string | null;
+  /** When applying stops being possible, from the frozen rules. */
+  registrationClosesAt: number | null;
+}) {
   if (phase === null) {
     return null;
   }
@@ -324,13 +377,19 @@ function Action({ phase }: { phase: number | null }) {
 
   if (phase >= 8) {
     return (
-      <ButtonLink href="?tab=builds" intent="quiet" className="shrink-0">
-        See what was built
+      <ButtonLink href="?tab=projects" intent="quiet" className="shrink-0">
+        See the projects
       </ButtonLink>
     );
   }
 
-  return <CommitButton href="?tab=take-part">Register as a hacker</CommitButton>;
+  return (
+    <Register
+      contractId={contractId}
+      slug={slug}
+      registrationClosesAt={registrationClosesAt}
+    />
+  );
 }
 
 /** A map pin, drawn rather than fetched, so the page ships no extra image. */

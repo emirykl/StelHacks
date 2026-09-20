@@ -26,9 +26,29 @@ import type { HackathonSummary } from "../../lib/chain";
 export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary }) {
   const worth = await worthOf(hackathon.asset, hackathon.prize);
   const prize = prizeLabel(worth, hackathon.prize);
-  const running = hackathon.phase !== null && hackathon.phase >= 2 && hackathon.phase <= 7;
   const finished = hackathon.phase !== null && hackathon.phase >= 8;
   const funding = hackathon.phase === 1;
+
+  /*
+    Whether the door is actually open, which is not the same as the phase.
+
+    A phase only moves when somebody calls `advance_phase`, so an event whose
+    submission deadline passed an hour ago is still `Open` on chain until
+    someone tells it otherwise. The badge answers "can I still get in", and for
+    that hour the honest answer is no, however the contract is labelling itself.
+
+    Green was also given to judging, reveal and settlement, which are stages
+    nobody can enter at all. It is now the one stage where entering is possible.
+  */
+  const now = Math.floor(Date.now() / 1000);
+
+  /* Signing up closes before building does, and the badge answers the first
+     question, not the second. A card that said OPEN because a team already in
+     had an hour left to submit was inviting somebody who could no longer
+     apply. */
+  const shut =
+    hackathon.registrationClosesAt !== null && hackathon.registrationClosesAt <= now;
+  const running = hackathon.phase === 2 && !shut;
 
   return (
     /* Hovering sharpens the frame rather than raising the card. The hairline
@@ -40,30 +60,34 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
       href={`/hackathons/${hackathon.slug}`}
       className="group flex h-full flex-col overflow-hidden border border-rule bg-paper transition-[border-color,box-shadow] duration-150 ease-settle hover:border-ink hover:ring-1 hover:ring-inset hover:ring-ink"
     >
-      <Picture hackathon={hackathon} running={running} funding={funding} finished={finished} />
+      <Picture
+        hackathon={hackathon}
+        running={running}
+        funding={funding}
+        finished={finished}
+        shut={shut}
+      />
 
-      <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5">
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 px-5 pb-5">
         <div className="min-w-0">
-          <div className="flex items-start gap-3">
-            {hackathon.logo_url !== null && (
-              /* The organizer's mark. A hackathon people have heard of is
-                 recognised by it before the name is read. */
-              <img
-                src={hackathon.logo_url}
-                alt=""
-                width={32}
-                height={32}
-                className="size-8 shrink-0 rounded-[0.3rem] object-cover ring-1 ring-rule"
-              />
+          {/* The mark sits over the picture's lower edge rather than beside the
+              name, which is where a logo goes on everything else that has both.
+              It also buys the name the full width of the card: at three words
+              the old row wrapped the title around a thirty two pixel square. */}
+          <div className="relative z-10 -mt-8 mb-4 size-14 overflow-hidden rounded-[0.6rem] border border-rule bg-paper">
+            {hackathon.logo_url === null ? (
+              <div className="hatch size-full" aria-hidden />
+            ) : (
+              <img src={hackathon.logo_url} alt="" className="size-full object-cover" />
             )}
-
-            <h3 className="min-w-0 text-[1.25rem] leading-tight transition-colors group-hover:text-ink-soft">
-              {hackathon.name}
-            </h3>
           </div>
 
+          <h3 className="min-w-0 text-[1.25rem] leading-tight transition-colors group-hover:text-ink-soft">
+            {hackathon.name}
+          </h3>
+
           {hackathon.tagline !== null && (
-            <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
               {hackathon.tagline}
             </p>
           )}
@@ -108,13 +132,17 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
               ) : (
                 <>
                   {prize.figure}{" "}
-                  <span className="label font-bold text-ink-soft">{prize.code}</span>
+                  <span className="font-bold text-ink">{prize.code}</span>
                 </>
               )}
             </p>
 
             <p className="label font-bold text-ink">
-              <Remaining closesAt={hackathon.closesAt} finished={finished} />
+              <Remaining
+                closesAt={hackathon.closesAt}
+                registrationClosesAt={hackathon.registrationClosesAt}
+                finished={finished}
+              />
             </p>
           </div>
         </div>
@@ -136,11 +164,14 @@ function Picture({
   running,
   funding,
   finished,
+  shut,
 }: {
   hackathon: HackathonSummary;
   running: boolean;
   funding: boolean;
   finished: boolean;
+  /** Whether the submission deadline has passed, whatever the phase says. */
+  shut: boolean;
 }) {
   /* Two and a half to one, which is the shape a banner is drawn in. Fixing the
      ratio rather than the height also keeps every card in a row the same, so a
@@ -153,7 +184,7 @@ function Picture({
         <img
           src={hackathon.banner_url}
           alt=""
-          className="size-full object-cover transition-transform duration-500 ease-settle group-hover:scale-[1.04]"
+          className="size-full object-cover"
         />
       )}
 
@@ -165,6 +196,10 @@ function Picture({
         Green yes, yellow not yet, red no. They are the traffic light everybody
         already reads, and the dot repeats it as a shape for anybody who cannot
         separate the colours.
+
+        Shut counts as red whatever the phase is called. An event whose deadline
+        has gone is closed to anybody arriving, and drawing that in the neutral
+        outline made "Closed" read as a footnote rather than as the answer.
       */}
       <span
         className={`label absolute left-3 top-3 flex items-center gap-2 px-2.5 py-1.5 ${
@@ -172,13 +207,13 @@ function Picture({
             ? "bg-verified text-paper"
             : funding
               ? "bg-signal text-signal-ink"
-              : finished
+              : finished || shut
                 ? "bg-broken text-paper"
                 : "bg-paper text-ink ring-1 ring-inset ring-rule"
         }`}
       >
         {running && <span aria-hidden className="size-1.5 rounded-full bg-paper" />}
-        {phaseName(hackathon.phase)}
+        {shut && !finished ? "Closed" : phaseName(hackathon.phase)}
       </span>
     </div>
   );
@@ -191,16 +226,33 @@ function Picture({
  * rather than a ticking clock. A counter updating every second would make this
  * page re-render forever for a figure nobody watches change.
  */
-function Remaining({ closesAt, finished }: { closesAt: number | null; finished: boolean }) {
+function Remaining({
+  closesAt,
+  registrationClosesAt,
+  finished,
+}: {
+  closesAt: number | null;
+  registrationClosesAt: number | null;
+  finished: boolean;
+}) {
   if (finished) {
     return <>submissions closed</>;
   }
 
-  if (closesAt === null) {
+  const now = Math.floor(Date.now() / 1000);
+
+  /* The clock the reader is on. Somebody who can still sign up is deciding
+     whether to; once that has gone they are watching a build deadline that is
+     not theirs. */
+  const registering = registrationClosesAt !== null && registrationClosesAt > now;
+  const deadline = registering ? registrationClosesAt : closesAt;
+
+  if (deadline === null) {
     return <>no deadline set</>;
   }
 
-  const left = closesAt - Math.floor(Date.now() / 1000);
+  const what = registering ? "to register" : "left";
+  const left = deadline - now;
 
   if (left <= 0) {
     return <>submissions closed</>;
@@ -209,11 +261,20 @@ function Remaining({ closesAt, finished }: { closesAt: number | null; finished: 
   const days = Math.floor(left / 86_400);
   const hours = Math.floor((left % 86_400) / 3_600);
 
-  return days > 0 ? (
-    <>{days === 1 ? "1 day left" : `${days} days left`}</>
-  ) : (
-    <>{hours === 1 ? "1 hour left" : `${hours} hours left`}</>
-  );
+  if (days > 0) {
+    return <>{`${days} ${days === 1 ? "day" : "days"} ${what}`}</>;
+  }
+
+  if (hours > 0) {
+    return <>{`${hours} ${hours === 1 ? "hour" : "hours"} ${what}`}</>;
+  }
+
+  /* Minutes in the last hour. Rounding them all down to hours printed "0 hours
+     left" for the whole of it, which reads as expired on an event somebody can
+     still just about enter. */
+  const minutes = Math.floor(left / 60);
+
+  return <>{`${minutes <= 1 ? "1 minute" : `${minutes} minutes`} ${what}`}</>;
 }
 
 /** A map pin, drawn rather than fetched, so a card ships no extra image. */

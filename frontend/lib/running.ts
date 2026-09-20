@@ -21,6 +21,8 @@ export interface Running {
   required: bigint;
   /** What the vault actually holds. */
   held: bigint;
+  /** Whether the platform's cut has been paid, which `complete` insists on. */
+  feeSettled: boolean;
   /** Read separately, from the frozen rules, and only when it is needed. */
   prizeAsset: string | null;
 }
@@ -32,6 +34,7 @@ const empty: Running = {
   vault: null,
   required: BigInt(0),
   held: BigInt(0),
+  feeSettled: false,
   prizeAsset: null,
 };
 
@@ -79,7 +82,7 @@ export async function runningOf(contractId: string): Promise<Running> {
     before anything is created they all do. A refusal is read as the state it
     describes rather than as a page that failed to load.
   */
-  const [phase, team, digest, vault, required, held] = await Promise.all([
+  const [phase, team, digest, vault, required, held, feeSettled] = await Promise.all([
     ask("phase").catch(() => null),
     /* The organizer is on the organizing team, not on the state. `state` holds
        what changes while the event runs; who runs it does not. */
@@ -88,6 +91,7 @@ export async function runningOf(contractId: string): Promise<Running> {
     ask("vault").catch(() => null),
     ask("required_funding").catch(() => null),
     ask("funding").catch(() => null),
+    ask("is_platform_fee_settled").catch(() => null),
   ]);
 
   const organizing = team as { organizer?: unknown } | null;
@@ -99,6 +103,7 @@ export async function runningOf(contractId: string): Promise<Running> {
     vault: typeof vault === "string" ? vault : null,
     required: required === null ? BigInt(0) : BigInt(required as bigint),
     held: held === null ? BigInt(0) : BigInt(held as bigint),
+    feeSettled: feeSettled === true,
     prizeAsset: null,
   };
 }
