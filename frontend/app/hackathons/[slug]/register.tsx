@@ -247,7 +247,7 @@ export function Register({
       {result !== null && (
         <div className="grid gap-2">
           <p
-            className={`max-w-[22rem] text-[0.8125rem] leading-relaxed ${
+            className={`max-w-[22rem] text-[0.875rem] leading-relaxed ${
               result.ok ? "text-verified" : "text-broken"
             }`}
           >
@@ -301,7 +301,7 @@ export function Register({
             {/* The suggestion is worth making because most teams have one name
                 in their head, not two, and inventing a second one at this
                 moment is a decision nobody came here to make. */}
-            <p className="mt-2 max-w-[30rem] text-[0.875rem] leading-relaxed text-ink-soft">
+            <p className="mt-2 max-w-[30rem] text-[0.9375rem] leading-relaxed text-ink-soft">
               The chain knows your team by a number. The name is what everybody
               else will look for it under, and you can change it later. Most
               teams use what they are building.
@@ -313,7 +313,7 @@ export function Register({
             onChange={(event) => setTeamName(event.target.value.slice(0, 80))}
             placeholder="Payments Crew"
             aria-label="Team name"
-            className="h-11 w-full bg-paper px-4 text-[0.9375rem] text-ink outline-none ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus:ring-ink"
+            className="h-11 w-full bg-paper px-4 text-[1rem] text-ink outline-none ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus:ring-ink"
           />
 
           <div>
@@ -378,7 +378,7 @@ function Next({
   }
 
   if (standing.application === "rejected") {
-    return <p className="text-[0.9375rem] text-broken">Your application was refused.</p>;
+    return <p className="text-[1rem] text-broken">Your application was refused.</p>;
   }
 
   if (standing.teams.length === 0) {
@@ -389,7 +389,7 @@ function Next({
         <button
           type="button"
           onClick={onFind}
-          className="text-left text-[0.8125rem] text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
+          className="text-left text-[0.875rem] text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
         >
           or join someone else&rsquo;s
         </button>
@@ -422,7 +422,7 @@ function Waiting({
 }) {
   return (
     <p
-      className={`flex items-center gap-2 text-[0.9375rem] ${
+      className={`flex items-center gap-2 text-[1rem] ${
         closed ? "text-ink-faint" : done ? "text-verified" : "text-signal-deep dark:text-signal"
       }`}
     >
@@ -449,9 +449,9 @@ function Missing({
 }) {
   return (
     <div className="max-w-[34rem]">
-      <p className="text-[0.9375rem] text-ink">You need {what} first.</p>
+      <p className="text-[1rem] text-ink">You need {what} first.</p>
 
-      <p className="mt-2 text-[0.875rem] leading-relaxed text-ink-soft">{why}</p>
+      <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">{why}</p>
 
       <div className="mt-5">{children}</div>
     </div>

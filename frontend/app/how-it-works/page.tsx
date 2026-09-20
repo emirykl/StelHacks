@@ -44,7 +44,7 @@ function Intro() {
           Ten stages, one direction
         </Display>
 
-        <p className="mt-6 max-w-[42rem] text-[1.0625rem] leading-relaxed text-ink-soft">
+        <p className="mt-6 max-w-[42rem] text-[1.125rem] leading-relaxed text-ink-soft">
           A hackathon here is a contract that moves forward one stage at a time
           and never back. Each stage opens exactly one door. Below is the whole
           sequence, then what you actually do in it, depending on whether you are
@@ -94,7 +94,7 @@ function Lifecycle() {
                 index={String(index + 1)}
                 label={PHASES[index] ?? ""}
               >
-                <p className="text-[0.9375rem] leading-relaxed">{what}</p>
+                <p className="text-[1rem] leading-relaxed">{what}</p>
               </SpecRow>
             ))}
           </SpecRows>
@@ -108,7 +108,7 @@ function Lifecycle() {
               back on the end of the one it is not part of. */}
           <SpecLabel>Cancelled</SpecLabel>
 
-          <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+          <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
             The one exit off that line. A hackathon can only end this way under a
             cancellation policy the organizer declared before the rules were
             locked, and once a ranking exists it cannot be taken. Everything in
@@ -175,7 +175,7 @@ function Roles() {
         <div className="mt-14 grid gap-x-10 gap-y-14 lg:grid-cols-3">
           {roles.map((role) => (
             <div key={role.who}>
-              <h3 className="display text-[1.375rem]">{role.who}</h3>
+              <h3 className="display text-[1.4375rem]">{role.who}</h3>
 
               {/* Numbered, because these are ordered and a bullet would say they
                   are not. The number sits outside the text column so the steps
@@ -190,12 +190,12 @@ function Roles() {
                       {index + 1}
                     </span>
 
-                    <p className="text-[0.9375rem] leading-relaxed text-ink-soft">{step}</p>
+                    <p className="text-[1rem] leading-relaxed text-ink-soft">{step}</p>
                   </li>
                 ))}
               </ol>
 
-              <p className="mt-5 text-[0.875rem] leading-relaxed text-ink-faint">
+              <p className="mt-5 text-[0.9375rem] leading-relaxed text-ink-faint">
                 {role.note}
               </p>
             </div>
@@ -237,7 +237,7 @@ function Checking() {
                 label={label ?? ""}
                 mark
               >
-                <p className="text-[0.9375rem] leading-relaxed">{how}</p>
+                <p className="text-[1rem] leading-relaxed">{how}</p>
               </SpecRow>
             ))}
           </SpecRows>
@@ -249,7 +249,7 @@ function Checking() {
             <Badge>→</Badge>
           </ButtonLink>
 
-          <p className="text-[0.875rem] text-ink-soft">
+          <p className="text-[0.9375rem] text-ink-soft">
             Every hackathon page has a button that does the first one for you,
             from your own browser.
           </p>

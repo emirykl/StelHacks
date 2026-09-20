@@ -375,14 +375,14 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
 
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
-      <h3 className="text-[1.25rem] text-ink">Cash out</h3>
+      <h3 className="text-[1.3125rem] text-ink">Cash out</h3>
 
       {/* The numbers first, because they are what somebody is deciding about,
           and the arrangement after, because that is what they are agreeing to.
           "Your prize" is a phrase; "10 USDC leaves, about 4,800 TRY arrives" is
           the thing. */}
       {held !== null && Number(held) > 0 && (
-        <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink">
+        <p className="mt-3 text-[1rem] leading-relaxed text-ink">
           You hold <span className="tabular font-medium">{held}</span> {codeOf(asset)}.
           {worth !== null && (
             <>
@@ -394,7 +394,7 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
         </p>
       )}
 
-      <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
         {anchor.hosted === undefined
           ? `${anchor.domain} takes it back and pays the money to a bank account. They decide who may withdraw; this page only sends them the asset.`
           : `${anchor.domain} takes it back and pays the money out. They handle the identity checks on their own site, which opens in a new tab; this page never sees your documents.`}
@@ -403,7 +403,7 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
       {/* The one thing people get wrong about this, said before they press it.
           A balance does not become lira: it leaves, and lira arrives somewhere
           else that is not on this network at all. */}
-      <p className="mt-3 text-[0.8125rem] leading-relaxed text-ink-faint">
+      <p className="mt-3 text-[0.875rem] leading-relaxed text-ink-faint">
         The {codeOf(asset)} leaves your wallet. Lira never arrives on Stellar —
         it reaches a bank. Keeping the {codeOf(asset)} instead is a fine answer;
         it is yours either way.
@@ -516,7 +516,7 @@ function Body({
   if (stage.at === "failed") {
     return (
       <div className="grid gap-4">
-        <p className="text-[0.8125rem] leading-relaxed text-broken">{stage.why}</p>
+        <p className="text-[0.875rem] leading-relaxed text-broken">{stage.why}</p>
 
         <div>
           <Button intent="quiet" onClick={onRetry}>
@@ -533,7 +533,7 @@ function Body({
     return (
       <div className="grid gap-2">
         <p
-          className={`flex items-center gap-2 text-[0.9375rem] ${
+          className={`flex items-center gap-2 text-[1rem] ${
             transfer.status === "completed" ? "text-verified" : "text-ink-soft"
           }`}
         >
@@ -549,7 +549,7 @@ function Body({
         {/* The anchor's own words, printed rather than interpreted. They know
             why they refused and we would only be guessing. */}
         {transfer.message !== undefined && (
-          <p className="text-[0.8125rem] leading-relaxed text-ink-soft">{transfer.message}</p>
+          <p className="text-[0.875rem] leading-relaxed text-ink-soft">{transfer.message}</p>
         )}
       </div>
     );
@@ -558,7 +558,7 @@ function Body({
   if (awaitingTransfer(transfer.status)) {
     return (
       <div className="grid gap-4">
-        <p className="text-[0.9375rem] leading-relaxed text-ink">{anchorReady(transfer)}</p>
+        <p className="text-[1rem] leading-relaxed text-ink">{anchorReady(transfer)}</p>
 
         <div>
           {/* The button names the amount and the asset, because that is what
@@ -576,7 +576,7 @@ function Body({
 
   return (
     <div className="grid gap-2">
-      <p className="flex items-center gap-2 text-[0.9375rem] text-signal-deep dark:text-signal">
+      <p className="flex items-center gap-2 text-[1rem] text-signal-deep dark:text-signal">
         <span
           aria-hidden
           className="size-1.5 shrink-0 rounded-full bg-signal-deep dark:bg-signal"
@@ -589,7 +589,7 @@ function Body({
           href={transfer.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="justify-self-start text-[0.8125rem] text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
+          className="justify-self-start text-[0.875rem] text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
         >
           Open their page again
         </a>
@@ -637,9 +637,9 @@ const finished: Record<string, string> = {
 function Unavailable({ children }: { children: React.ReactNode }) {
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
-      <h3 className="text-[1.25rem] text-ink">Cash out</h3>
+      <h3 className="text-[1.3125rem] text-ink">Cash out</h3>
 
-      <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">{children}</p>
+      <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">{children}</p>
     </section>
   );
 }

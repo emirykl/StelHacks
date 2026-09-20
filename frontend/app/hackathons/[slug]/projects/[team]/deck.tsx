@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 /**
  * A deck, read the way a deck is read: one page at a time, going right.
@@ -29,7 +30,7 @@ export function DeckViewer({ url }: { url: string }) {
   /* The loaded document, kept outside React's state. It is a handle with a
      worker behind it, not a value to render, and putting it in state makes
      every page turn a reason to reconsider it. */
-  const document = useRef<PdfDocument | null>(null);
+  const document = useRef<PDFDocumentProxy | null>(null);
 
   /* Which render is current. A page turn during a render would otherwise let
      the slower of the two finish last and paint the page nobody asked for. */
@@ -39,7 +40,7 @@ export function DeckViewer({ url }: { url: string }) {
      Ignoring its result is not enough: it is still drawing into the canvas, and
      two pages painted into one bitmap leave the earlier one showing through the
      white the later one never covered. */
-  const drawing = useRef<{ cancel(): void } | null>(null);
+  const drawing = useRef<RenderTask | null>(null);
 
   /* One turn per gesture. A trackpad flick arrives as thirty wheel events and
      without this a deck jumps from the first slide to the last. */
@@ -70,7 +71,13 @@ export function DeckViewer({ url }: { url: string }) {
     drawing.current?.cancel();
     drawing.current = null;
 
-    const sheet = await pdf.getPage(which);
+    let sheet;
+    try {
+      sheet = await pdf.getPage(which);
+    } catch {
+      if (mine === generation.current) setFailed(true);
+      return;
+    }
 
     if (mine !== generation.current) {
       return;
@@ -126,8 +133,10 @@ export function DeckViewer({ url }: { url: string }) {
 
     try {
       await task.promise;
-    } catch {
-      /* Cancelled, which is what the next page turn asked for. */
+    } catch (error) {
+      if (mine === generation.current && !(error instanceof Error && error.name === "RenderingCancelledException")) {
+        setFailed(true);
+      }
     } finally {
       if (drawing.current === task) {
         drawing.current = null;
@@ -137,10 +146,16 @@ export function DeckViewer({ url }: { url: string }) {
 
   useEffect(() => {
     let alive = true;
+    let loading: PDFDocumentLoadingTask | null = null;
+    setPages(0);
+    setPage(1);
+    setShape(null);
+    setFailed(false);
 
     void (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
+        if (!alive) return;
 
         /* The worker is built from the package rather than fetched from a CDN.
            Nothing in this product loads code from a third party, and a viewer
@@ -150,20 +165,18 @@ export function DeckViewer({ url }: { url: string }) {
           import.meta.url,
         ).toString();
 
-        const loaded = await pdfjs.getDocument({ url }).promise;
-
-        const handle = loaded as unknown as PdfDocument;
+        loading = pdfjs.getDocument({ url });
+        const loaded = await loading.promise;
 
         if (!alive) {
-          void handle.destroy();
-
           return;
         }
 
-        document.current = handle;
+        document.current = loaded;
         setPages(loaded.numPages);
 
-        const first = await handle.getPage(1);
+        const first = await loaded.getPage(1);
+        if (!alive) return;
         const size = first.getViewport({ scale: 1 });
 
         /* Clamped, because a frame is not obliged to honour a poster or a
@@ -180,10 +193,13 @@ export function DeckViewer({ url }: { url: string }) {
 
     return () => {
       alive = false;
+      generation.current += 1;
       drawing.current?.cancel();
       drawing.current = null;
-      void document.current?.destroy();
       document.current = null;
+      // pdf.js owns the worker and pending requests on the loading task.
+      // Destroy it even if navigation happens before the document is ready.
+      void loading?.destroy().catch(() => {});
     };
   }, [url, draw]);
 
@@ -259,7 +275,7 @@ export function DeckViewer({ url }: { url: string }) {
         className="relative grid max-h-[80vh] w-full place-items-center overflow-hidden rounded-[0.75rem] bg-paper-sunk ring-1 ring-inset ring-rule outline-none focus-visible:ring-2 focus-visible:ring-ink"
       >
         {failed ? (
-          <p className="px-6 text-center text-[0.875rem] text-ink-soft">
+          <p className="px-6 text-center text-[0.9375rem] text-ink-soft">
             This deck could not be opened here. The download beside the title
             still has the file.
           </p>
@@ -284,7 +300,7 @@ export function DeckViewer({ url }: { url: string }) {
               onClick={() => go(page + 1)}
             />
 
-            <p className="tabular absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-ink/80 px-3 py-1 text-[0.75rem] text-paper">
+            <p className="tabular absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-ink/80 px-3 py-1 text-[0.8125rem] text-paper">
               {page} / {pages}
             </p>
           </>
@@ -327,23 +343,4 @@ function Arrow({
       </svg>
     </button>
   );
-}
-
-/* The little of pdf.js this file touches. The package ships its own types and
-   they are correct; naming the two calls used here keeps the dynamic import
-   from widening to `any` and taking the rest of the file with it. */
-interface PdfDocument {
-  numPages: number;
-  getPage(which: number): Promise<PdfPage>;
-  destroy(): Promise<void>;
-}
-
-interface PdfPage {
-  getViewport(options: { scale: number }): { width: number; height: number };
-  render(options: {
-    canvasContext: CanvasRenderingContext2D;
-    canvas: null;
-    viewport: unknown;
-    background: string;
-  }): { promise: Promise<void>; cancel(): void };
 }

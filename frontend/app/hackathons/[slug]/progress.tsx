@@ -15,8 +15,9 @@ import type { Rules } from "../../../lib/rules";
  *
  * The stage comes from the contract and the deadline comes from the frozen
  * rules, which means the two can disagree: a phase only moves when somebody
- * calls `advance_phase`, so a deadline can pass while the contract still says
- * the old stage. That gap is shown rather than hidden. Counting down to a
+ * calls `advance_phase`, and the clock service takes a lap to, so a deadline
+ * can pass while the contract still says the old stage. That gap is shown
+ * rather than hidden. Counting down to a
  * moment that has already gone, or quietly drawing the next stage as though it
  * had started, would both be this page claiming something the chain does not
  * say.
@@ -168,7 +169,7 @@ export function Progress({ phase, rules }: { phase: number | null; rules: Rules 
           Allowed to scroll rather than wrap, because a stage list that reflows
           into two rows stops reading as an order.
         */}
-        <ol className="label flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto text-[0.6875rem]">
+        <ol className="label flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto text-[0.75rem]">
           {WALK.map((step) => (
             <li
               key={step}
@@ -188,7 +189,7 @@ export function Progress({ phase, rules }: { phase: number | null; rules: Rules 
 
         {/* The countdown, when the current stage has one. */}
         {left !== null && (
-          <p className="label shrink-0 text-[0.6875rem] text-ink-soft">
+          <p className="label shrink-0 text-[0.75rem] text-ink-soft">
             {left > 0 ? (
               <>
                 <span className="text-ink">{spoken(left)}</span> {deadlineName(phase)}

@@ -65,7 +65,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
                 </div>
 
                 {hackathon.tagline !== null && (
-                  <p className="mt-4 max-w-[46rem] text-[1.1875rem] leading-relaxed text-ink-soft">
+                  <p className="mt-4 max-w-[46rem] text-[1.25rem] leading-relaxed text-ink-soft">
                     {hackathon.tagline}
                   </p>
                 )}
@@ -80,7 +80,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
           <div className="self-start border border-rule lg:order-1">
             <Panel label="Prize pool">
               {hackathon.prize === null ? (
-                <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>
+                <p className="text-[0.9375rem] text-ink-faint">Not readable from the contract.</p>
               ) : (
                 /* One size and one weight across both halves. The figure was
                    set larger than the code beside it, so the two read as a
@@ -100,7 +100,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               />
 
               {windows.length === 0 ? (
-                <p className="mt-3 text-[0.875rem] text-ink-faint">no schedule readable</p>
+                <p className="mt-3 text-[0.9375rem] text-ink-faint">no schedule readable</p>
               ) : (
                 <ol className="mt-4 grid gap-2.5">
                   {windows.map((span) => (
@@ -118,7 +118,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               <div className="grid border-b border-rule sm:grid-cols-2 sm:divide-x sm:divide-rule">
                 {hackathon.location !== null && (
                   <Panel label="Where" bare>
-                    <p className="flex items-center gap-1.5 text-[0.9375rem] font-semibold text-ink">
+                    <p className="flex items-center gap-1.5 text-[1rem] font-semibold text-ink">
                       <Pin />
                       {hackathon.location}
                     </p>
@@ -131,7 +131,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
                       {hackathon.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="bg-paper-sunk px-2 py-1 text-[0.8125rem] text-ink-soft"
+                          className="bg-signal/15 px-2 py-1 text-[0.875rem] text-signal-ink ring-1 ring-inset ring-signal/30"
                         >
                           {tag}
                         </span>
@@ -190,8 +190,9 @@ function Picture({ hackathon }: { hackathon: HackathonDetail }) {
         What the badge answers is whether somebody can still get in, not what
         the phase is called.
 
-        A phase only moves when somebody calls `advance_phase`, so an event
-        whose submission deadline went an hour ago still says `Open` on chain.
+        A phase only moves when somebody calls `advance_phase`, and the clock
+        service takes a lap to, so an event whose submission deadline has just
+        gone still says `Open` on chain for a moment.
         This said "Open" over a strip that said "deadline passed", which is the
         page arguing with itself in two places a reader sees at once.
       */}
@@ -271,7 +272,7 @@ function Countdown({
 
   if (finished || deadline === null || left <= 0) {
     return (
-      <p className="bg-paper-sunk px-3 py-2 text-[0.875rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
+      <p className="bg-paper-sunk px-3 py-2 text-[0.9375rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
         {deadline === null ? "No deadline set" : "Submissions closed"}
       </p>
     );
@@ -292,7 +293,7 @@ function Countdown({
         : `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
 
   return (
-    <p className="bg-verified px-3 py-2 text-[0.9375rem] font-bold text-paper">
+    <p className="bg-verified px-3 py-2 text-[1rem] font-bold text-paper">
       {span} left {what}
     </p>
   );
@@ -323,15 +324,26 @@ function Countdown({
 function Span({ span }: { span: Window }) {
   return (
     <li className="flex items-baseline justify-between gap-4">
+      {/* The stage the event is in, in full ink and bold. Every row was the
+          same weight, so a rail of four deadlines said when things happen and
+          not which one is happening. */}
       <span
-        className={`text-[0.875rem] ${
-          span.standing === "past" ? "text-ink-faint" : "text-ink-soft"
+        className={`text-[0.9375rem] ${
+          span.standing === "now"
+            ? "font-bold text-ink"
+            : span.standing === "past"
+              ? "text-ink-faint"
+              : "text-ink-soft"
         }`}
       >
         {span.label}
       </span>
 
-      <span className="tabular shrink-0 text-[0.8125rem] text-ink-faint">
+      <span
+        className={`tabular shrink-0 text-[0.875rem] ${
+          span.standing === "now" ? "font-bold text-ink" : "text-ink-faint"
+        }`}
+      >
         {stamp(span.to ?? span.from)}
       </span>
     </li>

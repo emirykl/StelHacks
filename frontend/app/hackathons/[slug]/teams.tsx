@@ -176,12 +176,12 @@ export function Teams({ contractId }: { contractId: string }) {
                   <SpecRow key={request.id} index={`T${request.teamId}`} label="asking" mark>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
                       <div className="min-w-0">
-                        <p className="tabular break-all text-[0.8125rem] text-ink">
+                        <p className="tabular break-all text-[0.875rem] text-ink">
                           {request.applicant}
                         </p>
 
                         {request.note !== null && (
-                          <p className="mt-2 max-w-[34rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+                          <p className="mt-2 max-w-[34rem] text-[1rem] leading-relaxed text-ink-soft">
                             {request.note}
                           </p>
                         )}
@@ -213,14 +213,14 @@ export function Teams({ contractId }: { contractId: string }) {
               onChange={(event) => setHunt(event.target.value)}
               placeholder="Team or person"
               aria-label="Search teams"
-              className="h-10 w-full max-w-[18rem] bg-paper px-4 text-[0.9375rem] text-ink outline-none ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus:ring-ink"
+              className="h-10 w-full max-w-[18rem] bg-paper px-4 text-[1rem] text-ink outline-none ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus:ring-ink"
             />
           )}
         </div>
 
         <div className="mt-8">
           {matching.length === 0 ? (
-            <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
               {roster.teams.length === 0
                 ? "Nobody has founded a team yet. Whoever goes first is its captain, and a team of one is a team."
                 : "No team matches that."}
@@ -249,7 +249,7 @@ export function Teams({ contractId }: { contractId: string }) {
 
         {said !== null && (
           <p
-            className={`mt-8 max-w-[46rem] text-[0.9375rem] leading-relaxed ${
+            className={`mt-8 max-w-[46rem] text-[1rem] leading-relaxed ${
               said.ok ? "text-verified" : "text-broken"
             }`}
           >
@@ -307,14 +307,14 @@ function Card({
     <li className="flex flex-col border border-rule bg-paper p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="truncate text-[1.0625rem] text-ink">{name ?? `Team ${team.id}`}</p>
+          <p className="truncate text-[1.125rem] text-ink">{name ?? `Team ${team.id}`}</p>
 
-          <p className="mt-1 truncate text-[0.875rem] text-ink-soft">
+          <p className="mt-1 truncate text-[0.9375rem] text-ink-soft">
             {owner === null ? (
               /* Nobody has linked this address to an account, so there is no
                  name to give. The address is shown rather than a blank: it is
                  still who the captain is. */
-              <span className="tabular text-[0.8125rem]">
+              <span className="tabular text-[0.875rem]">
                 {team.captain.slice(0, 4)}…{team.captain.slice(-4)}
               </span>
             ) : (
@@ -324,7 +324,7 @@ function Card({
         </div>
 
         <p
-          className={`tabular shrink-0 text-[1.0625rem] ${room ? "text-ink" : "text-ink-faint"}`}
+          className={`tabular shrink-0 text-[1.125rem] ${room ? "text-ink" : "text-ink-faint"}`}
         >
           {team.members.length}/{roster.maxSize}
         </p>
@@ -358,7 +358,7 @@ function Card({
             onChange={(event) => setNote(event.target.value.slice(0, 280))}
             placeholder="Say something, if you like"
             aria-label="A note for the captain"
-            className="h-10 w-full bg-paper-sunk px-3 text-[0.875rem] text-ink outline-none ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus:ring-ink"
+            className="h-10 w-full bg-paper-sunk px-3 text-[0.9375rem] text-ink outline-none ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus:ring-ink"
           />
 
           <Button
@@ -373,7 +373,7 @@ function Card({
           {/* Said before the wallet opens rather than after. Somebody about to
               be asked for a signature deserves to know it is not the join
               itself. */}
-          <p className="mt-3 text-[0.75rem] leading-relaxed text-ink-faint">
+          <p className="mt-3 text-[0.8125rem] leading-relaxed text-ink-faint">
             You sign your half now. The captain adds theirs when they accept.
           </p>
         </div>

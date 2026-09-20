@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { entriesOf, type Entry } from "../../../lib/submissions";
 import { explorerFor } from "../../../lib/explorer";
 import type { Card } from "../../../lib/project";
+import { ownersOf, type Owner } from "../../../lib/team-names";
 
 /**
  * What was actually entered, for anybody to look at.
@@ -39,13 +40,18 @@ export function Entries({
   cards: Record<number, Card>;
 }) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [owners, setOwners] = useState<Map<string, Owner>>(new Map());
 
   useEffect(() => {
     let alive = true;
 
-    void entriesOf(contractId).then((found) => {
+    setEntries(null);
+    setOwners(new Map());
+    void entriesOf(contractId).then(async (found) => {
       if (alive) {
         setEntries(found);
+        const people = await ownersOf([...new Set(found.flatMap((entry) => entry.members))]);
+        if (alive) setOwners(people);
       }
     });
 
@@ -70,7 +76,7 @@ export function Entries({
     return (
       <section className="border-t border-rule">
         <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
-          <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+          <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
             No projects submitted yet.
           </p>
         </div>
@@ -82,13 +88,13 @@ export function Entries({
     <section className="border-t border-rule">
       <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
         <h2 className="text-[2rem] leading-tight">
-          {entries.length} {entries.length === 1 ? "project" : "projects"}
+          Submitted projects
         </h2>
 
         <ul className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {entries.map((entry) => (
             <li key={entry.team}>
-              <Project entry={entry} slug={slug} card={cards[entry.team]} />
+              <Project entry={entry} slug={slug} card={cards[entry.team]} owners={owners} />
             </li>
           ))}
         </ul>
@@ -110,10 +116,12 @@ function Project({
   entry,
   slug,
   card,
+  owners,
 }: {
   entry: Entry;
   slug: string;
   card: Card | undefined;
+  owners: Map<string, Owner>;
 }) {
   const title = card?.title ?? `Team ${entry.team}`;
   const links = linksOf(card);
@@ -161,7 +169,10 @@ function Project({
             )}
           </div>
 
-          <h3 className="min-w-0 text-[1.25rem] leading-tight">
+          {/* The same weight and face the hackathon card gives its name. Both
+              are a thing somebody named, drawn in the same shape of card, and
+              they should not be two different kinds of heading. */}
+          <h3 className="display min-w-0 text-[1.3125rem] font-bold leading-tight">
             <Link
               href={`/hackathons/${slug}/projects/${entry.team}`}
               className="transition-colors group-hover:text-ink-soft"
@@ -171,18 +182,42 @@ function Project({
           </h3>
 
           {card?.summary != null && (
-            <p className="mt-2 line-clamp-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="mt-2 line-clamp-3 text-[1rem] leading-relaxed text-ink-soft">
               {card.summary}
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-rule pt-4">
-          <p className="label text-ink-faint">
-            {entry.members.length === 0
-              ? "no roster"
-              : `${entry.members.length} ${entry.members.length === 1 ? "member" : "members"}`}
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-4">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2.5">
+            <p className="max-w-full truncate text-[0.875rem] text-ink-soft" title={card?.teamName ?? `Team ${entry.team}`}>
+              {card?.teamName ?? `Team ${entry.team}`}
+            </p>
+            <ul aria-label="Team members" className="flex shrink-0 -space-x-2">
+              {entry.members.map((address) => {
+                const person = owners.get(address);
+                const name = person?.displayName ?? person?.username ?? `${address.slice(0, 4)}…${address.slice(-4)}`;
+                const avatar = person?.avatarUrl == null ? (
+                  <span className="grid size-full place-items-center bg-paper-sunk text-[0.6875rem] font-medium text-ink-soft">
+                    {name.slice(0, 2).toUpperCase()}
+                  </span>
+                ) : <img src={person.avatarUrl} alt="" className="size-full object-cover" />;
+                const style = "relative block size-7 overflow-hidden rounded-full border-2 border-paper bg-paper ring-1 ring-rule hover:z-10";
+
+                return (
+                  <li key={address}>
+                    {person?.username ? (
+                      <Link href={`/u/${person.username}`} aria-label={name} title={name} className={style}>
+                        {avatar}
+                      </Link>
+                    ) : (
+                      <span role="img" aria-label={name} title={name} className={style}>{avatar}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
           {/* Outside the title link and not wrapping it, because an anchor
               inside an anchor is invalid and the browser resolves it by
@@ -264,7 +299,7 @@ function Globe() {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
-      className="size-4 shrink-0"
+      className="size-4 shrink-0 text-blue-600"
     >
       <circle cx="8" cy="8" r="6.2" />
       <path d="M1.8 8h12.4M8 1.8c1.6 1.7 2.5 3.9 2.5 6.2S9.6 12.5 8 14.2C6.4 12.5 5.5 10.3 5.5 8S6.4 3.5 8 1.8Z" />
@@ -280,11 +315,10 @@ function Play() {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
-      className="size-4 shrink-0"
+      className="size-4 shrink-0 text-red-600"
     >
       <rect x="1.4" y="3.2" width="13.2" height="9.6" rx="2.4" />
       <path d="M6.7 6.2 10.4 8l-3.7 1.8V6.2Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
-

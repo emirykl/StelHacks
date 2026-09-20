@@ -70,7 +70,7 @@ export function Prizes() {
 
   if (prizes.length === 0) {
     return (
-      <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
         Nothing yet. Prizes appear here once a hackathon settles and the contract
         pays this wallet.
       </p>
@@ -96,11 +96,11 @@ export function Prizes() {
           >
             <span className="min-w-0">
               {prize.slug === null ? (
-                <span className="text-[0.9375rem] text-ink">{prize.name}</span>
+                <span className="text-[1rem] text-ink">{prize.name}</span>
               ) : (
                 <Link
                   href={`/hackathons/${prize.slug}?tab=results`}
-                  className="text-[0.9375rem] text-ink underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:decoration-ink"
+                  className="text-[1rem] text-ink underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:decoration-ink"
                 >
                   {prize.name}
                 </Link>
@@ -111,7 +111,7 @@ export function Prizes() {
               </span>
             </span>
 
-            <span className="tabular text-[0.9375rem] font-medium text-verified">
+            <span className="tabular text-[1rem] font-medium text-verified">
               {amountOf(prize.amount)} {codeFor(prize.assetContract) ?? ""}
             </span>
           </li>

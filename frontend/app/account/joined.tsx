@@ -107,7 +107,7 @@ export function Joined() {
               />
             )}
 
-            <span className="min-w-0 flex-1 truncate text-[0.9375rem] text-ink">
+            <span className="min-w-0 flex-1 truncate text-[1rem] text-ink">
               {entry.name}
             </span>
 
@@ -125,7 +125,7 @@ export function Joined() {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="border-t border-rule pt-5 text-[0.875rem] leading-relaxed text-ink-soft">
+    <p className="border-t border-rule pt-5 text-[0.9375rem] leading-relaxed text-ink-soft">
       {children}
     </p>
   );

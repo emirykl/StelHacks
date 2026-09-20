@@ -123,7 +123,7 @@ export default async function ProjectPage({
               <h1 className="text-[1.75rem] leading-tight text-ink">{title}</h1>
 
               {project?.summary != null && (
-                <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+                <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
                   {project.summary}
                 </p>
               )}
@@ -132,7 +132,7 @@ export default async function ProjectPage({
                 /* Struck out during screening. Said here rather than left to be
                    inferred from a missing rank later, because a team reading
                    their own page deserves to be told. */
-                <p className="mt-4 text-[0.875rem] text-broken">
+                <p className="mt-4 text-[0.9375rem] text-broken">
                   Ruled out at screening. It stays on the page; it is not ranked.
                 </p>
               )}
@@ -196,10 +196,10 @@ export default async function ProjectPage({
                 rule and a grey caption was the weight of a caption, and it read
                 as one beside two headings the same size as the project's name. */}
             <section className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule">
-              <h2 className="text-[1.25rem] text-ink">Team</h2>
+              <h2 className="text-[1.3125rem] text-ink">Team</h2>
 
               {project?.teamName != null && (
-                <p className="mt-1 text-[0.9375rem] text-ink-soft">{project.teamName}</p>
+                <p className="mt-1 text-[1rem] text-ink-soft">{project.teamName}</p>
               )}
 
               <ul className="mt-5 grid gap-4">
@@ -216,14 +216,14 @@ export default async function ProjectPage({
               but white space saying where one ended. */}
           <div className="grid min-w-0 gap-6">
             <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10">
-              <h2 className="text-[1.25rem] text-ink">About</h2>
+              <h2 className="text-[1.3125rem] text-ink">About</h2>
 
               {project?.description == null ? (
-                <p className="mt-4 text-[0.9375rem] leading-relaxed text-ink-soft">
+                <p className="mt-4 text-[1rem] leading-relaxed text-ink-soft">
                   This team entered without writing anything about their project.
                 </p>
               ) : (
-                <div className="mt-4 whitespace-pre-line text-[1rem] leading-relaxed text-ink">
+                <div className="mt-4 whitespace-pre-line text-[1.0625rem] leading-relaxed text-ink">
                   {project.description}
                 </div>
               )}
@@ -291,7 +291,7 @@ function Person({ person }: { person: Member }) {
 
   const inside = (
     <>
-      <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-sunk text-[0.875rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
+      <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-sunk text-[0.9375rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
         {person.avatarUrl === null ? (
           (name ?? person.address).slice(0, 1).toUpperCase()
         ) : (
@@ -304,14 +304,14 @@ function Person({ person }: { person: Member }) {
             addresses are set in when there is not. The two are different kinds
             of fact and reading them at the same weight hides which is which. */}
         <span
-          className={`block truncate text-[0.9375rem] text-ink ${
-            name === null ? "tabular text-[0.875rem]" : "font-medium"
+          className={`block truncate text-[1rem] text-ink ${
+            name === null ? "tabular text-[0.9375rem]" : "font-medium"
           }`}
         >
           {name ?? `${person.address.slice(0, 4)}…${person.address.slice(-4)}`}
         </span>
 
-        <span className="label text-[0.6875rem] text-ink-faint">
+        <span className="label text-[0.75rem] text-ink-faint">
           {person.captain ? "Captain" : "Member"}
         </span>
       </span>

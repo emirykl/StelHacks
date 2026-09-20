@@ -57,7 +57,7 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
        very top of the window and the header floats on it. Without this the
        picture begins under a band of paper and the header's own edges vanish
        into it. */
-    <main data-solo className="relative -mt-19 flex-1 overflow-hidden bg-night">
+    <main data-solo className="relative -mt-18 flex-1 overflow-hidden bg-night">
       {/* The whole page, not half of it. A split screen gives the artwork a
           column and a hard edge down the middle; letting it run under
           everything makes it the room the form is standing in, which is what a
@@ -81,7 +81,7 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
         <div className="w-full max-w-[26rem] rounded-lg bg-paper p-8 shadow-[0_28px_70px_-24px_rgba(0,0,0,0.6)] sm:p-10">
           <h1 className="text-[2rem]">Welcome</h1>
 
-          <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+          <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
             {wayIn
               ? "Continue with an account you already have. Nothing to fill in and no password to keep."
               : "Sign in is not configured on this deployment."}
@@ -96,13 +96,13 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
                deployment without the keys is one where signing in does not
                exist, and offering it anyway teaches somebody to distrust the
                next button too. */
-            <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="mt-6 text-[1rem] leading-relaxed text-ink-soft">
               Everything a signed in person can verify can still be verified
               here without an account.
             </p>
           )}
 
-          <p className="mt-8 border-t border-rule pt-5 text-[0.8125rem] leading-relaxed text-ink-faint">
+          <p className="mt-8 border-t border-rule pt-5 text-[0.875rem] leading-relaxed text-ink-faint">
             An account is a name and nothing else. Your wallet does every
             signature and you attach one after this.
           </p>

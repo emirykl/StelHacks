@@ -63,7 +63,10 @@ export function Filters({
         beside the search; the topics are open ended and go behind a disclosure,
         which is where a control somebody uses occasionally belongs.
       */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 py-3">
+      {/* Tighter than it was. This is furniture above the thing somebody came
+          for, and it was taking the height of a card's worth of page before the
+          first hackathon appeared. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2">
         <Search applied={applied} />
 
         <div className="flex flex-wrap items-center gap-1">
@@ -110,7 +113,7 @@ export function Filters({
         /* Open when a topic is chosen, so a filtered list never hides the thing
            doing the filtering. */
         <details open={(applied.tag ?? "") !== ""} className="group border-t border-rule">
-          <summary className="label flex cursor-pointer list-none items-center gap-2 py-2.5 text-ink-soft transition-colors duration-150 ease-settle hover:text-ink">
+          <summary className="label flex cursor-pointer list-none items-center gap-2 py-1.5 text-[0.75rem] text-ink-soft transition-colors duration-150 ease-settle hover:text-ink">
             <span aria-hidden className="transition-transform duration-150 ease-settle group-open:rotate-90">
               ›
             </span>
@@ -181,7 +184,7 @@ function Search({ applied }: { applied: Applied }) {
           type="search"
           placeholder="Search by name"
           aria-label="Search hackathons by name"
-          className="h-9 min-w-0 flex-1 bg-transparent text-[0.875rem] text-ink outline-none placeholder:text-ink-faint"
+          className="h-8 min-w-0 flex-1 bg-transparent text-[0.875rem] text-ink outline-none placeholder:text-ink-faint"
         />
       </label>
 
@@ -190,7 +193,7 @@ function Search({ applied }: { applied: Applied }) {
       {typed.trim() !== asked && (
         <button
           type="submit"
-          className="label h-9 shrink-0 bg-ink px-3 text-paper transition-colors duration-150 ease-settle hover:bg-ink/85 active:translate-y-px"
+          className="label h-8 shrink-0 bg-ink px-3 text-paper transition-colors duration-150 ease-settle hover:bg-ink/85 active:translate-y-px"
         >
           Search
         </button>
@@ -232,7 +235,7 @@ function Choice({
     <Link
       href={href}
       aria-current={chosen ? "true" : undefined}
-      className={`relative px-3 py-1.5 text-[0.875rem] transition-colors duration-150 ease-settle ${
+      className={`relative px-2.5 py-1 text-[0.875rem] transition-colors duration-150 ease-settle ${
         chosen ? "font-semibold text-paper" : "text-ink-soft hover:bg-paper-sunk hover:text-ink"
       }`}
     >

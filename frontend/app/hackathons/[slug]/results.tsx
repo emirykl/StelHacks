@@ -8,6 +8,7 @@ import { useWallet } from "../../components/wallet-context";
 import { arg, send, type Sent } from "../../../lib/send";
 import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/results";
 import { rulesFor } from "../../../lib/rules";
+import { runningOf } from "../../../lib/running";
 import { CashOut } from "./cash-out";
 import { Podium } from "./podium";
 import { teamMarks, type Mark } from "../../../lib/team-names";
@@ -21,17 +22,34 @@ import { accept, assetOf, holds, type PrizeAsset } from "../../../lib/trustline"
  * the tie break settled it: a result that says only "second" invites exactly
  * the question this is meant to answer.
  *
- * Claiming is here rather than on an account page because this is where the
- * result is. A winner reading their own name should not have to go looking for
- * the button, and anybody can press it for them: `settle_prize` is not gated on
- * the recipient, so a winner with an empty wallet still gets paid.
+ * Paying is here rather than on a page of its own because this is where the
+ * result is: handing out the prizes is the last reading of the board, not a
+ * separate errand. The contract lets anybody pay a winner, since the amount and
+ * the recipient were both frozen at the lock and nobody paying can change
+ * either. This page still offers it to the organizer alone. A visitor meeting
+ * buttons that move somebody else's prize money has no way to tell that they
+ * are harmless, and reads them as a hackathon anyone can reach into.
  */
 
 export function ResultsBoard({ contractId }: { contractId: string }) {
   const { wallet } = useWallet();
   const [results, setResults] = useState<Results[] | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<Sent | null>(null);
+  /* Only what went wrong is held. A run that worked is reported by the board
+     changing, so there is nothing for this to say. */
+  const [outcome, setOutcome] = useState<Extract<Sent, { ok: false }> | null>(null);
+
+  /* Who is allowed to hand the prizes out here. Read from the contract rather
+     than from our tables, because a row claiming somebody organizes an event is
+     a claim and the contract's answer is the fact. */
+  const [organizer, setOrganizer] = useState<string | null>(null);
+
+  /* Whether the platform's cut has left the vault, because it goes out with the
+     prizes and `complete` will not close the event until it has. */
+  const [feeSettled, setFeeSettled] = useState(true);
+
+  /* How far through the payments we are, so a table of winners does not sit
+     still while five wallet prompts go past. Null when none is running. */
+  const [paying, setPaying] = useState<{ done: number; of: number } | null>(null);
 
   /*
     Which places the frozen rules actually pay.
@@ -63,9 +81,10 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
 
     void (async () => {
       const tracks = await tracksOf(contractId);
-      const [found, rules] = await Promise.all([
+      const [found, rules, state] = await Promise.all([
         resultsOf(contractId, tracks),
         rulesFor(contractId),
+        runningOf(contractId),
       ]);
 
       if (!alive) {
@@ -73,6 +92,8 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
       }
 
       setResults(found);
+      setOrganizer(state.organizer);
+      setFeeSettled(state.feeSettled);
       setPayable(new Set((rules?.tiers ?? []).map((tier) => `${tier.track}-${tier.rank}`)));
       setNames(await teamMarks(contractId));
 
@@ -129,7 +150,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
         <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
           <h2 className="text-[2rem] leading-tight">Results</h2>
 
-          <p className="mt-4 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+          <p className="mt-4 max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
             Nothing is ranked yet. When judging closes, the contract works out
             the placings and they appear here — the scores, what settled each
             tie, and what was paid.
@@ -151,6 +172,10 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
     : results
         .flatMap((result) => result.places.map((place) => ({ ...place, track: result.track })))
         .find((place) => place.members.includes(address)) ?? null;
+
+  /* Whose hackathon this is. The payout card is theirs; everybody else reads
+     the same board without it. */
+  const organizing = address !== null && address === organizer;
 
   /* Whether this wallet has already been paid at this event, which is what
      makes cashing out a thing it can do. */
@@ -192,27 +217,109 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
     }
   }
 
-  async function claim(track: string, rank: number, member: string) {
-    if (wallet === null) {
+  /*
+    Every share still owed, in the order the board reads.
+
+    Per person rather than per place, because a team prize is split equally and
+    each share goes straight to its own member: nobody is handed somebody else's
+    money to pass on. That is also why this is a list and not a single call —
+    the contract has no "pay everybody", and inventing one would mean a contract
+    that holds a list of people to pay in the order a website decided.
+  */
+  const shares =
+    results === null
+      ? []
+      : results.flatMap((result) =>
+          result.places
+            .filter((place) => !place.paid && payable.has(`${result.track}-${place.rank}`))
+            .flatMap((place) =>
+              place.members.map((member) => ({
+                track: result.track,
+                rank: place.rank,
+                member,
+              })),
+            ),
+        );
+
+  /*
+    The platform's cut, last in the same queue.
+
+    It had a button of its own on the manage page, and asking an organizer to
+    settle our fee as a separate errand was never defensible: they deposited it
+    with the prize money when the rules were locked, the rate was frozen there
+    too, and there is nothing for them to decide. It is one more thing the vault
+    owes, so it leaves with everything else the vault owes.
+
+    Last rather than first so a run that stops part way has paid winners and not
+    us. The contract charges the fee on top of the prize table and never out of
+    it, so the order cannot change what anybody receives; it only decides who is
+    still waiting if something goes wrong.
+  */
+  const owing: ({ fee: true } | { fee: false; track: string; rank: number; member: string })[] = [
+    ...shares.map((share) => ({ fee: false as const, ...share })),
+    ...(feeSettled ? [] : [{ fee: true as const }]),
+  ];
+
+  async function payWinners() {
+    if (wallet === null || results === null) {
       return;
     }
 
-    const key = `${track}-${rank}-${member}`;
-    setBusy(key);
     setOutcome(null);
+    setPaying({ done: 0, of: owing.length });
 
-    const sent = await send(
-      contractId,
-      "settle_prize",
-      [await arg.symbol(track), await arg.u32(rank), await arg.address(member)],
-      wallet.address,
-    );
+    let paid = 0;
+    let stopped: Extract<Sent, { ok: false }> | null = null;
 
-    setOutcome(sent.ok || !sent.refused ? sent : null);
-    setBusy(null);
+    for (const share of owing) {
+      const sent = share.fee
+        ? await send(contractId, "settle_platform_fee", [], wallet.address)
+        : await send(
+            contractId,
+            "settle_prize",
+            [
+              await arg.symbol(share.track),
+              await arg.u32(share.rank),
+              await arg.address(share.member),
+            ],
+            wallet.address,
+          );
 
-    if (sent.ok) {
-      setResults(await resultsOf(contractId, results!.map((result) => result.track)));
+      if (sent.ok) {
+        paid += 1;
+        setPaying({ done: paid, of: owing.length });
+
+        continue;
+      }
+
+      /*
+        One refusal ends the run rather than moving to the next winner.
+
+        Declining in the wallet is the common one, and carrying on would put the
+        next prompt up immediately: somebody who changed their mind would have
+        to decline once per winner to get out of it. A failure is worth stopping
+        on too, since the usual cause is the whole run failing for one reason —
+        a paused settlement, a vault short of funds — and finding that out once
+        is enough.
+      */
+      stopped = sent.refused ? null : sent;
+
+      break;
+    }
+
+    setPaying(null);
+    setOutcome(stopped);
+
+    if (paid > 0) {
+      /* Both, because the fee is the last thing in the run and the board would
+         otherwise keep offering a payment that has already gone. */
+      const [again, state] = await Promise.all([
+        resultsOf(contractId, results.map((result) => result.track)),
+        runningOf(contractId),
+      ]);
+
+      setResults(again);
+      setFeeSettled(state.feeSettled);
     }
   }
 
@@ -230,13 +337,61 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
             is still looking for themselves and should not have to search a
             table sorted by a number they do not know. */}
         {mine !== null && (
-          <p className="mt-3 text-[1rem] leading-relaxed text-ink">
+          <p className="mt-3 text-[1.0625rem] leading-relaxed text-ink">
             {mine.rank <= 3 ? "Congratulations. " : ""}
             Your team placed{" "}
             <span className="font-medium">{ordinal(mine.rank)}</span> in{" "}
             {mine.track}
             {mine.paid ? " and the prize has been paid." : "."}
           </p>
+        )}
+
+        {/*
+          Handing out the prizes, on the page that says who won them.
+
+          The organizer's card and nobody else's. It disappears the moment there
+          is nothing outstanding rather than greying out, because an empty
+          payout card on a finished hackathon is a job that looks undone.
+        */}
+        {organizing && owing.length > 0 && (
+          <section className="mt-10 max-w-[46rem] rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
+            <h3 className="text-[1.3125rem] text-ink">
+              {shares.length === 0
+                ? "One payment left"
+                : shares.length === 1
+                  ? "One winner to pay"
+                  : `${shares.length} winners to pay`}
+            </h3>
+
+            <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
+              {shares.length === 0 ? (
+                <>
+                  Every winner has been paid. What is left in the vault is the
+                  platform fee you deposited alongside the prizes, and the
+                  hackathon cannot close until it is out.
+                </>
+              ) : (
+                <>
+                  The money goes from the vault straight to each winner's wallet,
+                  at the amount their place was promised when the rules were
+                  frozen. A team prize is split equally between its members, so
+                  this is one signature per person and none of it passes through
+                  you.
+                  {!feeSettled && (
+                    <> The platform fee you deposited goes out with them, last.</>
+                  )}
+                </>
+              )}
+            </p>
+
+            <div className="mt-6">
+              <Button disabled={paying !== null} onClick={() => void payWinners()}>
+                {paying === null
+                  ? "Pay the winners"
+                  : `Paying ${Math.min(paying.done + 1, paying.of)} of ${paying.of}`}
+              </Button>
+            </div>
+          </section>
         )}
 
         {/*
@@ -251,9 +406,9 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
         */}
         {ready === false && asset?.kind === "issued" && owed && (
           <section className="mt-10 max-w-[46rem] rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
-            <h3 className="text-[1.25rem] text-ink">Accept {asset.code} to be paid</h3>
+            <h3 className="text-[1.3125rem] text-ink">Accept {asset.code} to be paid</h3>
 
-            <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
               Stellar will not put an asset into a wallet that has not accepted
               it. Your prize is waiting in the vault and the contract will not
               release it until this is done. It is one signature and it moves no
@@ -267,7 +422,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
             </div>
 
             {refused !== null && (
-              <p className="mt-4 text-[0.8125rem] leading-relaxed text-broken">{refused}</p>
+              <p className="mt-4 text-[0.875rem] leading-relaxed text-broken">{refused}</p>
             )}
           </section>
         )}
@@ -302,7 +457,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
               key={result.track}
               className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10"
             >
-              <h3 className="text-[1.25rem] text-ink">{result.track}</h3>
+              <h3 className="text-[1.3125rem] text-ink">{result.track}</h3>
 
               <div className="mt-6">
                 <SpecRows>
@@ -324,28 +479,6 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
                           {place.paid && <span className="label text-verified">paid</span>}
                         </div>
 
-                        {/* A team prize is split equally and paid to each member
-                            directly, so the claim is per person rather than per
-                            place. Nobody holds anybody else's share. */}
-                        {!place.paid &&
-                          wallet !== null &&
-                          payable.has(`${result.track}-${place.rank}`) && (
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            {place.members.map((member) => (
-                              <Button
-                                key={member}
-                                size="sm"
-                                intent="quiet"
-                                disabled={busy !== null}
-                                onClick={() => void claim(result.track, place.rank, member)}
-                              >
-                                {busy === `${result.track}-${place.rank}-${member}`
-                                  ? "Signing"
-                                  : `Pay ${short(member)}`}
-                              </Button>
-                            ))}
-                          </div>
-                          )}
                       </div>
                     </SpecRow>
                   ))}
@@ -355,13 +488,12 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
           ))}
         </div>
 
+        {/* Only ever a failure now. What went right is said by the board
+            itself: the rows say paid and the card asking for the payment is
+            gone, which is a better confirmation than a transaction hash. */}
         {outcome !== null && (
-          <p
-            className={`mt-8 max-w-[46rem] text-[0.875rem] leading-relaxed ${
-              outcome.ok ? "text-verified" : "text-broken"
-            }`}
-          >
-            {outcome.ok ? `Paid. ${outcome.hash}` : outcome.why}
+          <p className="mt-8 max-w-[46rem] text-[0.9375rem] leading-relaxed text-broken">
+            {outcome.why}
           </p>
         )}
       </div>
@@ -389,8 +521,4 @@ function percent(score: number): string {
 
 function ordinal(rank: number): string {
   return ["1st", "2nd", "3rd"][rank - 1] ?? `${rank}th`;
-}
-
-function short(address: string): string {
-  return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }

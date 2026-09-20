@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SubmitForm } from "./form";
 import { currentUser } from "../../../../lib/supabase/server";
 import { findHackathon } from "../../../../lib/chain";
+import type { SubmissionFields } from "../../../../lib/constitution";
 
 /**
  * Submitting a project, which is a page rather than a dialog.
@@ -16,6 +17,22 @@ import { findHackathon } from "../../../../lib/chain";
  */
 
 export const revalidate = 0;
+
+/**
+ * What to offer when the frozen rules could not be read.
+ *
+ * Everything offered and nothing demanded, which is the only answer that
+ * cannot make things worse: a field wrongly marked required would stop a team
+ * submitting at all, and one wrongly left off their form would stop them
+ * sending something the organizer did ask for.
+ */
+const UNREADABLE: SubmissionFields = {
+  repository: "optional",
+  demoVideo: "optional",
+  liveUrl: "optional",
+  pitchDeck: "optional",
+  deployedContract: "optional",
+};
 
 export default async function Submit({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -31,9 +48,7 @@ export default async function Submit({ params }: { params: Promise<{ slug: strin
         contractId={hackathon.contract_id}
         slug={slug}
         tracks={hackathon.rules?.tracks ?? []}
-        requires={
-          hackathon.rules?.requires ?? { repository: true, demoVideo: false, liveUrl: false }
-        }
+        requires={hackathon.rules?.requires ?? UNREADABLE}
         userId={user?.id ?? null}
       />
     </main>

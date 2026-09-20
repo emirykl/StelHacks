@@ -73,7 +73,7 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
                   telling a reader something the heading under it does not. */}
               <h1 className="text-[clamp(2.5rem,5.5vw,4rem)]">Hackathons</h1>
 
-              <p className="mt-6 max-w-[40rem] text-[1.1875rem] leading-relaxed text-ink-soft">
+              <p className="mt-6 max-w-[40rem] text-[1.25rem] leading-relaxed text-ink-soft">
                 Every hackathon listed here has its rules and its prize written
                 on chain before anybody registers.
               </p>
@@ -160,7 +160,10 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
    turns up and there is one place to change how it reads. */
 function List({ hackathons }: { hackathons: HackathonSummary[] }) {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    /* Three at the widest rather than four. A card carries a banner, a mark, a
+       name at twenty six pixels, a place, tags and a prize; at a quarter of the
+       window the name wrapped to three lines and the tags to two. */
+    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {hackathons.map((hackathon) => (
         <HackathonCard key={hackathon.contract_id} hackathon={hackathon} />
       ))}
@@ -178,14 +181,14 @@ function List({ hackathons }: { hackathons: HackathonSummary[] }) {
 function Empty({ narrowed }: { narrowed: boolean }) {
   return (
     <div className="py-16 text-center">
-      <p className="text-[1.0625rem] text-ink">
+      <p className="text-[1.125rem] text-ink">
         {narrowed ? "Nothing matches that." : "Nothing here yet."}
       </p>
 
       {/* Two different situations and two different sentences. Telling somebody
           who filtered to "payments" that the indexer might be behind sends them
           to look at the wrong thing. */}
-      <p className="mx-auto mt-3 max-w-[30rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="mx-auto mt-3 max-w-[30rem] text-[1rem] leading-relaxed text-ink-soft">
         {narrowed
           ? "Try a wider filter, or clear it to see everything."
           : "Either nobody has created one, or our indexer is behind the chain. The contract will tell you which."}

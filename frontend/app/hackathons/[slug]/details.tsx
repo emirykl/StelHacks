@@ -1,6 +1,5 @@
-import { EXPLORER } from "../../../lib/explorer";
 import { Measure } from "../../components/primitives";
-import { SpecButton, SpecRow, SpecRows, SpecValue } from "../../components/spec";
+import { OnChain } from "./on-chain";
 import { windowsOf } from "../../../lib/rules";
 import { WEIGHT_TOTAL_BPS } from "../../../lib/constitution";
 import { prizeLabel, worthOf } from "../../../lib/money";
@@ -44,7 +43,6 @@ export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
     { id: "prizes", title: "Prizes", when: rules !== null && rules.tiers.length > 0 },
     { id: "judging", title: "Judging criteria", when: rules !== null },
     { id: "taking-part", title: "Taking part", when: rules !== null },
-    { id: "on-chain", title: "On chain" },
   ].filter((part) => part.when !== false);
 
   return (
@@ -58,7 +56,7 @@ export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
               {/* Held to a reading measure inside a wider box. A line of text
                   past about seventy five characters costs the reader the return
                   sweep, and no amount of screen makes that worth spending. */}
-              <p className="max-w-[46rem] whitespace-pre-line text-[1rem] leading-relaxed text-ink-soft">
+              <p className="max-w-[46rem] whitespace-pre-line text-[1.0625rem] leading-relaxed text-ink-soft">
                 {hackathon.description}
               </p>
             </Part>
@@ -86,71 +84,49 @@ export async function Details({ hackathon }: { hackathon: HackathonDetail }) {
             </>
           )}
 
-          <Part id="on-chain" title="On chain">
-            {/* The one place the chain's own voice belongs, because these are
-                the values somebody compares character by character.
-
-                Everything that has a page on an explorer links to it. Two rows
-                used to and three did not, which read as the other three being
-                somehow less checkable rather than as nobody having wired them
-                up. The digest still does not: it is a hash of a document, not
-                an address, and there is nothing at the far end to open. */}
-            <SpecRows>
-              <SpecRow index="1" label="Rules digest" mark>
-                <SpecValue>{hackathon.constitution_hash ?? "not locked yet"}</SpecValue>
-              </SpecRow>
-
-              <SpecRow index="2" label="Hackathon" mark>
-                <Explorable value={hackathon.contract_id} kind="contract" />
-              </SpecRow>
-
-              <SpecRow index="3" label="Prize vault" mark={hackathon.vault_id !== null}>
-                <Explorable value={hackathon.vault_id} kind="contract" missing="not bound yet" />
-              </SpecRow>
-
-              <SpecRow index="4" label="Organizer">
-                <Explorable value={hackathon.organizer} kind="account" missing="not published yet" />
-              </SpecRow>
-
-              <SpecRow index="5" label="Prize asset">
-                <Explorable
-                  value={hackathon.prize_asset}
-                  kind="contract"
-                  missing="not published yet"
-                />
-              </SpecRow>
-            </SpecRows>
-
-          </Part>
+          {/* A press rather than a section. Five rows of fifty six characters
+              set the tone of a page whose subject is a hackathon, and almost
+              nobody reads them twice; taking them away would take the product's
+              own claim with them. Behind a button they are the reader asking
+              rather than the page telling. */}
+          <OnChain
+            held={[
+              {
+                label: "Rules digest",
+                said: "A fingerprint of the frozen rules. Rebuild them from this page, hash them yourself, and compare: if the two differ, the competition being run is not the one that was announced. There is nothing to open on an explorer, because it is a hash of a document rather than an address.",
+                value: hackathon.constitution_hash,
+                missing: "the rules are not locked yet",
+              },
+              {
+                label: "Hackathon contract",
+                said: "The contract running this event. It holds the rules, the phase and the result.",
+                value: hackathon.contract_id,
+                kind: "contract",
+              },
+              {
+                label: "Prize vault",
+                said: "The contract holding the money. It has no owner and no way to withdraw; only the hackathon above can move anything out of it, and only after a result is final.",
+                value: hackathon.vault_id,
+                kind: "contract",
+                missing: "no vault bound yet",
+              },
+              {
+                label: "Organizer",
+                said: "The wallet the contract treats as the organizer. It is the only key that can screen entries or move the event on.",
+                value: hackathon.organizer,
+                kind: "account",
+              },
+              {
+                label: "Prize token",
+                said: "The token the prizes are denominated in and paid out in. Not an amount: this is the contract for the token itself.",
+                value: hackathon.asset ?? hackathon.prize_asset,
+                kind: "contract",
+              },
+            ]}
+          />
         </div>
       </div>
     </Measure>
-  );
-}
-
-/** An address, and the way to go and check it. */
-function Explorable({
-  value,
-  kind,
-  missing,
-}: {
-  value: string | null;
-  /** An account and a contract are different pages on the explorer. */
-  kind: "contract" | "account";
-  missing?: string;
-}) {
-  if (value === null) {
-    return <span className="text-[0.875rem] text-ink-faint">{missing ?? "not published yet"}</span>;
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-4">
-      <SpecValue>{value}</SpecValue>
-
-      <SpecButton href={`https://stellar.expert/explorer/${EXPLORER}/${kind}/${value}`}>
-        Explorer
-      </SpecButton>
-    </div>
   );
 }
 
@@ -172,7 +148,7 @@ function Outline({ parts }: { parts: Part[] }) {
             <a
               key={part.id}
               href={`#${part.id}`}
-              className="-mx-2 rounded-xs px-2 py-1.5 text-[0.875rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
+              className="-mx-2 rounded-xs px-2 py-1.5 text-[0.9375rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
             >
               {part.title}
             </a>
@@ -198,7 +174,7 @@ function Outline({ parts }: { parts: Part[] }) {
 function Part({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} className="relative scroll-mt-32 border border-rule bg-paper px-6 pb-6 pt-9">
-      <h2 className="absolute -top-3.5 left-5 bg-paper px-2 text-[1.375rem]">{title}</h2>
+      <h2 className="absolute -top-3.5 left-5 bg-paper px-2 text-[1.4375rem]">{title}</h2>
 
       {children}
     </section>
@@ -228,7 +204,7 @@ function Timeline({ rules }: { rules: Rules }) {
           }`}
         >
           <span
-            className={`text-[0.9375rem] ${
+            className={`text-[1rem] ${
               span.standing === "now"
                 ? "text-ink"
                 : span.standing === "past"
@@ -241,7 +217,7 @@ function Timeline({ rules }: { rules: Rules }) {
           </span>
 
           <span
-            className={`text-[0.9375rem] ${
+            className={`text-[1rem] ${
               span.standing === "past" ? "text-ink-faint" : "text-ink-soft"
             }`}
           >
@@ -298,7 +274,7 @@ function Prizes({ rules, asset }: { rules: Rules; asset: string | null }) {
 
         return (
           <div key={track}>
-            <h3 className="mb-1 text-[0.9375rem] text-ink-soft">{track}</h3>
+            <h3 className="mb-1 text-[1rem] text-ink-soft">{track}</h3>
 
             <ul className="grid gap-0">
               {tiers.map((tier, at) => (
@@ -308,12 +284,12 @@ function Prizes({ rules, asset }: { rules: Rules; asset: string | null }) {
                     at === tiers.length - 1 ? "" : "border-b border-rule"
                   }`}
                 >
-                  <span className="flex items-baseline gap-2.5 text-[0.9375rem] text-ink">
+                  <span className="flex items-baseline gap-2.5 text-[1rem] text-ink">
                     {/* A medal for the three places that have one. Hidden from
                         a screen reader: the word beside it already says which
                         place this is, and "first place medal, First" is the
                         same fact twice. */}
-                    <span aria-hidden className="text-[1.0625rem]">
+                    <span aria-hidden className="text-[1.125rem]">
                       {MEDALS[tier.rank] ?? ""}
                     </span>
                     {ordinal(tier.rank)}
@@ -339,7 +315,7 @@ async function Amount({ amount, asset }: { amount: bigint; asset: string | null 
   const shown = prizeLabel(worth, amount);
 
   return (
-    <span className="text-[0.9375rem] text-ink">
+    <span className="text-[1rem] text-ink">
       {shown.figure} <span className="font-bold text-ink">{shown.code}</span>
     </span>
   );
@@ -361,7 +337,7 @@ function Judging({ rules }: { rules: Rules }) {
               category every small event has is a heading that labels the whole
               section twice. */}
           {rules.tracks.length > 1 && (
-            <h3 className="mb-2 text-[0.9375rem] text-ink-soft">{track.id}</h3>
+            <h3 className="mb-2 text-[1rem] text-ink-soft">{track.id}</h3>
           )}
 
           <ul className="grid gap-0">
@@ -372,9 +348,9 @@ function Judging({ rules }: { rules: Rules }) {
                   at === track.criteria.length - 1 ? "" : "border-b border-rule"
                 }`}
               >
-                <span className="text-[0.9375rem] text-ink">{criterion.id}</span>
+                <span className="text-[1rem] text-ink">{criterion.id}</span>
 
-                <span className="text-[0.9375rem] text-ink-soft">
+                <span className="text-[1rem] text-ink-soft">
                   {percent(criterion.weightBps)}
                 </span>
               </li>
@@ -386,7 +362,7 @@ function Judging({ rules }: { rules: Rules }) {
       {/* Only when the crowd has a share. "Judges 100%" is the answer to a
           question nobody asked about an event with no community vote. */}
       {rules.communityBps > 0 && (
-        <p className="mt-5 border-t border-rule pt-4 text-[0.875rem] text-ink-soft">
+        <p className="mt-5 border-t border-rule pt-4 text-[0.9375rem] text-ink-soft">
           Judges decide {percent(rules.judgeBps)}, the crowd {percent(rules.communityBps)}.
         </p>
       )}
@@ -419,7 +395,7 @@ function Fact({ term, said }: { term: string; said: string }) {
     <div>
       <dt className="label text-ink-faint">{term}</dt>
 
-      <dd className="mt-1.5 text-[0.9375rem] font-semibold leading-snug text-ink">{said}</dd>
+      <dd className="mt-1.5 text-[1rem] font-semibold leading-snug text-ink">{said}</dd>
     </div>
   );
 }
@@ -431,13 +407,23 @@ function percent(bps: number): string {
   return `${Number.isInteger(share) ? share : share.toFixed(1)}%`;
 }
 
-/** What the contract will refuse a submission for missing. */
+/**
+ * What an entry is incomplete without.
+ *
+ * Only the demanded fields. What an event merely offers is on the submission
+ * form where a team can act on it; naming it here would turn the one line
+ * saying what is compulsory into a list of everything that exists.
+ */
 function needed(rules: Rules): string {
   const parts = [
-    rules.requires.repository ? "a repository" : null,
-    rules.requires.demoVideo ? "a demo video" : null,
-    rules.requires.liveUrl ? "something running" : null,
-  ].filter((part): part is string => part !== null);
+    ["a repository", rules.requires.repository],
+    ["a demo video", rules.requires.demoVideo],
+    ["a live site", rules.requires.liveUrl],
+    ["a pitch deck", rules.requires.pitchDeck],
+    ["a deployed contract", rules.requires.deployedContract],
+  ]
+    .filter(([, rule]) => rule === "required")
+    .map(([said]) => said as string);
 
   return parts.length === 0 ? "A link, and nothing else is compulsory" : upper(parts.join(", "));
 }

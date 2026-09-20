@@ -64,7 +64,7 @@ function One({ tab, chosen, count }: { tab: Tab; chosen: boolean; count: number 
       href={`?tab=${tab}`}
       scroll={false}
       aria-current={chosen ? "page" : undefined}
-      className={`relative flex shrink-0 items-center gap-2 px-4 py-4 text-[0.9375rem] transition-colors duration-150 ease-settle ${
+      className={`relative flex shrink-0 items-center gap-2 px-4 py-4 text-[1rem] transition-colors duration-150 ease-settle ${
         chosen ? "text-ink" : "text-ink-soft hover:text-ink"
       }`}
     >

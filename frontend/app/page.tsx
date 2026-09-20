@@ -36,7 +36,7 @@ function Hero() {
 
         <Display className="mt-6">Check it yourself</Display>
 
-        <p className="mx-auto mt-6 max-w-[34rem] text-pretty text-[1.0625rem] leading-relaxed text-ink-soft">
+        <p className="mx-auto mt-6 max-w-[34rem] text-pretty text-[1.125rem] leading-relaxed text-ink-soft">
           The prize goes into a contract before registration opens. The rules get
           hashed and frozen. Judges score under seal. At the end the contract
           pays the winners. Nobody presses send.
@@ -53,7 +53,7 @@ function Hero() {
           </ButtonLink>
         </div>
 
-        <p className="mt-12 text-[0.8125rem] text-ink-faint">
+        <p className="mt-12 text-[0.875rem] text-ink-faint">
           No account needed to check any of it.
         </p>
       </Measure>
@@ -98,15 +98,15 @@ function Promise() {
         <div className="mt-14 grid gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
           {removed.map((item, index) => (
             <div key={item.before}>
-              <p className="tabular text-[0.75rem] text-ink-faint">
+              <p className="tabular text-[0.8125rem] text-ink-faint">
                 {index + 1}
               </p>
 
               <Rule className="mt-3" />
 
-              <p className="mt-5 text-[1.0625rem] text-ink">{item.before}</p>
+              <p className="mt-5 text-[1.125rem] text-ink">{item.before}</p>
 
-              <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+              <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
                 {item.after}
               </p>
             </div>
@@ -161,7 +161,7 @@ function Audiences() {
             >
               <h3 className="display text-[1.5rem]">{item.who}</h3>
 
-              <p className="mt-4 text-[0.9375rem] leading-relaxed text-night-ink-soft">
+              <p className="mt-4 text-[1rem] leading-relaxed text-night-ink-soft">
                 {item.what}
               </p>
 
@@ -169,7 +169,7 @@ function Audiences() {
                   a dialog anywhere you press it is a card people open by
                   accident while selecting a sentence to read twice. */}
               {item.apply !== undefined && (
-                <ApplyTrigger className="group mt-6 inline-flex items-center gap-2 text-[0.9375rem] text-night-ink transition-colors duration-150 ease-settle hover:text-signal">
+                <ApplyTrigger className="group mt-6 inline-flex items-center gap-2 text-[1rem] text-night-ink transition-colors duration-150 ease-settle hover:text-signal">
                   {item.apply}
 
                   <span

@@ -25,7 +25,7 @@ export function Deck({ url }: { url: string }) {
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[1.25rem] text-ink">Pitch deck</h2>
+        <h2 className="text-[1.3125rem] text-ink">Pitch deck</h2>
 
         <div className="flex items-center gap-1">
           <Toggle open={open} onClick={() => setOpen(!open)} />
@@ -80,7 +80,7 @@ export function Video({ url }: { url: string }) {
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[1.25rem] text-ink">Demo video</h2>
+        <h2 className="text-[1.3125rem] text-ink">Demo video</h2>
 
         <div className="flex items-center gap-1">
           {/* A link this cannot embed still gets a way out. Vimeo, Loom and a
@@ -91,7 +91,7 @@ export function Video({ url }: { url: string }) {
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="text-[0.8125rem] text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
+              className="text-[0.875rem] text-ink-soft underline decoration-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-ink hover:decoration-ink"
             >
               Watch it
             </a>

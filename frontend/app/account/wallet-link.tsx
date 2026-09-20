@@ -101,7 +101,7 @@ export function WalletLink() {
 
   if (standing === "linked") {
     return (
-      <p className="flex items-center gap-2 text-[0.875rem] text-verified">
+      <p className="flex items-center gap-2 text-[0.9375rem] text-verified">
         <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-verified" />
         This wallet is yours, and everybody can see it.
       </p>
@@ -110,7 +110,7 @@ export function WalletLink() {
 
   return (
     <div className="grid gap-3">
-      <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
         Your wallet is connected but not yet proved to be yours. Until it is,
         hackathons show your address rather than your name.
       </p>
@@ -121,7 +121,7 @@ export function WalletLink() {
         </Button>
       </div>
 
-      {failed !== null && <p className="text-[0.8125rem] text-broken">{failed}</p>}
+      {failed !== null && <p className="text-[0.875rem] text-broken">{failed}</p>}
     </div>
   );
 }

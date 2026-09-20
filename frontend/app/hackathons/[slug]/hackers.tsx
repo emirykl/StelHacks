@@ -32,7 +32,7 @@ export async function Hackers({ contractId }: { contractId: string }) {
       </SpecHeading>
 
       {hackers.length === 0 ? (
-        <p className="mt-6 max-w-[36rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="mt-6 max-w-[36rem] text-[1rem] leading-relaxed text-ink-soft">
           Either registration has not opened, or the organizer has not approved
           anybody yet. The contract is the record either way, and this list is
           rebuilt from its approval events rather than kept alongside them.
@@ -69,11 +69,11 @@ function One({ hacker }: { hacker: Hacker }) {
 
       <div className="min-w-0">
         {named === null ? (
-          <p className="tabular truncate text-[0.875rem] text-ink">{shorten(hacker.address)}</p>
+          <p className="tabular truncate text-[0.9375rem] text-ink">{shorten(hacker.address)}</p>
         ) : (
           <>
-            <p className="truncate text-[0.9375rem] font-medium text-ink">{named}</p>
-            <p className="tabular mt-1 truncate text-[0.75rem] text-ink-soft">
+            <p className="truncate text-[1rem] font-medium text-ink">{named}</p>
+            <p className="tabular mt-1 truncate text-[0.8125rem] text-ink-soft">
               {shorten(hacker.address)}
             </p>
           </>
@@ -164,7 +164,7 @@ function Avatar({ hacker }: { hacker: Hacker }) {
       className={`grid size-10 shrink-0 place-items-center rounded-full ${
         named === null
           ? "label bg-paper-sunk text-ink-faint ring-1 ring-inset ring-rule"
-          : "bg-ink text-[0.875rem] font-semibold text-signal"
+          : "bg-ink text-[0.9375rem] font-semibold text-signal"
       }`}
     >
       {named === null ? hacker.address.slice(1, 3) : named.trim().charAt(0).toUpperCase()}

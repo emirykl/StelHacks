@@ -15,6 +15,7 @@ import { challengeFor } from "../../../../lib/organizer";
 import { metadataHash, standingOf, type Standing } from "../../../../lib/participate";
 import { proveAddressHex } from "../../../../lib/wallet";
 import type { Track } from "../../../../lib/rules";
+import type { FieldRule, SubmissionFields } from "../../../../lib/constitution";
 
 /**
  * Entering a project, on a page of its own.
@@ -47,13 +48,17 @@ export function SubmitForm({
   /** From the frozen rules, so the choice is the contract's own list. */
   tracks: Track[];
   /**
-   * Which links the organizer made compulsory, from the frozen rules.
+   * What the organizer asked for, from the frozen rules.
    *
    * This file used to decide: the repository was required and the rest were
    * marked optional in their own placeholders. That is the organizer's call and
    * it was frozen before anybody entered, so it is read rather than assumed.
+   *
+   * A field they never asked for is not drawn at all. Showing every box to
+   * everybody and only moving the word beside it was how a design event ended
+   * up with entries judged against an empty repository row.
    */
-  requires: { repository: boolean; demoVideo: boolean; liveUrl: boolean };
+  requires: SubmissionFields;
   /** Whose folder artwork lands in. Absent when nobody is signed in. */
   userId: string | null;
 }) {
@@ -95,12 +100,20 @@ export function SubmitForm({
   }, [contractId, address]);
 
   const team = standing?.teams[0] ?? null;
+  /* Demanded and empty is the only thing that holds a submission back. A field
+     that was never asked for is not checked at all, and one merely offered
+     never was. */
+  const missing = (rule: FieldRule, value: string) =>
+    rule === "required" && value.trim().length === 0;
+
   const ready =
     title.trim().length > 0 &&
     track.length > 0 &&
-    (!requires.repository || repo.trim().length > 0) &&
-    (!requires.liveUrl || live.trim().length > 0) &&
-    (!requires.demoVideo || video.trim().length > 0);
+    !missing(requires.repository, repo) &&
+    !missing(requires.liveUrl, live) &&
+    !missing(requires.demoVideo, video) &&
+    !missing(requires.pitchDeck, deck) &&
+    !missing(requires.deployedContract, deployed);
 
   async function submit() {
     if (address === null || team === null) {
@@ -128,6 +141,10 @@ export function SubmitForm({
         repository: repo.trim(),
         live: live.trim(),
         video: video.trim(),
+        /* Pinned now that an organizer can demand one. A field the frozen rules
+           can make compulsory has to be covered by the digest, or an event
+           could require a deck and have nothing to hold the team to. */
+        deck: deck.trim(),
       }).filter(([, value]) => value.length > 0),
     );
 
@@ -221,7 +238,7 @@ export function SubmitForm({
       <div className="mx-auto max-w-[46rem]">
         <SpecHeading>What you built</SpecHeading>
 
-        <p className="mt-5 text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="mt-5 text-[1rem] leading-relaxed text-ink-soft">
           The chain records a digest of this and the repository link. Everything
           else is how judges and visitors will read it, and you can change any of
           it until submissions close.
@@ -231,12 +248,12 @@ export function SubmitForm({
           <Part number={1} title="Introduction">
             {tracks.length > 1 && (
               <label className="grid gap-2">
-                <span className="text-[0.9375rem] font-semibold text-ink">Category</span>
+                <span className="text-[1rem] font-semibold text-ink">Category</span>
 
                 <select
                   value={track}
                   onChange={(event) => setTrack(event.target.value)}
-                  className="h-12 rounded-[0.625rem] bg-paper px-4 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
+                  className="h-12 rounded-[0.625rem] bg-paper px-4 text-[1.0625rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
                 >
                   {tracks.map((one) => (
                     <option key={one.id} value={one.id}>
@@ -260,7 +277,7 @@ export function SubmitForm({
 
           <Part number={2} title="Presentation">
             {userId === null ? (
-              <p className="text-[0.875rem] text-ink-soft">
+              <p className="text-[0.9375rem] text-ink-soft">
                 Sign in to upload artwork. A project without it still enters.
               </p>
             ) : (
@@ -287,71 +304,91 @@ export function SubmitForm({
 
           <Part number={3} title="About">
             <label className="grid gap-2">
-              <span className="text-[0.9375rem] font-semibold text-ink">Full description</span>
+              <span className="text-[1rem] font-semibold text-ink">Full description</span>
 
               <textarea
                 value={about}
                 onChange={(event) => setAbout(event.target.value.slice(0, 20_000))}
                 rows={12}
                 placeholder="What problem it solves, how it works, what you would do next."
-                className="rounded-[0.625rem] bg-paper p-4 text-[1rem] leading-relaxed text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
+                className="rounded-[0.625rem] bg-paper p-4 text-[1.0625rem] leading-relaxed text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
               />
             </label>
           </Part>
 
           <Part number={4} title="Deliverables">
-            <Field
-              label="Repository"
-              value={repo}
-              onChange={setRepo}
-              placeholder="https://github.com/…"
-              icon={<GitHub />}
-              optional={!requires.repository}
-            />
+            {requires.repository !== "unasked" && (
+              <Field
+                label="Repository"
+                value={repo}
+                onChange={setRepo}
+                placeholder="https://github.com/…"
+                icon={<GitHub />}
+                optional={requires.repository === "optional"}
+              />
+            )}
 
-            <Field
-              label="Live site"
-              value={live}
-              onChange={setLive}
-              placeholder="https://…"
-              icon={<Globe />}
-              optional={!requires.liveUrl}
-            />
+            {requires.liveUrl !== "unasked" && (
+              <Field
+                label="Live site"
+                value={live}
+                onChange={setLive}
+                placeholder="https://…"
+                icon={<Globe />}
+                optional={requires.liveUrl === "optional"}
+              />
+            )}
 
-            <Field
-              label="Demo video"
-              value={video}
-              onChange={setVideo}
-              placeholder="https://…"
-              icon={<YouTube />}
-              optional={!requires.demoVideo}
-            />
+            {requires.demoVideo !== "unasked" && (
+              <Field
+                label="Demo video"
+                value={video}
+                onChange={setVideo}
+                placeholder="https://…"
+                icon={<YouTube />}
+                optional={requires.demoVideo === "optional"}
+              />
+            )}
 
-            {/* Always optional, and it has to be. A wallet, an indexer or a
+            {/* Rarely demanded, and it can be now. A wallet, an indexer or a
                 piece of tooling is a whole project at a Stellar hackathon and
-                never deploys anything; asking for this as a requirement would
-                make those read as unfinished. The frozen rules carry no flag
-                for it either, so no organizer can ask. */}
-            <Field
-              label="Contract"
-              value={deployed}
-              onChange={setDeployed}
-              placeholder="C…"
-              icon={<Stellar />}
-              optional
-              note={
-                deployed.trim().length > 0 && !looksLikeContract(deployed.trim())
-                  ? "A contract id starts with C and is 56 characters."
-                  : undefined
-              }
-            />
+                never deploys anything, so an event that wants a contract has to
+                say so before anybody enters rather than have every entry
+                assumed to carry one. */}
+            {requires.deployedContract !== "unasked" && (
+              <Field
+                label="Contract"
+                value={deployed}
+                onChange={setDeployed}
+                placeholder="C…"
+                icon={<Stellar />}
+                optional={requires.deployedContract === "optional"}
+                note={
+                  deployed.trim().length > 0 && !looksLikeContract(deployed.trim())
+                    ? "A contract id starts with C and is 56 characters."
+                    : undefined
+                }
+              />
+            )}
 
             {/* Last, because it is the only one that is a file rather than a
-                link, and always optional: the frozen rules carry no flag for a
-                deck, so no organizer can ask for one. */}
-            {userId !== null && (
-              <DeckPicker userId={userId} value={deck} onChange={setDeck} />
-            )}
+                link. It needs somewhere to upload to, so signing out is the one
+                thing that can take a demanded field off the form; the note
+                below says so rather than leaving a gap. */}
+            {requires.pitchDeck !== "unasked" &&
+              (userId === null ? (
+                <p className="text-[0.9375rem] text-ink-soft">
+                  Sign in to attach a pitch deck
+                  {requires.pitchDeck === "required" && ", which this event asks for"}.
+                </p>
+              ) : (
+                <DeckPicker
+                  userId={userId}
+                  value={deck}
+                  onChange={setDeck}
+                  optional={requires.pitchDeck === "optional"}
+                />
+              ))}
           </Part>
         </div>
 
@@ -366,7 +403,7 @@ export function SubmitForm({
         </div>
 
         {failed !== null && (
-          <p className="mt-6 max-w-[38rem] text-[0.875rem] leading-relaxed text-broken">{failed}</p>
+          <p className="mt-6 max-w-[38rem] text-[0.9375rem] leading-relaxed text-broken">{failed}</p>
         )}
       </div>
     </Measure>
@@ -397,7 +434,7 @@ function Part({
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10">
       <div className="flex items-center gap-3.5">
-        <span className="tabular grid size-9 shrink-0 place-items-center rounded-full bg-paper-sunk text-[1rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
+        <span className="tabular grid size-9 shrink-0 place-items-center rounded-full bg-paper-sunk text-[1.0625rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
           {number}
         </span>
 
@@ -452,15 +489,15 @@ function Field({
         {/* Sentence case and full weight. Small tracked capitals are how this
             page reports what the chain holds; a question put to a person is
             language, and it was competing with its own placeholder. */}
-        <span className="text-[0.9375rem] font-semibold text-ink">{label}</span>
+        <span className="text-[1rem] font-semibold text-ink">{label}</span>
 
-        {hint !== undefined && <span className="text-[0.8125rem] text-ink-faint">{hint}</span>}
+        {hint !== undefined && <span className="text-[0.875rem] text-ink-faint">{hint}</span>}
 
         {optional !== undefined &&
           (optional ? (
-            <span className="text-[0.8125rem] text-ink-faint">optional</span>
+            <span className="text-[0.875rem] text-ink-faint">optional</span>
           ) : (
-            <span className="text-[0.8125rem] text-signal-deep dark:text-signal">required</span>
+            <span className="text-[0.875rem] text-signal-deep dark:text-signal">required</span>
           ))}
       </span>
 
@@ -475,7 +512,7 @@ function Field({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className={`h-full min-w-0 flex-1 bg-transparent text-[1rem] text-ink outline-none ${
+          className={`h-full min-w-0 flex-1 bg-transparent text-[1.0625rem] text-ink outline-none ${
             icon === undefined ? "px-4" : "pr-4"
           }`}
         />
@@ -484,7 +521,7 @@ function Field({
       {/* Under the box, in the colour of a refusal, and only once there is
           something to refuse. A shape stated before anybody has typed is a
           hint; the same words after they have are a correction. */}
-      {note !== undefined && <span className="text-[0.8125rem] text-broken">{note}</span>}
+      {note !== undefined && <span className="text-[0.875rem] text-broken">{note}</span>}
     </label>
   );
 }
@@ -531,7 +568,7 @@ function Globe() {
 function Note({ children }: { children: React.ReactNode }) {
   return (
     <Measure wide className="py-16">
-      <p className="mx-auto max-w-[46rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="mx-auto max-w-[46rem] text-[1rem] leading-relaxed text-ink-soft">
         {children}
       </p>
     </Measure>
@@ -542,18 +579,19 @@ function Note({ children }: { children: React.ReactNode }) {
  * The deck, uploaded rather than linked.
  *
  * A team already has this file; asking them to host it somewhere first is the
- * step that makes people skip it. It is always optional and says so, because
- * the frozen rules carry no flag for a deck and an organizer cannot make one
- * compulsory however much they would like to.
+ * step that makes people skip it. Whether it is demanded is the organizer's
+ * call in the frozen rules, and it is marked here the way every other field is.
  */
 function DeckPicker({
   userId,
   value,
   onChange,
+  optional,
 }: {
   userId: string;
   value: string;
   onChange: (url: string) => void;
+  optional: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -582,9 +620,14 @@ function DeckPicker({
   return (
     <label className="grid gap-2">
       <span className="flex items-baseline gap-2.5">
-        <span className="text-[0.9375rem] font-semibold text-ink">Pitch deck</span>
-        <span className="text-[0.8125rem] text-ink-faint">PDF, up to 20 MB</span>
-        <span className="text-[0.8125rem] text-ink-faint">always optional</span>
+        <span className="text-[1rem] font-semibold text-ink">Pitch deck</span>
+        <span className="text-[0.875rem] text-ink-faint">PDF, up to 20 MB</span>
+
+        {optional ? (
+          <span className="text-[0.875rem] text-ink-faint">optional</span>
+        ) : (
+          <span className="text-[0.875rem] text-signal-deep dark:text-signal">required</span>
+        )}
       </span>
 
       <input
@@ -599,7 +642,7 @@ function DeckPicker({
         }}
       />
 
-      <span className="flex h-12 cursor-pointer items-center gap-3 rounded-[0.625rem] bg-paper px-4 text-[0.9375rem] ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle hover:ring-ink">
+      <span className="flex h-12 cursor-pointer items-center gap-3 rounded-[0.625rem] bg-paper px-4 text-[1rem] ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle hover:ring-ink">
         <Document />
 
         <span className={value.length === 0 ? "text-ink-faint" : "truncate text-ink"}>
@@ -607,7 +650,7 @@ function DeckPicker({
         </span>
       </span>
 
-      {refused !== null && <span className="text-[0.8125rem] text-broken">{refused}</span>}
+      {refused !== null && <span className="text-[0.875rem] text-broken">{refused}</span>}
     </label>
   );
 }

@@ -84,19 +84,19 @@ export function ProfileForm({
         page for something almost nobody does.
       */}
       <label className="grid gap-1.5">
-        <span className="text-[0.8125rem] font-semibold text-ink">Email</span>
+        <span className="text-[0.875rem] font-semibold text-ink">Email</span>
 
         <input
           value={email ?? "no address on this account"}
           readOnly
           aria-readonly
           tabIndex={-1}
-          className="h-11 cursor-default bg-paper-sunk px-3.5 text-[0.9375rem] text-ink-soft ring-1 ring-inset ring-rule outline-none"
+          className="h-11 cursor-default bg-paper-sunk px-3.5 text-[1rem] text-ink-soft ring-1 ring-inset ring-rule outline-none"
         />
       </label>
 
       <label className="grid gap-1.5">
-        <span className="text-[0.8125rem] font-semibold text-ink">Bio</span>
+        <span className="text-[0.875rem] font-semibold text-ink">Bio</span>
 
         <textarea
           name="bio"
@@ -104,7 +104,7 @@ export function ProfileForm({
           rows={3}
           maxLength={500}
           placeholder="What you build, in a sentence."
-          className="resize-y bg-paper p-3 text-[0.9375rem] leading-relaxed text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+          className="resize-y bg-paper p-3 text-[1rem] leading-relaxed text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
         />
       </label>
 
@@ -116,12 +116,12 @@ export function ProfileForm({
           shipping and nothing will ever group by it, so it is left as typing. */}
       <div className="grid gap-6 sm:grid-cols-2">
         <label className="grid gap-1.5">
-          <span className="text-[0.8125rem] font-semibold text-ink">Country</span>
+          <span className="text-[0.875rem] font-semibold text-ink">Country</span>
 
           <select
             name="country"
             defaultValue={profile.country ?? ""}
-            className="h-11 appearance-none bg-paper bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20stroke%3D%22%23a8a29c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m4%206%204%204%204-4%22/%3E%3C/svg%3E')] bg-[length:1rem] bg-[right_0.875rem_center] bg-no-repeat pl-3.5 pr-10 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+            className="h-11 appearance-none bg-paper bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20stroke%3D%22%23a8a29c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m4%206%204%204%204-4%22/%3E%3C/svg%3E')] bg-[length:1rem] bg-[right_0.875rem_center] bg-no-repeat pl-3.5 pr-10 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
           >
             <option value="">Not saying</option>
 
@@ -176,7 +176,7 @@ export function ProfileForm({
             a save leaves somebody pressing the button again to find out. */}
         {state.message !== null && (
           <p
-            className={`text-[0.875rem] leading-relaxed ${
+            className={`text-[0.9375rem] leading-relaxed ${
               state.ok ? "text-verified" : "text-broken"
             }`}
             role="status"
@@ -205,7 +205,7 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[0.8125rem] font-semibold text-ink">{label}</span>
+      <span className="text-[0.875rem] font-semibold text-ink">{label}</span>
 
       {/* The ring is on the wrapper rather than the input, so a mark inside the
           box is inside the frame that lights up on focus rather than beside a
@@ -218,7 +218,7 @@ function Field({
           defaultValue={defaultValue}
           placeholder={placeholder}
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-[0.9375rem] text-ink outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[1rem] text-ink outline-none"
         />
       </div>
     </label>

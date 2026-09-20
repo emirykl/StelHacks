@@ -72,7 +72,7 @@ export default async function Account() {
           <div className="mt-9 flex min-w-0 items-center gap-4">
             <AvatarPicker userId={user.id} src={avatar} name={name} />
 
-            <p className="min-w-0 truncate text-[1.125rem] text-ink">{name}</p>
+            <p className="min-w-0 truncate text-[1.1875rem] text-ink">{name}</p>
           </div>
         </Measure>
       </section>
@@ -80,7 +80,7 @@ export default async function Account() {
       <Measure wide className="py-14">
         <div className="grid max-w-[52rem] gap-14">
           {profile === null ? (
-            <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="text-[1rem] leading-relaxed text-ink-soft">
               Your profile could not be read on this deployment, so there is
               nothing to edit here yet.
             </p>
@@ -125,7 +125,7 @@ export default async function Account() {
 function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h2 className="text-[1.375rem]">{title}</h2>
+      <h2 className="text-[1.4375rem]">{title}</h2>
 
       <div className="mt-6">{children}</div>
     </section>

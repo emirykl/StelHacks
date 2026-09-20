@@ -129,7 +129,7 @@ export function AvatarPicker({
       </button>
 
       {refused !== null && (
-        <p className="mt-2 max-w-[14rem] text-[0.75rem] leading-relaxed text-broken">
+        <p className="mt-2 max-w-[14rem] text-[0.8125rem] leading-relaxed text-broken">
           {refused}
         </p>
       )}

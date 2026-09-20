@@ -64,7 +64,7 @@ export default async function PublicProfile({ params }: PageProps<"/u/[username]
               <div className="min-w-0">
                 <h1 className="text-[clamp(1.75rem,3.4vw,2.5rem)]">{name}</h1>
 
-                <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.9375rem] text-ink-soft">
+                <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[1rem] text-ink-soft">
                   <span>@{profile.username}</span>
 
                   {place !== null && (
@@ -82,7 +82,7 @@ export default async function PublicProfile({ params }: PageProps<"/u/[username]
                 </p>
 
                 {profile.bio !== null && (
-                  <p className="mt-5 max-w-[36rem] text-[1.0625rem] leading-relaxed text-ink-soft">
+                  <p className="mt-5 max-w-[36rem] text-[1.125rem] leading-relaxed text-ink-soft">
                     {profile.bio}
                   </p>
                 )}
@@ -128,7 +128,7 @@ export default async function PublicProfile({ params }: PageProps<"/u/[username]
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-lg bg-paper p-6 ring-1 ring-rule">
-      <h2 className="text-[1.125rem]">{title}</h2>
+      <h2 className="text-[1.1875rem]">{title}</h2>
 
       <div className="mt-5">{children}</div>
     </section>

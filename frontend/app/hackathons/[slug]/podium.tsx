@@ -72,11 +72,11 @@ export function Podium({
               )}
             </div>
 
-            <p className="mb-1 w-full truncate text-center text-[0.9375rem] font-medium text-ink">
+            <p className="mb-1 w-full truncate text-center text-[1rem] font-medium text-ink">
               {marks.get(place.team)?.name ?? `Team ${place.team}`}
             </p>
 
-            <p className="tabular mb-3 text-[0.8125rem] text-ink-soft">
+            <p className="tabular mb-3 text-[0.875rem] text-ink-soft">
               {percent(place.finalScore)}
             </p>
 
