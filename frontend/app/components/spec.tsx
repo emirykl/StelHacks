@@ -123,7 +123,7 @@ export function SpecValue({
     <span
       className={join(
         "tabular break-all",
-        size === "lg" ? "text-[1.0625rem]" : "text-[0.875rem]",
+        size === "lg" ? "text-[1.125rem]" : "text-[0.9375rem]",
       )}
     >
       {children}

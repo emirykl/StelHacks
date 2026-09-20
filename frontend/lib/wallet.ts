@@ -205,11 +205,14 @@ export async function walletNetwork(): Promise<string | null> {
   }
 }
 
+/** The network this deployment signs against, for comparing a wallet's to. */
+export const ours = network ?? null;
+
 /** Whether the wallet and this deployment are on the same network. */
 export async function onTheSameNetwork(): Promise<boolean> {
   const theirs = await walletNetwork();
 
-  return theirs === null || network === undefined || theirs === network;
+  return theirs === null || ours === null || theirs === ours;
 }
 
 /**
@@ -218,18 +221,40 @@ export async function onTheSameNetwork(): Promise<boolean> {
  * The kit talks to the extension; nothing here sees a key. What comes back is
  * an envelope with a signature on it, ready to submit.
  */
-export async function signTransaction(xdr: string): Promise<string> {
+export async function signTransaction(xdr: string, from?: string): Promise<string> {
   const instance = await kit();
 
   try {
-    const { signedTxXdr } = await instance.signTransaction(xdr, {
+    const { signedTxXdr, signerAddress } = await instance.signTransaction(xdr, {
       networkPassphrase: network,
+      ...(from === undefined ? {} : { address: from }),
     });
+
+    /*
+      Refused here rather than by the network.
+
+      A wallet signs with whichever account is selected in it, and this page
+      builds against whichever one it was connected as. Switch accounts in the
+      extension and the two part company without either side saying so: the
+      signature is valid, it is simply not the source account's, and the network
+      answers `tx_bad_auth` after charging a fee. Naming it here is the
+      difference between a setting somebody can fix and a line of JSON.
+    */
+    if (from !== undefined && signerAddress !== undefined && signerAddress !== from) {
+      throw new Error(
+        `Your wallet signed as ${shorten(signerAddress)} but this site is connected as ${shorten(from)}. Select that account in your wallet, or reconnect.`,
+      );
+    }
 
     return signedTxXdr;
   } catch (thrown) {
     throw new Error(explain(thrown));
   }
+}
+
+/** Enough of an address to recognise, with the middle left out. */
+function shorten(address: string): string {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
 /**

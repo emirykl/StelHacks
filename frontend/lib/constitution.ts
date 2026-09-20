@@ -13,6 +13,7 @@
  */
 
 import entries from "./contract-spec.json";
+import { CONSTITUTION_VERSION } from "./rules";
 
 /** Weights are basis points and a rubric has to add up to exactly this. */
 export const WEIGHT_TOTAL_BPS = 10_000;
@@ -35,6 +36,39 @@ export interface Track {
   noAwardAllowed: boolean;
 }
 
+/**
+ * What one field of a submission is worth to the organizer.
+ *
+ * Three answers rather than two, mirroring `FieldRule` in the contract. A field
+ * nobody has to fill in is still a field a team is shown; one that was never
+ * asked for is not on their form at all, and a judge is never left reading an
+ * empty row as a team that did not bother.
+ */
+export type FieldRule = "unasked" | "optional" | "required";
+
+/** Everything a submission can carry, in the order a form asks for it. */
+export interface SubmissionFields {
+  repository: FieldRule;
+  demoVideo: FieldRule;
+  liveUrl: FieldRule;
+  pitchDeck: FieldRule;
+  deployedContract: FieldRule;
+}
+
+/**
+ * The rules as the contract numbers them.
+ *
+ * A Soroban enum whose variants carry no payload is a `u32` on the wire, and
+ * these are its discriminants in declaration order. Written out rather than
+ * derived from the order of the union above, because a reordered union would
+ * otherwise silently renumber every rule in a frozen document.
+ */
+const ON_THE_WIRE: Record<FieldRule, number> = {
+  unasked: 0,
+  optional: 1,
+  required: 2,
+};
+
 export interface Judge {
   address: string;
   /**
@@ -53,6 +87,19 @@ export interface Draft {
   tracks: Track[];
   judges: Judge[];
   judgeQuorum: number;
+  /**
+   * The crowd's share of the final score, in basis points.
+   *
+   * Zero is the standard hackathon and what the form opens on. Ten thousand is
+   * decided entirely by the crowd, and anything between is a blend. The contract
+   * puts no ceiling on it, because every participant was admitted one approval
+   * at a time, so the electorate is a list somebody vetted rather than whoever
+   * showed up.
+   *
+   * Above zero it costs a vote window, and the schedule has to make room for it
+   * between the entry check and the end of judging.
+   */
+  communityBps: number;
   /** Seconds since the epoch. The contract checks that these run in order. */
   schedule: {
     registrationOpensAt: number;
@@ -63,14 +110,21 @@ export interface Draft {
     judgingClosesAt: number;
   };
   /**
-   * Which links a submission has to carry.
+   * What a submission has to carry.
    *
    * Announced rather than enforced, and worth being precise about: the contract
-   * takes one link and a digest, and never reads these flags. They are a rule
+   * takes one link and a digest, and never reads these rules. They are a rule
    * the organizer publishes before anybody enters, the submission form holds
    * teams to, and screening is the place a breach is acted on.
    */
-  requires: { repository: boolean; demoVideo: boolean; liveUrl: boolean };
+  requires: SubmissionFields;
+  /**
+   * Whether an application waits for the organizer or is admitted on arrival.
+   *
+   * Part of the frozen rules rather than a setting, so an organizer cannot shut
+   * the door after seeing who applied, or open it on the morning of the vote.
+   */
+  openRegistration: boolean;
   /** Whether one person may be on more than one team. */
   multiTeamAllowed: boolean;
   maxTeamSize: number;
@@ -174,9 +228,12 @@ export async function createArgs(organizer: string, draft: Draft) {
   const encoder = await spec();
 
   const constitution = {
-    /* Two since the platform fee joined the document. A contract built against
-       version one does not have the field and will refuse this. */
-    version: 2,
+    /* The shape this build writes, and it has to be the one `lib/rules.ts`
+       reads. It was left at two when the submission rules widened the document
+       to three, so every hackathon created here was written in a shape the
+       listing then dropped as superseded: created successfully, invisible
+       everywhere, and no error anywhere to say why. */
+    version: CONSTITUTION_VERSION,
     metadata_hash: Buffer.from(draft.metadataHash),
     prize_asset: draft.prizeAsset,
 
@@ -205,20 +262,30 @@ export async function createArgs(organizer: string, draft: Draft) {
        deferred table rather than half implemented here. */
     judging_mode: { tag: "Easy", values: [organizer] },
 
-    /* No community vote by default: it needs an eligibility snapshot, and an
-       organizer who has not asked for one should not silently get a weighting
-       they did not choose. */
-    vote: { judge_bps: WEIGHT_TOTAL_BPS, community_bps: 0 },
+    /* The split the organizer chose. Zero for the crowd is the standard event
+       and what the form opens on: a weighting nobody asked for should never
+       arrive by default. */
+    vote: {
+      judge_bps: WEIGHT_TOTAL_BPS - draft.communityBps,
+      community_bps: draft.communityBps,
+    },
 
     /* Public. Written as a number because a Soroban enum whose variants carry
        no payload is a `u32` on the wire, unlike the ones that do. */
     visibility: 0,
 
     submission_requirements: {
-      repository_required: draft.requires.repository,
-      demo_video_required: draft.requires.demoVideo,
-      live_url_required: draft.requires.liveUrl,
+      repository: ON_THE_WIRE[draft.requires.repository],
+      demo_video: ON_THE_WIRE[draft.requires.demoVideo],
+      live_url: ON_THE_WIRE[draft.requires.liveUrl],
+      pitch_deck: ON_THE_WIRE[draft.requires.pitchDeck],
+      deployed_contract: ON_THE_WIRE[draft.requires.deployedContract],
     },
+
+    /* Written as a number for the same reason `visibility` is: a Soroban enum
+       whose variants carry no payload is a `u32` on the wire. One is the open
+       policy, zero the reviewed one. */
+    registration: draft.openRegistration ? 1 : 0,
 
     teams: {
       max_size: draft.maxTeamSize,
@@ -247,8 +314,15 @@ export async function createArgs(organizer: string, draft: Draft) {
     /* The chain the contract walks when two projects tie. Highest single
        criterion first, then who submitted earlier, which is the only tie break
        that cannot be influenced after the fact. */
+    /* The crowd's step is only in the chain when there is a crowd. The contract
+       refuses a chain that breaks ties on a vote the event never runs, which is
+       the right refusal: a step that can never fire is a step somebody read and
+       believed. */
     tie_break: [
       { tag: "JudgeScore", values: undefined },
+      ...(draft.communityBps > 0
+        ? [{ tag: "CommunityScore", values: undefined }]
+        : []),
       { tag: "Criterion", values: [draft.tracks[0]?.criteria[0]?.id ?? "impact"] },
       { tag: "SubmissionOrder", values: undefined },
     ],
@@ -292,10 +366,20 @@ export async function createArgs(organizer: string, draft: Draft) {
       screening_closes_at: BigInt(draft.schedule.screeningClosesAt),
       judging_closes_at: BigInt(draft.schedule.judgingClosesAt),
 
-      /* No community vote, so its window is the judging deadline rather than
-         zero: the contract checks that every timestamp runs in order, and a
-         zero in the middle of the sequence is a schedule that goes backwards. */
-      community_vote_opens_at: BigInt(draft.schedule.judgingClosesAt),
+      /*
+        The vote runs alongside judging, which is where the rules put it: it
+        opens when the entry check ends and closes when the judges are done, so
+        the crowd is voting on the same set the judges are scoring and nobody
+        votes on an entry that was struck out.
+
+        Without a vote the window collapses onto the judging deadline rather
+        than onto zero. The contract checks that every timestamp runs in order,
+        and a zero in the middle of the sequence is a schedule that goes
+        backwards.
+      */
+      community_vote_opens_at: BigInt(
+        draft.communityBps > 0 ? draft.schedule.screeningClosesAt : draft.schedule.judgingClosesAt,
+      ),
       community_vote_closes_at: BigInt(draft.schedule.judgingClosesAt),
     },
 

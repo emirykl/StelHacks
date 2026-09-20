@@ -70,8 +70,8 @@ function base(
 ): string {
   const shape =
     size === "sm"
-      ? "h-9 px-4 text-[0.8125rem] gap-1.5"
-      : "h-11 px-5 text-[0.9375rem] gap-2";
+      ? "h-9 px-4 text-[0.875rem] gap-1.5"
+      : "h-11 px-5 text-[1rem] gap-2";
 
   const look = {
     primary: "bg-ink text-paper hover:bg-ink/90",
@@ -111,7 +111,7 @@ export function Badge({ children }: { children: ReactNode }) {
   return (
     <span
       aria-hidden
-      className="grid size-6 place-items-center rounded-full bg-signal text-signal-ink text-xs"
+      className="grid size-6 place-items-center rounded-full bg-signal text-signal-ink text-[0.8125rem]"
     >
       {children}
     </span>
@@ -153,7 +153,7 @@ export function Card({
  */
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="text-[0.6875rem] font-medium uppercase tracking-[0.14em] text-ink-faint">
+    <p className="text-[0.75rem] font-medium uppercase tracking-[0.14em] text-ink-faint">
       {children}
     </p>
   );
@@ -232,7 +232,7 @@ export function Chain({
   title?: string;
 }) {
   return (
-    <span title={title} className="tabular text-[0.8125rem] text-ink-soft break-all">
+    <span title={title} className="tabular text-[0.875rem] text-ink-soft break-all">
       {children}
     </span>
   );

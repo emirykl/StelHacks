@@ -107,7 +107,7 @@ export async function send(
     }
 
     const prepared = rpc.assembleTransaction(built, simulated).build();
-    const signed = await signTransaction(prepared.toXDR());
+    const signed = await signTransaction(prepared.toXDR(), from);
 
     const sent = await server.sendTransaction(
       TransactionBuilder.fromXDR(signed, passphrase),
@@ -201,7 +201,7 @@ export async function deploy(
     }
 
     const prepared = rpc.assembleTransaction(built, simulated).build();
-    const signed = await signTransaction(prepared.toXDR());
+    const signed = await signTransaction(prepared.toXDR(), from);
     const sent = await server.sendTransaction(TransactionBuilder.fromXDR(signed, passphrase));
 
     if (sent.status === "ERROR") {
@@ -256,7 +256,7 @@ function refusal(thrown: unknown): Sent {
 const meanings: Record<number, string> = {
   3: "this wallet is not allowed to do that",
   30: "the hackathon is not at the stage where this is allowed",
-  32: "this has not opened yet",
+  32: "this stage's deadline has not passed yet",
   33: "the deadline for this has passed",
   40: "the contract has no record of that",
   41: "you have already applied",
@@ -275,8 +275,36 @@ function readable(raw: string): string {
     }
   }
 
+  /* The network's own verdicts, which arrive as a word inside a line of JSON.
+     They are about the envelope rather than about the contract, so none of them
+     are in the error enum above, and printed raw they read as a crash. */
+  for (const [word, meaning] of Object.entries(verdicts)) {
+    if (raw.includes(word)) {
+      return meaning;
+    }
+  }
+
   return raw.length > 200 ? `${raw.slice(0, 197)}…` : raw;
 }
+
+/**
+ * What the network says when it refuses the envelope rather than the call.
+ *
+ * `tx_bad_auth` is the one that matters here and it has two causes, both of
+ * them a setting: the wallet signed with a different account than the one this
+ * page is connected as, or it signed against a different network. The signature
+ * is real in both cases, which is why nothing earlier catches it.
+ */
+const verdicts: Record<string, string> = {
+  tx_bad_auth:
+    "The wallet signed as a different account, or on a different network, than this transaction was built for. Check which account is selected in your wallet and that it is on the same network as this site.",
+  tx_bad_auth_extra: "The wallet added a signature this transaction did not ask for.",
+  tx_bad_seq: "Something else signed from this account at the same time. Try again.",
+  tx_insufficient_fee: "The network is busy and the fee offered was too low. Try again.",
+  tx_insufficient_balance: "This account cannot cover the fee.",
+  tx_too_late: "This transaction sat unsigned for too long. Try again.",
+  tx_no_source_account: UNFUNDED,
+};
 
 /**
  * An argument, with its contract type named at the call site.
@@ -310,6 +338,12 @@ export const arg = {
   async text(value: string): Promise<Arg> {
     const { nativeToScVal } = await import("@stellar/stellar-sdk/base");
     return { value: nativeToScVal(value, { type: "string" }) };
+  },
+
+  /** A moment, which the contract keeps in seconds since the epoch. */
+  async u64(value: bigint): Promise<Arg> {
+    const { nativeToScVal } = await import("@stellar/stellar-sdk/base");
+    return { value: nativeToScVal(value, { type: "u64" }) };
   },
 
   async i128(value: bigint): Promise<Arg> {

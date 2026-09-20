@@ -129,14 +129,14 @@ export function ApplyPanel({
 
         {/* Said once, at the top, rather than as a line under each field. What
             a reader needs before typing is why they are being asked at all. */}
-        <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="text-[1rem] leading-relaxed text-ink-soft">
           {standing.status === "rejected"
             ? "You can apply again whenever something has changed."
             : "Tell us what you want to run. We answer by hand."}
         </p>
 
         {standing.note !== null && (
-          <p className="mt-1 text-[0.875rem] leading-relaxed text-ink-soft">
+          <p className="mt-1 text-[0.9375rem] leading-relaxed text-ink-soft">
             Last time: {standing.note}
           </p>
         )}
@@ -161,7 +161,7 @@ function Panel({
       <div className="grid gap-2">
         <h2 className="display text-[1.5rem]">{title}</h2>
 
-        <p className="text-[0.9375rem] leading-relaxed text-ink-soft">{line}</p>
+        <p className="text-[1rem] leading-relaxed text-ink-soft">{line}</p>
       </div>
 
       {children !== undefined && <div>{children}</div>}

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 /**
  * The database, as the person reading the page.
@@ -54,8 +55,20 @@ export async function serverClient() {
   });
 }
 
-/** Who is reading this page, or nobody. */
-export async function currentUser() {
+/**
+ * Who is reading this page, or nobody. One answer per request.
+ *
+ * Cached because the layout and the page both ask, and they were asking
+ * separately. Each call is a round trip to the auth server, and around an
+ * expiring token the two can disagree: the first triggers a refresh whose new
+ * cookie a server component is not allowed to write, so the second arrives with
+ * a token that has already been spent and is told no. The page then rendered a
+ * form for somebody the header was showing a sign in button to.
+ *
+ * `cache` is per request and nothing survives it, so this is deduplication
+ * rather than a session cached across visitors.
+ */
+export const currentUser = cache(async () => {
   const db = await serverClient();
 
   if (db === null) {
@@ -71,4 +84,4 @@ export async function currentUser() {
   const { data } = await db.auth.getUser();
 
   return data.user;
-}
+});

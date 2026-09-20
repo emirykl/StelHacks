@@ -50,6 +50,14 @@ export interface HackathonSummary {
    * countdown a team already in is watching is the other.
    */
   registrationClosesAt: number | null;
+  /**
+   * When signing up starts.
+   *
+   * Only the card uses it, and only when the indexer has not recorded a phase:
+   * between "published and waiting" and "open for sign-ups" there is nothing
+   * else to tell them apart from.
+   */
+  registrationOpensAt: number | null;
   /** The token the prize is paid in, from the frozen rules. */
   asset: string | null;
   logo_url: string | null;
@@ -201,6 +209,7 @@ export async function listHackathons(filter: Filter = {}): Promise<HackathonSumm
         ...summary,
         prize: document?.prize ?? null,
         closesAt: document?.closesAt ?? null,
+        registrationOpensAt: document?.registrationOpensAt ?? null,
         registrationClosesAt: document?.registrationClosesAt ?? null,
         asset: document?.asset ?? null,
       },
@@ -268,6 +277,49 @@ export async function nameOf(contractId: string): Promise<{ name: string; slug: 
     : { name: String(data.name), slug: String(data.slug) };
 }
 
+/**
+ * How a hackathon presents itself, for the panel's own masthead.
+ *
+ * The panel used to head itself with the name alone, which made it look like
+ * any other page of the product rather than like this organizer's event. The
+ * logo and the line under the name are what an organizer recognises their own
+ * hackathon by, and they are already stored; they were simply never read here.
+ */
+export async function presentationOf(contractId: string): Promise<{
+  name: string;
+  slug: string;
+  tagline: string | null;
+  logo: string | null;
+  banner: string | null;
+  location: string | null;
+  tags: string[];
+  /** When the row was written, which is about when the contract was created. */
+  createdAt: string | null;
+} | null> {
+  if (db === null) {
+    return null;
+  }
+
+  const { data } = await db
+    .from("hackathons")
+    .select("name, slug, tagline, logo_url, banner_url, location, tags, created_at")
+    .eq("contract_id", contractId)
+    .maybeSingle();
+
+  return data === null
+    ? null
+    : {
+        name: String(data.name),
+        slug: String(data.slug),
+        tagline: data.tagline === null ? null : String(data.tagline),
+        logo: data.logo_url === null ? null : String(data.logo_url),
+        banner: data.banner_url === null ? null : String(data.banner_url),
+        location: data.location === null ? null : String(data.location),
+        tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+        createdAt: data.created_at === null ? null : String(data.created_at),
+      };
+}
+
 /** Every tag in use, for building the filter from what actually exists. */
 export async function tagsInUse(): Promise<string[]> {
   if (db === null) {
@@ -320,6 +372,7 @@ export async function countHackathons(filter: Filter = {}): Promise<number> {
         prize: null,
         closesAt: null,
         registrationClosesAt: null,
+        registrationOpensAt: null,
         asset: null,
         logo_url: null,
         banner_url: null,
@@ -364,6 +417,7 @@ async function rulesOf(
   version: number;
   prize: bigint;
   closesAt: number;
+  registrationOpensAt: number;
   registrationClosesAt: number;
   asset: string | null;
 } | null> {
@@ -375,6 +429,7 @@ async function rulesOf(
         version: rules.version,
         prize: rules.total,
         closesAt: rules.schedule.submissionCloses,
+        registrationOpensAt: rules.schedule.registrationOpens,
         registrationClosesAt: rules.schedule.registrationCloses,
         asset: rules.prizeAsset,
       };
@@ -438,6 +493,7 @@ export async function findHackathon(slug: string): Promise<HackathonDetail | nul
     prize: rules?.total ?? null,
     closesAt: rules?.schedule.submissionCloses ?? null,
     registrationClosesAt: rules?.schedule.registrationCloses ?? null,
+    registrationOpensAt: rules?.schedule.registrationOpens ?? null,
     asset: rules?.prizeAsset ?? null,
   };
 }
@@ -464,6 +520,7 @@ function merge(
     prize: null,
     closesAt: null,
     registrationClosesAt: null,
+    registrationOpensAt: null,
     asset: null,
     logo_url: (written["logo_url"] as string | null) ?? null,
     banner_url: (written["banner_url"] as string | null) ?? null,

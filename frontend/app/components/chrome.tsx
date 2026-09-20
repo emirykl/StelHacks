@@ -29,42 +29,46 @@ export async function Header() {
       ? [null, false, false]
       : await Promise.all([profileOf(db, user.id), mayOrganize(db), isStaff(db)]);
 
-  /* A bar that floats rather than one painted across the top.
+  /* A sheet of glass across the top, curled off at the bottom two corners.
 
-     Only the bottom corners used to be rounded, and the curl was invisible
-     until something scrolled underneath it: at rest the header sat flush to
-     three edges of the window and the only thing anybody could see was one
-     straight line. So the hairline goes all the way around and the header is
-     held off every edge by the same gap, which makes the shape the same
-     whether the page has moved or not. The radius stays small enough to be
-     felt rather than noticed. */
+     It floated for a while: held off all four edges, hairlined the whole way
+     round, four corners rounded. That shape is a card, and a card announces
+     itself. What belongs up here is a surface the page passes behind, so the
+     bar goes back to meeting the top and the sides, and the only drawn edge
+     left is the one that has a job — the line the content stops at.
+
+     That line is barely there on purpose. The bar is read as glass because
+     the page is visible through it and blurred, not because an outline says
+     where it ends; an edge you can see the weight of is the thing that turns
+     glass back into a panel. The two bottom corners carry all the shape. */
   return (
     <>
       {/*
-        The strip the floating bar does not cover.
+        The glass past the bar's own edge.
 
-        Holding the header off every edge leaves a gap above it and a margin
-        down each side, and the page scrolls through all three. A video panel
-        or a banner passing behind the bar arrived sharp in that gap and blurred
-        under the bar, so the one thing meant to read as a single sheet of glass
-        read as a pane with a hole cut round it.
+        The bar covers its own height and stops, and the two curled corners
+        leave the page sharp in the notches beside them. This reaches lower
+        than the bar and fades out rather than stopping on a line, so what is
+        under the curls is blurred like everything above them and the corner
+        reads as a shape cut in glass rather than a bite taken out of it.
 
-        This is that glass. It reaches to the bar's lower edge and fades out
-        rather than stopping on a line, because a blur that ends abruptly is
-        just a second edge to explain. It sits under the header and over the
-        page, and it takes no pointer events: it is a surface, not a control.
+        It sits under the header and over the page, and it takes no pointer
+        events: it is a surface, not a control.
       */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-[5.5rem] backdrop-blur-xl [mask-image:linear-gradient(to_bottom,black_0,black_4.75rem,transparent_5.5rem)]"
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-[5.75rem] backdrop-blur-xl [mask-image:linear-gradient(to_bottom,black_0,black_4.5rem,transparent_5.75rem)]"
       />
 
       {/* The height is stated on the header itself rather than on the row
           inside it, so the space this bar occupies is one number and not that
-          number plus two hairlines. The sign in page pulls its artwork up by
+          number plus a hairline. The sign in page pulls its artwork up by
           exactly this much and the difference was two pixels of scrollbar. */}
-      <header className="sticky top-3 z-20 mx-3 mt-3 h-16 rounded-[1.25rem] border border-rule bg-paper/92 backdrop-blur-xl">
-      <div className="mx-auto flex h-full w-full max-w-[96rem] items-center justify-between px-5 sm:px-6">
+      <header className="sticky top-0 z-20 h-18 rounded-b-[1.5rem] border-b border-rule/50 bg-paper/55 backdrop-blur-2xl backdrop-saturate-150">
+      {/* A little wider than before, because the bar no longer holds itself off
+          the window: the margin that used to come from the gap down each side
+          has to come from the padding instead. */}
+      <div className="mx-auto flex h-full w-full max-w-[96rem] items-center justify-between px-6 sm:px-8">
         <a href="/" className="flex items-center gap-2.5">
           {/* The mark ships on its own black tile rather than transparent. The
               art has a black laptop screen and a black shadow in it, so a
@@ -74,12 +78,12 @@ export async function Header() {
           <img
             src="/mark.png"
             alt=""
-            width={32}
-            height={32}
-            className="size-8 rounded-[0.45rem]"
+            width={44}
+            height={44}
+            className="size-11 rounded-[0.6rem]"
           />
 
-          <span className="display text-xl tracking-normal">StelHacks</span>
+          <span className="display text-[1.625rem] tracking-normal">StelHacks</span>
         </a>
 
         <nav className="hidden items-center gap-1 sm:flex" aria-label="Sections">
@@ -87,11 +91,14 @@ export async function Header() {
               "Create" belong to the landing page's argument rather than to the
               header: a nav with three items and no hierarchy makes a reader
               choose before they know what any of them are. */}
+          {/* Full ink and half a weight up. It is the only destination in the
+              bar, and set soft and regular it read as a caption between two
+              controls that both looked more pressable than it. */}
           {[["Hackathons", "/hackathons"]].map(([label, href]) => (
             <a
               key={href}
               href={href}
-              className="rounded-full px-4 py-2.5 text-[1rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
+              className="rounded-full px-4 py-2 text-[1.1875rem] font-semibold text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
             >
               {label}
             </a>
@@ -120,11 +127,11 @@ export function Footer() {
     <footer className="border-t border-rule py-12">
       <Measure wide>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[0.8125rem] text-ink-faint">
+          <p className="text-[0.875rem] text-ink-faint">
             Stellar testnet. Contract addresses and build hashes are published.
           </p>
 
-          <nav className="flex flex-wrap gap-5 text-[0.8125rem] text-ink-soft" aria-label="Elsewhere">
+          <nav className="flex flex-wrap gap-5 text-[0.875rem] text-ink-soft" aria-label="Elsewhere">
             <a href="/how-it-works" className="hover:text-ink">
               How it works
             </a>

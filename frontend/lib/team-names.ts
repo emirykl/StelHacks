@@ -18,6 +18,7 @@ import { browserClient } from "./supabase/client";
 export interface Owner {
   displayName: string | null;
   username: string | null;
+  avatarUrl: string | null;
 }
 
 /** What each team called itself, keyed by the number the chain gave it. */
@@ -60,34 +61,37 @@ export async function ownersOf(addresses: string[]): Promise<Map<string, Owner>>
     .select("address, profile_id")
     .in("address", addresses);
 
-  const byProfile = new Map<string, string>();
+  const byAddress = new Map<string, string>();
 
   for (const row of links ?? []) {
     const record = row as Record<string, unknown>;
-    byProfile.set(String(record["profile_id"] ?? ""), String(record["address"] ?? ""));
+    byAddress.set(String(record["address"] ?? ""), String(record["profile_id"] ?? ""));
   }
 
-  if (byProfile.size === 0) {
+  if (byAddress.size === 0) {
     return new Map();
   }
 
   const { data: people } = await db
     .from("profiles")
-    .select("id, username, display_name")
-    .in("id", [...byProfile.keys()]);
+    .select("id, username, display_name, avatar_url")
+    .in("id", [...new Set(byAddress.values())]);
 
   const owners = new Map<string, Owner>();
+  const profiles = new Map<string, Owner>();
 
   for (const row of people ?? []) {
     const record = row as Record<string, unknown>;
-    const address = byProfile.get(String(record["id"] ?? ""));
+    profiles.set(String(record["id"] ?? ""), {
+      displayName: text(record["display_name"]),
+      username: text(record["username"]),
+      avatarUrl: text(record["avatar_url"]),
+    });
+  }
 
-    if (address !== undefined) {
-      owners.set(address, {
-        displayName: text(record["display_name"]),
-        username: text(record["username"]),
-      });
-    }
+  for (const [address, profileId] of byAddress) {
+    const profile = profiles.get(profileId);
+    if (profile !== undefined) owners.set(address, profile);
   }
 
   return owners;

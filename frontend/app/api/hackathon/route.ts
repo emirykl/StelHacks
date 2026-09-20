@@ -96,8 +96,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "that is not JSON" }, { status: 400 });
   }
 
-  if (typeof body.contract !== "string" || typeof body.signature !== "string") {
-    return NextResponse.json({ error: "a contract and a signature are needed" }, { status: 400 });
+  if (typeof body.contract !== "string") {
+    return NextResponse.json({ error: "a contract is needed" }, { status: 400 });
   }
 
   const organizer = await organizerOf(body.contract);
@@ -109,17 +109,49 @@ export async function POST(request: Request) {
     );
   }
 
-  const proved = await signedByOrganizer({
-    organizer,
-    contract: body.contract,
-    account: user.id,
-    issuedAt: body.issuedAt,
-    signature: body.signature,
-  });
+  /*
+    Two ways to prove the organizer's key, and they are the same strength.
 
-  if (!proved) {
+    A signature over the challenge is one. The other is a row in `wallet_links`,
+    which exists only because the address already signed a challenge the server
+    verified, and which only the verifier can write. So an organizer who has
+    linked their wallet to their account has proved this key once already, and
+    asking them to sign a message every time they change a tagline is asking for
+    a proof we are holding.
+
+    The session is still required either way. A link says the key belongs to an
+    account; it takes the cookie to say the person at the keyboard is in it.
+  */
+  const linked = await linkedToAccount(organizer, user.id);
+
+  const signed =
+    !linked &&
+    typeof body.signature === "string" &&
+    (await signedByOrganizer({
+      organizer,
+      contract: body.contract,
+      account: user.id,
+      issuedAt: body.issuedAt,
+      signature: body.signature,
+    }));
+
+  /*
+    A signature that verified is kept, so it is never asked for twice.
+
+    `wallet_links` is exactly this fact written down: that this address signed a
+    challenge naming this account, checked by the server. Having just checked
+    one, recording it is not a shortcut around the proof, it is the proof filed
+    where the rest of the product already looks for it. Without this the third
+    wallet prompt came back on every hackathon, asking somebody to re-prove a
+    key they had proved an hour earlier.
+  */
+  if (signed) {
+    await rememberLink(organizer, user.id);
+  }
+
+  if (!linked && !signed) {
     return NextResponse.json(
-      { error: "that signature is not the organizer's" },
+      { error: "that is not the organizer's key" },
       { status: 403 },
     );
   }
@@ -148,10 +180,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "nothing to write" }, { status: 400 });
   }
 
+  /*
+    Written rather than only updated, and this was the bug under everything.
+
+    This handler used to PATCH the row for the contract. PostgREST answers a
+    PATCH that matches nothing with success and an empty list, so a hackathon
+    created through the site — which has no row until something makes one, and
+    nothing did — saved its name to no rows at all and was told it worked. The
+    event then had no name, never appeared in the listing, and could not be
+    found by the page that lists what a judge has been asked to score.
+
+    Upserted on the primary key, so the first write creates the row and every
+    one after it edits the same row. The slug is only ever chosen here, on the
+    way in, because it is in URLs from that moment and a name changed later must
+    not move the page somebody bookmarked.
+  */
+  const fresh = (await metadataOf(body.contract)) === null;
+
+  if (fresh) {
+    patch["contract_id"] = body.contract;
+    patch["slug"] = await freeSlug(String(patch["name"] ?? "hackathon"), body.contract);
+  }
+
   const written = await fetch(
-    `${url}/rest/v1/hackathons?contract_id=eq.${encodeURIComponent(body.contract)}`,
+    fresh
+      ? `${url}/rest/v1/hackathons`
+      : `${url}/rest/v1/hackathons?contract_id=eq.${encodeURIComponent(body.contract)}`,
     {
-      method: "PATCH",
+      method: fresh ? "POST" : "PATCH",
       headers: {
         apikey: serviceRole,
         Authorization: `Bearer ${serviceRole}`,
@@ -167,6 +223,43 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ written: Object.keys(patch) });
+}
+
+/**
+ * A slug nobody else is using, from the name somebody typed.
+ *
+ * The shape is what the column's own check demands: lowercase, digits and
+ * dashes, three characters at least. A name of nothing but punctuation, or a
+ * slug already taken, falls back to the end of the contract address, which is
+ * unique by construction and readable enough for a URL nobody types by hand.
+ */
+async function freeSlug(name: string, contract: string): Promise<string> {
+  const tail = contract.slice(-8).toLowerCase();
+
+  const wanted = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
+  if (wanted.length < 3) {
+    return `event-${tail}`;
+  }
+
+  const taken = await fetch(
+    `${url}/rest/v1/hackathons?slug=eq.${encodeURIComponent(wanted)}&select=slug`,
+    { headers: { apikey: serviceRole!, Authorization: `Bearer ${serviceRole!}` } },
+  ).catch(() => null);
+
+  if (taken === null || !taken.ok) {
+    return `${wanted}-${tail}`;
+  }
+
+  const rows = (await taken.json().catch(() => [])) as unknown[];
+
+  return Array.isArray(rows) && rows.length === 0 ? wanted : `${wanted}-${tail}`;
 }
 
 /**
@@ -198,6 +291,51 @@ async function metadataOf(contract: string): Promise<Record<string, unknown> | n
   const rows = (await answer.json()) as Record<string, unknown>[];
 
   return rows[0] ?? null;
+}
+
+/**
+ * Files a proved address against the account that proved it.
+ *
+ * Ignored on conflict rather than overwritten: an address already linked to
+ * somebody is not something a second person gets to claim by signing, and the
+ * caller has nothing to do about it either way.
+ */
+async function rememberLink(address: string, account: string): Promise<void> {
+  await fetch(`${url}/rest/v1/wallet_links`, {
+    method: "POST",
+    headers: {
+      apikey: serviceRole!,
+      Authorization: `Bearer ${serviceRole!}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=ignore-duplicates",
+    },
+    body: JSON.stringify({ address, profile_id: account }),
+  }).catch(() => null);
+}
+
+/**
+ * Whether this address has already been proved to belong to this account.
+ *
+ * A row in `wallet_links` is written by the challenge verifier and by nothing
+ * else: no client role has an insert grant on it. Its existence is a signature
+ * that was checked, kept, so it stands in for one now.
+ *
+ * Read as the service role rather than as the reader, because the check must
+ * not depend on a policy that might later hide the row from them.
+ */
+async function linkedToAccount(address: string, account: string): Promise<boolean> {
+  const answer = await fetch(
+    `${url}/rest/v1/wallet_links?address=eq.${address}&profile_id=eq.${account}&select=address`,
+    { headers: { apikey: serviceRole!, Authorization: `Bearer ${serviceRole!}` } },
+  ).catch(() => null);
+
+  if (answer === null || !answer.ok) {
+    return false;
+  }
+
+  const rows = (await answer.json().catch(() => [])) as unknown[];
+
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 /** Who the contract says runs this hackathon. */

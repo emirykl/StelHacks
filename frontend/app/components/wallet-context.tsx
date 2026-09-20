@@ -13,7 +13,9 @@ import {
 import {
   connect as openPicker,
   disconnect as forget,
+  ours,
   restore,
+  walletNetwork,
   watch,
   type Connection,
 } from "../../lib/wallet";
@@ -34,6 +36,14 @@ interface Held {
   wallet: Connection | null;
   /** Before the first read finishes, we do not know. Not the same as "none". */
   known: boolean;
+  /**
+   * The network the wallet is pointed at, when it is not the one we are on.
+   *
+   * Null covers three cases that all mean "carry on": no wallet, the same
+   * network, and a wallet that declined to say. Only a stated disagreement
+   * lands here, because that is the only one worth stopping somebody over.
+   */
+  wrongNetwork: string | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
 }
@@ -116,9 +126,73 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setWallet(null);
   }, []);
 
+  /*
+    Which network the extension is on, asked whenever the wallet changes.
+
+    A wallet extension keeps its own network setting and nothing keeps it in
+    step with this deployment's. Signing across that gap does not fail politely:
+    the extension opens, refuses, and says the transaction "is not possible at
+    the moment", which reads as our bug at the last step of a long form. Asked
+    here, once, so every surface that signs can say so before the prompt.
+  */
+  const [wrongNetwork, setWrongNetwork] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (wallet === null) {
+      setWrongNetwork(null);
+      return;
+    }
+
+    let alive = true;
+
+    const ask = () => {
+      void walletNetwork().then((theirs) => {
+        if (alive) {
+          setWrongNetwork(theirs === null || theirs === ours ? null : theirs);
+        }
+      });
+    };
+
+    ask();
+
+    /*
+      Asked again whenever this tab comes back.
+
+      Switching networks happens inside the extension and tells us nothing: the
+      address does not change, so nothing here re-runs. Asked once, the notice
+      would keep insisting on a setting the person has already gone and fixed,
+      which is worse than not having noticed in the first place. Coming back to
+      the tab is exactly the moment they have finished changing it.
+    */
+    const again = () => {
+      if (document.visibilityState === "visible") {
+        ask();
+      }
+    };
+
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+
+    /* And a slow poll, but only while we are the ones complaining. Some wallets
+       are switched without this tab ever losing focus, and a notice that clears
+       itself in a few seconds is the difference between a setting and a wall. */
+    const polling =
+      wrongNetwork === null ? undefined : window.setInterval(ask, 4_000);
+
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", again);
+      window.removeEventListener("focus", again);
+
+      if (polling !== undefined) {
+        window.clearInterval(polling);
+      }
+    };
+  }, [wallet, wrongNetwork]);
+
   const held = useMemo(
-    () => ({ wallet, known, connect, disconnect }),
-    [wallet, known, connect, disconnect],
+    () => ({ wallet, known, wrongNetwork, connect, disconnect }),
+    [wallet, known, wrongNetwork, connect, disconnect],
   );
 
   return <Context.Provider value={held}>{children}</Context.Provider>;

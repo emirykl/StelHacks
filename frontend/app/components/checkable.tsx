@@ -82,13 +82,13 @@ export function CheckableProofStrip({
               <Settled onAgain={() => void run()} />
             ) : (
               <>
-                <p className="text-[0.8125rem] text-ink-soft">{said(stage)}</p>
+                <p className="text-[0.875rem] text-ink-soft">{said(stage)}</p>
 
                 <button
                   type="button"
                   onClick={() => void run()}
                   disabled={stage.at === "asking"}
-                  className="h-8 shrink-0 rounded-full px-4 text-[0.8125rem] text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk active:translate-y-px disabled:opacity-50"
+                  className="h-8 shrink-0 rounded-full px-4 text-[0.875rem] text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk active:translate-y-px disabled:opacity-50"
                 >
                   {stage.at === "asking"
                     ? "Reading the contract"
@@ -122,7 +122,7 @@ function Settled({ onAgain }: { onAgain: () => void }) {
         initial={still ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: "spring", stiffness: 460, damping: 30 }}
-        className="flex h-8 shrink-0 items-center gap-2 rounded-full bg-verified px-3.5 text-[0.8125rem] font-semibold text-paper"
+        className="flex h-8 shrink-0 items-center gap-2 rounded-full bg-verified px-3.5 text-[0.875rem] font-semibold text-paper"
       >
         <Tick />
         All four match the contract
@@ -131,7 +131,7 @@ function Settled({ onAgain }: { onAgain: () => void }) {
       <button
         type="button"
         onClick={onAgain}
-        className="text-[0.8125rem] text-night-ink-soft underline decoration-night-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-night-ink"
+        className="text-[0.875rem] text-night-ink-soft underline decoration-night-rule underline-offset-4 transition-colors duration-150 ease-settle hover:text-night-ink"
       >
         Check again
       </button>

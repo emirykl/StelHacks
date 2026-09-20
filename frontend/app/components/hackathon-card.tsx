@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { phaseName } from "../../lib/phase";
 import { prizeLabel, worthOf } from "../../lib/money";
 import type { HackathonSummary } from "../../lib/chain";
 
@@ -27,15 +26,15 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
   const worth = await worthOf(hackathon.asset, hackathon.prize);
   const prize = prizeLabel(worth, hackathon.prize);
   const finished = hackathon.phase !== null && hackathon.phase >= 8;
-  const funding = hackathon.phase === 1;
 
   /*
     Whether the door is actually open, which is not the same as the phase.
 
-    A phase only moves when somebody calls `advance_phase`, so an event whose
-    submission deadline passed an hour ago is still `Open` on chain until
-    someone tells it otherwise. The badge answers "can I still get in", and for
-    that hour the honest answer is no, however the contract is labelling itself.
+    A phase only moves when somebody calls `advance_phase`, and the clock
+    service does that within a lap rather than instantly, so an event whose
+    submission deadline has just passed is still `Open` on chain for a moment.
+    The badge answers "can I still get in", and for that moment the honest
+    answer is no, however the contract is labelling itself.
 
     Green was also given to judging, reveal and settlement, which are stages
     nobody can enter at all. It is now the one stage where entering is possible.
@@ -63,7 +62,6 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
       <Picture
         hackathon={hackathon}
         running={running}
-        funding={funding}
         finished={finished}
         shut={shut}
       />
@@ -82,33 +80,49 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
             )}
           </div>
 
-          <h3 className="min-w-0 text-[1.25rem] leading-tight transition-colors group-hover:text-ink-soft">
+          {/* The display face at full weight, which is what the rest of the
+              system already does with a name somebody chose. It was set in the
+              interface face at regular, because an `h3` is not in the base rule
+              that gives `h1` and `h2` the display face, and the card's title
+              ended up the same type as the tagline under it and half a shade
+              lighter than the tags below that. Bold rather than the 600 the
+              base rule uses: a name at twenty one pixels needs the extra weight
+              to carry the presence a headline gets from size. */}
+          <h3 className="display min-w-0 text-[1.625rem] font-bold leading-tight transition-colors group-hover:text-ink-soft">
             {hackathon.name}
           </h3>
 
           {hackathon.tagline !== null && (
-            <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
+            <p className="mt-2 text-[1rem] leading-relaxed text-ink-soft">
               {hackathon.tagline}
             </p>
           )}
         </div>
 
         <div>
-          {(hackathon.location !== null || hackathon.tags.length > 0) && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              {/* A place is not a subject, so it is not dressed as one. The pin
-                  says which kind of fact it is without a word being spent. */}
-              {hackathon.location !== null && (
-                <span className="label flex items-center gap-1.5 font-bold text-ink-soft">
-                  <Pin />
-                  {hackathon.location}
-                </span>
-              )}
+          {/* A place is a fact about the event and the tags are what it is
+              about, so they get a line each. Sharing one, the place was the
+              first of four grey chips and read as another tag. */}
+          {hackathon.location !== null && (
+            <p className="flex items-center gap-1.5 text-[1rem] font-semibold text-ink">
+              <Pin />
+              {hackathon.location}
+            </p>
+          )}
 
+          {hackathon.tags.length > 0 && (
+            <div className="mt-2.5 flex flex-wrap gap-2">
               {hackathon.tags.slice(0, 3).map((tag) => (
+                /* Tinted rather than grey. Three grey chips under a grey place
+                   and a grey tagline gave the lower half of the card one
+                   colour, and the tags are the one thing on it a reader scans
+                   for rather than reads. The signal yellow is the accent this
+                   product already uses for "look here"; at a tenth it is a wash
+                   rather than a highlight, so a row of them stays quieter than
+                   the prize. */
                 <span
                   key={tag}
-                  className="label bg-paper-sunk px-2 py-1 text-ink-faint"
+                  className="label bg-signal/15 px-2 py-1 text-signal-ink ring-1 ring-inset ring-signal/30"
                 >
                   {tag}
                 </span>
@@ -116,33 +130,24 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
             </div>
           )}
 
-          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-rule pt-4">
-            {/* The two numbers somebody is actually comparing across a grid of
-                these, so they are the two things given weight. The money is
-                green because money is; the countdown is full ink because it is
-                the other half of the same decision, and a deadline set in the
-                soft grey the tags use loses to them. Everything else on the
-                card stays quiet so that this pair reads first. */}
-            <p className="tabular text-[1.25rem] font-bold text-verified">
+          {/* The money, named. It was one figure with a ticker beside it, which
+              is a number somebody has to work out the meaning of; a labelled
+              row is read without stopping. */}
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t border-rule pt-4">
+            <p className="label text-ink-faint">Prize pool</p>
+
+            <p className="tabular text-[1.375rem] font-bold text-verified">
               {/* Absent rather than zero when the contract could not be reached.
                   A prize shown as nothing is a claim; a prize shown as unknown
                   is the truth. */}
               {hackathon.prize === null ? (
-                <span className="label font-normal text-ink-faint">prize not readable</span>
+                <span className="label font-normal text-ink-faint">not readable</span>
               ) : (
                 <>
                   {prize.figure}{" "}
-                  <span className="font-bold text-ink">{prize.code}</span>
+                  <span className="text-[1rem] font-semibold text-ink-soft">{prize.code}</span>
                 </>
               )}
-            </p>
-
-            <p className="label font-bold text-ink">
-              <Remaining
-                closesAt={hackathon.closesAt}
-                registrationClosesAt={hackathon.registrationClosesAt}
-                finished={finished}
-              />
             </p>
           </div>
         </div>
@@ -162,13 +167,11 @@ export async function HackathonCard({ hackathon }: { hackathon: HackathonSummary
 function Picture({
   hackathon,
   running,
-  funding,
   finished,
   shut,
 }: {
   hackathon: HackathonSummary;
   running: boolean;
-  funding: boolean;
   finished: boolean;
   /** Whether the submission deadline has passed, whatever the phase says. */
   shut: boolean;
@@ -201,15 +204,14 @@ function Picture({
         has gone is closed to anybody arriving, and drawing that in the neutral
         outline made "Closed" read as a footnote rather than as the answer.
       */}
+      <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-3">
       <span
-        className={`label absolute left-3 top-3 flex items-center gap-2 px-2.5 py-1.5 ${
+        className={`label flex items-center gap-2 px-2.5 py-1.5 ${
           running
             ? "bg-verified text-paper"
-            : funding
-              ? "bg-signal text-signal-ink"
-              : finished || shut
-                ? "bg-broken text-paper"
-                : "bg-paper text-ink ring-1 ring-inset ring-rule"
+            : finished || shut
+              ? "bg-broken text-paper"
+              : "bg-signal text-signal-ink"
         }`}
       >
         {running && <span aria-hidden className="size-1.5 rounded-full bg-paper" />}
@@ -231,10 +233,72 @@ function Picture({
         */}
         {shut && (hackathon.phase === null || hackathon.phase === 2)
           ? "Closed"
-          : phaseName(hackathon.phase)}
+          : label(hackathon)}
       </span>
+
+      {/* The clock beside the badge rather than under the prize. They answer one
+          question between them — can I get in, and by when — and reading them
+          together is what somebody scanning a grid actually does. */}
+      <span className="label bg-paper/90 px-2.5 py-1.5 text-ink backdrop-blur-sm">
+        <Remaining
+          closesAt={hackathon.closesAt}
+          registrationClosesAt={hackathon.registrationClosesAt}
+          finished={finished}
+        />
+      </span>
+      </div>
     </div>
   );
+}
+
+/**
+ * One word for where the event is, in a stranger's vocabulary.
+ *
+ * A badge on a card is glanced at, not read, so it gets a word rather than a
+ * sentence. The phase is the contract's own naming and it stays in the
+ * organizer's panel, where the phase is the thing being moved; "Draft",
+ * "Funding" and "Reveal" are not answers to the question a card is asked, which
+ * is whether this is worth a weekend.
+ *
+ * The unknown case is the one that mattered here. A phase is what the indexer
+ * recorded and a schedule is read from the chain, so an event the indexer has
+ * not reached has real deadlines and no phase — and printing "Not published
+ * yet" over a hackathon that is open, funded and taking sign-ups is worse than
+ * saying nothing. The deadlines answer it on their own.
+ */
+function label(hackathon: HackathonSummary): string {
+  const now = Math.floor(Date.now() / 1000);
+
+  if (hackathon.phase === null) {
+    if (hackathon.registrationOpensAt !== null && now < hackathon.registrationOpensAt) {
+      return "Soon";
+    }
+
+    return hackathon.registrationClosesAt !== null && now < hackathon.registrationClosesAt
+      ? "Open"
+      : "Running";
+  }
+
+  switch (hackathon.phase) {
+    case 0:
+    case 1:
+      return "Soon";
+    case 2:
+      return "Open";
+    case 3:
+      return "Checking";
+    case 4:
+    case 5:
+      return "Judging";
+    case 6:
+      return "Results";
+    case 7:
+      return "Paying";
+    case 8:
+      return "Finished";
+    default:
+      return "Called off";
+  }
 }
 
 /**

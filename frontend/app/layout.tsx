@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 
 import { Footer, Header } from "./components/chrome";
+import { NetworkNotice } from "./components/network-notice";
 import { WalletProvider } from "./components/wallet-context";
 import "./globals.css";
 
@@ -93,6 +94,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             being wrong. */}
         <WalletProvider>
           <Header />
+          {/* Under the bar rather than over the page. It only appears when the
+              wallet and this deployment disagree about which network they are
+              on, which is a setting rather than an error, so it sits in the
+              furniture and lets somebody carry on reading. */}
+          <NetworkNotice />
           {children}
           <Footer />
         </WalletProvider>

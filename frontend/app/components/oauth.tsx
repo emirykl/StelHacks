@@ -70,7 +70,7 @@ export function OAuthButtons({
           type="button"
           onClick={() => void go(provider)}
           disabled={going !== null}
-          className="flex h-11 items-center justify-center gap-3 rounded-full bg-paper text-[0.9375rem] font-medium text-ink ring-1 ring-inset ring-rule-strong transition-colors duration-150 ease-settle hover:bg-paper-sunk active:translate-y-px disabled:opacity-50"
+          className="flex h-11 items-center justify-center gap-3 rounded-full bg-paper text-[1rem] font-medium text-ink ring-1 ring-inset ring-rule-strong transition-colors duration-150 ease-settle hover:bg-paper-sunk active:translate-y-px disabled:opacity-50"
         >
           <Mark provider={provider} />
           {going === provider
@@ -79,7 +79,7 @@ export function OAuthButtons({
         </button>
       ))}
 
-      {refused !== null && <p className="text-[0.875rem] text-broken">{refused}</p>}
+      {refused !== null && <p className="text-[0.9375rem] text-broken">{refused}</p>}
     </div>
   );
 }

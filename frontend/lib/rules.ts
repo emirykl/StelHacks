@@ -17,6 +17,8 @@
  * single round trip.
  */
 
+import type { FieldRule, SubmissionFields } from "./constitution";
+
 /** The eight announced moments, seconds since the epoch. */
 export interface Schedule {
   registrationOpens: number;
@@ -60,14 +62,14 @@ export const VISIBILITY = ["Public", "Participants", "Restricted"] as const;
 /**
  * The constitution shape this build understands.
  *
- * It is two because the platform fee joined the document, and a hackathon
- * created before that has no fee field at all. The number is here rather than
- * imported from the contract because nothing on this side can import Rust; it
- * has to match `CONSTITUTION_VERSION` in
- * `contracts/hackathon-core/src/constitution/document.rs`, and the fixtures both
- * languages read are what catch it when it does not.
+ * It is three because a submission field stopped being a yes or no, and a
+ * hackathon created before that has three booleans where this build reads five
+ * rules. The number is here rather than imported from the contract because
+ * nothing on this side can import Rust; it has to match `CONSTITUTION_VERSION`
+ * in `contracts/hackathon-core/src/constitution/document.rs`, and the fixtures
+ * both languages read are what catch it when it does not.
  */
-export const CONSTITUTION_VERSION = 2;
+export const CONSTITUTION_VERSION = 4;
 
 export interface Rules {
   /**
@@ -96,7 +98,16 @@ export interface Rules {
   judgeQuorum: number;
   maxTeamSize: number;
   multiTeamAllowed: boolean;
-  requires: { repository: boolean; demoVideo: boolean; liveUrl: boolean };
+  /**
+   * Whether anybody who applies is in, or an application waits for a decision.
+   *
+   * Read back rather than inferred from whether a queue has anything in it: an
+   * open hackathon and a reviewed one nobody has applied to yet look identical
+   * from the outside, and only one of them is asking the organizer to do
+   * something.
+   */
+  openRegistration: boolean;
+  requires: SubmissionFields;
   /** How the final score splits, in basis points. The two total ten thousand. */
   judgeBps: number;
   communityBps: number;
@@ -203,15 +214,34 @@ function shape(raw: Record<string, unknown>): Rules {
     judgeQuorum: Number(raw["judge_quorum"] ?? 0),
     maxTeamSize: Number(teams["max_size"] ?? 0),
     multiTeamAllowed: teams["multi_team_allowed"] === true,
+    /* Reviewed unless the document plainly says otherwise, which is the safe
+       end: reading an open event as reviewed leaves an organizer with a queue
+       that decides nothing, and reading a reviewed one as open would tell a
+       page that strangers were already admitted. */
+    openRegistration: Number(raw["registration"] ?? 0) === 1,
     requires: {
-      repository: needs["repository_required"] === true,
-      demoVideo: needs["demo_video_required"] === true,
-      liveUrl: needs["live_url_required"] === true,
+      repository: ruleOf(needs["repository"]),
+      demoVideo: ruleOf(needs["demo_video"]),
+      liveUrl: ruleOf(needs["live_url"]),
+      pitchDeck: ruleOf(needs["pitch_deck"]),
+      deployedContract: ruleOf(needs["deployed_contract"]),
     },
     judgeBps: Number(vote["judge_bps"] ?? 0),
     communityBps: Number(vote["community_bps"] ?? 0),
     settlementDelay: delayOf(discretion["settlement"]),
   };
+}
+
+/**
+ * What the frozen rules say about one submission field.
+ *
+ * The enum carries no payload, so it arrives as the number the contract gave
+ * it. Anything unrecognised reads as offered rather than as never asked for:
+ * a rule this side cannot name is a field a team might still need to fill in,
+ * and hiding it would take away the only way they have to comply.
+ */
+function ruleOf(raw: unknown): FieldRule {
+  return raw === 2 ? "required" : raw === 0 ? "unasked" : "optional";
 }
 
 /**
@@ -286,14 +316,12 @@ export function windowsOf(rules: Rules, now = Math.floor(Date.now() / 1000)): Wi
     ["Judging ends", schedule.judgingCloses, null],
   ];
 
-  return spans
+  const windows = spans
     .filter(([, from]) => from > 0)
     .map(([label, from, to]) => ({
       label,
       from,
       to,
-      /* A deadline with no window is "now" only in the sense that it has not
-         happened; it is never something you are inside of. */
       standing: (to === null
         ? now >= from
           ? "past"
@@ -304,4 +332,25 @@ export function windowsOf(rules: Rules, now = Math.floor(Date.now() / 1000)): Wi
             ? "now"
             : "ahead") as Window["standing"],
     }));
+
+  /*
+    Whatever is next is where the event is.
+
+    Half of these are a deadline rather than a window — the entry check and the
+    judging have a closing moment and no opening one — so on the rule above they
+    could only ever be past or ahead, never the stage you are in. An event in
+    its judging round therefore had nothing marked at all, and a reader looking
+    for where it had got to found four grey lines.
+
+    The first row that has not happened is that stage, whichever shape it is.
+  */
+  if (!windows.some((window) => window.standing === "now")) {
+    const next = windows.find((window) => window.standing === "ahead");
+
+    if (next !== undefined) {
+      next.standing = "now";
+    }
+  }
+
+  return windows;
 }

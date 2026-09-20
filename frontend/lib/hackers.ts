@@ -95,6 +95,63 @@ export async function hackersOf(contractId: string, limit = 60): Promise<Hacker[
   });
 }
 
+/** Who an address belongs to, when it belongs to anybody. */
+export interface Person {
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * The people behind a set of addresses, keyed by address.
+ *
+ * The same two reads `hackersOf` makes, lifted out so a surface holding
+ * addresses from the chain rather than from `participants` can use them. The
+ * applications queue is one: it reads who applied out of the contract's own
+ * events, because a pending application is not a participant yet and has no row
+ * anywhere on our side.
+ *
+ * An address with nobody behind it is simply absent from the map. That is the
+ * ordinary case and not a failure: the contract approves keys, and a key is
+ * allowed to belong to somebody who never made an account here.
+ */
+export async function peopleFor(addresses: string[]): Promise<Record<string, Person>> {
+  if (db === null || addresses.length === 0) {
+    return {};
+  }
+
+  const { data: links } = await db
+    .from("wallet_links")
+    .select("address, profile_id")
+    .in("address", addresses);
+
+  const owner = new Map((links ?? []).map((row) => [String(row.address), String(row.profile_id)]));
+  const ids = [...new Set(owner.values())];
+
+  if (ids.length === 0) {
+    return {};
+  }
+
+  const { data: people } = await profilesOf(ids);
+  const person = new Map((people ?? []).map((row) => [String(row["id"]), row]));
+
+  const found: Record<string, Person> = {};
+
+  for (const [address, id] of owner) {
+    const row = person.get(id);
+
+    if (row !== undefined) {
+      found[address] = {
+        username: String(row["username"]),
+        displayName: (row["display_name"] as string | null) ?? null,
+        avatarUrl: (row["avatar_url"] as string | null) ?? null,
+      };
+    }
+  }
+
+  return found;
+}
+
 /**
  * The profiles behind those addresses, links included where the schema has
  * caught up.

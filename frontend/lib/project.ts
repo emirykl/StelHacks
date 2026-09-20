@@ -224,6 +224,7 @@ function text(value: unknown): string | null {
 export type Card = Pick<
   Project,
   | "teamId"
+  | "teamName"
   | "title"
   | "summary"
   | "logoUrl"
@@ -281,6 +282,7 @@ export async function cardsOf(contractId: string): Promise<Record<number, Card>>
   for (const [teamId, name] of named) {
     cards[teamId] = {
       teamId,
+      teamName: name,
       title: name,
       summary: null,
       logoUrl: null,
@@ -297,6 +299,7 @@ export async function cardsOf(contractId: string): Promise<Record<number, Card>>
 
     cards[teamId] = {
       teamId,
+      teamName: named.get(teamId) ?? null,
       title: String(row["title"] ?? named.get(teamId) ?? `Team ${teamId}`),
       summary: text(row["summary"]),
       logoUrl: text(row["logo_url"]),

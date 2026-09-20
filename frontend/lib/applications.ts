@@ -15,6 +15,30 @@
 const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
 const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
 
+/**
+ * Where to begin the walk, in ledgers.
+ *
+ * A day of margin on top of the estimate, because five seconds a ledger is an
+ * average rather than a promise and an application missed is worse than a pass
+ * wasted. Floored at what the node holds, since asking for a ledger it has
+ * dropped is refused outright.
+ */
+function startAt(oldest: number, latest: number, createdAt?: string | null): number {
+  if (createdAt == null) {
+    return oldest;
+  }
+
+  const age = Date.now() - new Date(createdAt).getTime();
+
+  if (!Number.isFinite(age) || age < 0) {
+    return oldest;
+  }
+
+  const margin = 17_280;
+
+  return Math.max(oldest, latest - Math.ceil(age / 5_000) - margin);
+}
+
 export interface Applicant {
   address: string;
   status: "pending" | "approved" | "rejected";
@@ -22,7 +46,23 @@ export interface Applicant {
 
 const statuses = ["pending", "approved", "rejected"] as const;
 
-export async function applicantsOf(contractId: string): Promise<Applicant[]> {
+export async function applicantsOf(
+  contractId: string,
+  /**
+   * When the hackathon was created, if we know.
+   *
+   * Without it the scan starts at the oldest ledger the node still holds, which
+   * on testnet is about a week: twelve passes of ten thousand ledgers, almost
+   * all of them over a chain that had never heard of this contract. A hackathon
+   * created this morning needs one pass, and this is what says so.
+   *
+   * An estimate, and deliberately a generous one. Ledgers close about every
+   * five seconds, so the arithmetic is close but not exact, and being early
+   * costs a pass while being late loses an application. It is also floored at
+   * whatever the node actually holds.
+   */
+  createdAt?: string | null,
+): Promise<Applicant[]> {
   if (rpcUrl === undefined || passphrase === undefined) {
     return [];
   }
@@ -41,7 +81,22 @@ export async function applicantsOf(contractId: string): Promise<Applicant[]> {
     indexer exists; until it records applications this is the only list there
     is, and an organizer should know it can be short rather than complete.
   */
-  const { oldestLedger } = await server.getHealth();
+  /* A node that will not answer leaves the queue empty rather than the page
+     broken. Every caller of this renders a list; none of them can do anything
+     useful with a thrown object from an RPC endpoint. */
+  let oldestLedger: number;
+  let latestLedger: number;
+
+  try {
+    const [health, latest] = await Promise.all([server.getHealth(), server.getLatestLedger()]);
+
+    oldestLedger = health.oldestLedger;
+    latestLedger = latest.sequence;
+  } catch {
+    return [];
+  }
+
+  const from = startAt(oldestLedger, latestLedger, createdAt);
 
   let cursor: string | undefined;
   const seen = new Set<string>();
@@ -56,11 +111,26 @@ export async function applicantsOf(contractId: string): Promise<Applicant[]> {
     contract that had them. The cursor is followed until it runs out.
   */
   for (let pass = 0; pass < 24; pass += 1) {
-    const page = await server.getEvents({
-      ...(cursor === undefined ? { startLedger: oldestLedger } : { cursor }),
-      filters: [{ type: "contract", contractIds: [contractId] }],
-      limit: 200,
-    });
+    /*
+      A failed page ends the scan rather than the page.
+
+      The node refuses a `startLedger` it no longer holds, and it refuses it by
+      throwing something that is not an `Error`: a bare object, which React
+      renders as `[object Object]` across the whole screen. What is already in
+      `seen` is still a true partial list, so the scan stops and the queue shows
+      what it found.
+    */
+    let page;
+
+    try {
+      page = await server.getEvents({
+        ...(cursor === undefined ? { startLedger: from } : { cursor }),
+        filters: [{ type: "contract", contractIds: [contractId] }],
+        limit: 200,
+      });
+    } catch {
+      break;
+    }
 
     for (const event of page.events) {
       /* The event name is the first topic and the applicant the second. The

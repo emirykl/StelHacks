@@ -54,6 +54,36 @@ export function AccountMenu({
 }) {
   const router = useRouter();
   const { wallet, known, connect, disconnect } = useWallet();
+
+  /*
+    How many hackathons name this wallet as a judge.
+
+    Asked once per connected address rather than on every render, and only to
+    decide whether a row appears. A judge is not a role in our tables: it is an
+    address in a frozen constitution, so the only way to know is to read the
+    rules, which is what the route behind this does.
+  */
+  const [judging, setJudging] = useState(0);
+
+  useEffect(() => {
+    const address = wallet?.address ?? null;
+
+    if (address === null) {
+      setJudging(0);
+      return;
+    }
+
+    let alive = true;
+
+    void fetch(`/api/judging?address=${address}`)
+      .then((answer) => answer.json() as Promise<{ judging: unknown[] }>)
+      .then((said) => alive && setJudging(said.judging.length))
+      .catch(() => alive && setJudging(0));
+
+    return () => {
+      alive = false;
+    };
+  }, [wallet?.address]);
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const holder = useRef<HTMLDivElement>(null);
@@ -131,7 +161,7 @@ export function AccountMenu({
         <button
           type="button"
           onClick={() => void connect()}
-          className="hidden h-9 items-center gap-2 rounded-full px-3 text-[0.8125rem] text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk sm:flex"
+          className="hidden h-10 items-center gap-2 rounded-full px-3.5 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk sm:flex"
         >
           <WalletIcon />
           Connect wallet
@@ -150,16 +180,16 @@ export function AccountMenu({
           aria-expanded={open}
           aria-haspopup="menu"
           aria-label={attached ? `Account, wallet ${wallet.address}` : "Account"}
-          className={`flex h-9 items-center rounded-full transition-colors duration-150 ease-settle ${
+          className={`flex h-10 items-center rounded-full transition-colors duration-150 ease-settle ${
             attached
-              ? "gap-2 bg-paper-sunk pl-3 pr-1 text-ink ring-1 ring-inset ring-rule hover:bg-rule/60"
+              ? "gap-2 bg-paper-sunk pl-3.5 pr-1 text-ink ring-1 ring-inset ring-rule hover:bg-rule/60"
               : ""
           }`}
         >
           {attached && (
             <>
               <Icon id={wallet.id} name={wallet.wallet} />
-              <span className="tabular text-[0.8125rem]">{shorten(wallet.address)}</span>
+              <span className="tabular text-[0.9375rem]">{shorten(wallet.address)}</span>
             </>
           )}
 
@@ -167,7 +197,7 @@ export function AccountMenu({
         </motion.button>
       </Press>
 
-      <Pop open={open} className="absolute right-0 top-12 z-20 w-[17rem] origin-top-right">
+      <Pop open={open} className="absolute right-0 top-13 z-20 w-[17rem] origin-top-right">
         {/*
           A list of places to go, which is what a menu under an avatar is.
 
@@ -190,7 +220,7 @@ export function AccountMenu({
             <Link
               href={`/u/${username}`}
               onClick={() => setOpen(false)}
-              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[0.9375rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
+              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[1rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
             >
               <Person />
               <span className="flex-1 truncate">Profile</span>
@@ -201,7 +231,7 @@ export function AccountMenu({
           <Link
             href="/account"
             onClick={() => setOpen(false)}
-            className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[0.9375rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
+            className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[1rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
           >
             <Sliders />
             <span className="flex-1 truncate">Settings</span>
@@ -211,13 +241,30 @@ export function AccountMenu({
           {/* The rows somebody has and almost nobody else does, kept in their
               own band so the menu still reads as three things for the reader
               who has none of them. */}
-          {(organizer || staff) && (
+          {(organizer || staff || judging > 0) && (
             <div className="my-1.5 border-t border-rule pt-1.5">
+              {/* A judge is an address in a frozen document rather than a role
+                  in our tables, so this row is decided by what the connected
+                  wallet is named in and appears for somebody who has no grant
+                  from us at all. Without it a judge's only way in was a link
+                  the organizer sent them once. */}
+              {judging > 0 && (
+                <Link
+                  href="/judge"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[1rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
+                >
+                  <Gavel />
+                  <span className="flex-1 truncate">Judging</span>
+                  <Chevron />
+                </Link>
+              )}
+
               {organizer && (
                 <Link
                   href="/manage"
                   onClick={() => setOpen(false)}
-                  className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[0.9375rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
+                  className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[1rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
                 >
                   <Stage />
                   <span className="flex-1 truncate">Your hackathons</span>
@@ -229,7 +276,7 @@ export function AccountMenu({
                 <Link
                   href="/admin/organizers"
                   onClick={() => setOpen(false)}
-                  className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[0.9375rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
+                  className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[1rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
                 >
                   <Tray />
                   <span className="flex-1 truncate">Applications</span>
@@ -249,7 +296,7 @@ export function AccountMenu({
               setOpen(false);
               void connect();
             }}
-            className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[0.9375rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
+            className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[1rem] text-ink transition-colors duration-150 ease-settle hover:bg-paper-sunk"
           >
             <WalletIcon />
             <span className="flex-1 truncate">{attached ? "Switch wallet" : "Connect a wallet"}</span>
@@ -263,7 +310,7 @@ export function AccountMenu({
                 setOpen(false);
                 void disconnect();
               }}
-              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[0.9375rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
+              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[1rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
             >
               <Unplug />
               <span className="flex-1 truncate">Disconnect</span>
@@ -279,7 +326,7 @@ export function AccountMenu({
               type="button"
               disabled={leaving}
               onClick={() => void signOut()}
-              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[0.9375rem] text-danger transition-colors duration-150 ease-settle hover:bg-danger/10 disabled:opacity-50"
+              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[1rem] text-danger transition-colors duration-150 ease-settle hover:bg-danger/10 disabled:opacity-50"
             >
               <Exit />
               <span className="flex-1 truncate">{leaving ? "Signing out" : "Sign out"}</span>
@@ -328,6 +375,18 @@ function Stage() {
     <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="size-[1.125rem] shrink-0">
       <path d="M5.5 17V3.75" />
       <path d="M5.5 4.25h7.75l-1.5 2.75 1.5 2.75H5.5" />
+    </svg>
+  );
+}
+
+/** A gavel, for the one role the chain hands out rather than we do. */
+function Gavel() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="size-[1.125rem] shrink-0">
+      <path d="M4 16.5h7" />
+      <path d="M7.5 13.5 13 8" />
+      <path d="m10.75 4.5 4.75 4.75" />
+      <path d="m12.5 2.75 4.75 4.75-1.75 1.75-4.75-4.75z" />
     </svg>
   );
 }
@@ -400,7 +459,7 @@ function Avatar({ email, avatarUrl }: { email: string; avatarUrl: string | null 
         aria-hidden
         src={avatarUrl}
         alt=""
-        className="size-8 shrink-0 rounded-full object-cover ring-1 ring-inset ring-rule"
+        className="size-9 shrink-0 rounded-full object-cover ring-1 ring-inset ring-rule"
       />
     );
   }
@@ -408,7 +467,7 @@ function Avatar({ email, avatarUrl }: { email: string; avatarUrl: string | null 
   return (
     <span
       aria-hidden
-      className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[0.8125rem] font-semibold text-signal"
+      className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-[0.9375rem] font-semibold text-signal"
     >
       {initial === "" ? <Figure /> : initial}
     </span>

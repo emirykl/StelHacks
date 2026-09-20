@@ -78,7 +78,7 @@ export function ProofStrip({ proofs, action }: { proofs: Proof[]; action?: React
               /* The value the claim rests on, reachable without taking a line
                  of its own. The full version is on the Details tab. */
               title={proof.value}
-              className="flex items-center gap-2 text-[0.875rem] text-ink-soft"
+              className="flex items-center gap-2 text-[0.9375rem] text-ink-soft"
             >
               <Dot standing={proof.standing} />
               {proof.claim}
@@ -96,13 +96,13 @@ export function ProofStrip({ proofs, action }: { proofs: Proof[]; action?: React
       {broken.length > 0 && (
         <div className="mt-5 border-t border-broken/40 bg-broken/5 px-4 py-4">
           <div>
-            <p className="text-[0.875rem] font-semibold text-broken">
+            <p className="text-[0.9375rem] font-semibold text-broken">
               The contract does not agree with this page.
             </p>
 
             <ul className="mt-3 grid gap-2">
               {broken.map((proof) => (
-                <li key={proof.key} className="text-[0.8125rem] text-ink-soft">
+                <li key={proof.key} className="text-[0.875rem] text-ink-soft">
                   <span className="font-semibold text-ink">{proof.claim}</span> — the contract
                   says <span className="tabular break-all text-ink">{proof.found}</span>
                 </li>
