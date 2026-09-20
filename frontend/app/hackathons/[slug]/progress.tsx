@@ -65,6 +65,27 @@ function deadlineOf(phase: number, rules: Rules): number | null {
   }
 }
 
+/**
+ * What that deadline is the deadline for.
+ *
+ * Said rather than left as "this stage". Two clocks run on this page and they
+ * count to different moments: this one to the end of the stage, the rail's to
+ * the end of registration, which closes first. Both were right and neither said
+ * which, so the pair read as one number contradicting itself.
+ */
+function deadlineName(phase: number): string {
+  switch (phase) {
+    case 2:
+      return "left to submit";
+    case 3:
+      return "left in entry check";
+    case 4:
+      return "left to judge";
+    default:
+      return "left in this stage";
+  }
+}
+
 /** A gap in the units somebody would say it in, largest two only. */
 function spoken(seconds: number): string {
   const day = Math.floor(seconds / 86_400);
@@ -170,7 +191,7 @@ export function Progress({ phase, rules }: { phase: number | null; rules: Rules 
           <p className="label shrink-0 text-[0.6875rem] text-ink-soft">
             {left > 0 ? (
               <>
-                <span className="text-ink">{spoken(left)}</span> left in this stage
+                <span className="text-ink">{spoken(left)}</span> {deadlineName(phase)}
               </>
             ) : (
               /* The deadline has gone but the contract has not been told. Said

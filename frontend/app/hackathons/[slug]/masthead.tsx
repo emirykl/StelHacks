@@ -82,9 +82,12 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               {hackathon.prize === null ? (
                 <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>
               ) : (
-                <p className="tabular text-[2rem] font-bold leading-none text-verified">
-                  {prize.figure}{" "}
-                  <span className="align-middle font-bold text-ink">{prize.code}</span>
+                /* One size and one weight across both halves. The figure was
+                   set larger than the code beside it, so the two read as a
+                   number with a label rather than as one amount of money. */
+                <p className="tabular flex items-baseline gap-2 text-[2rem] font-bold leading-none">
+                  <span className="text-verified">{prize.figure}</span>
+                  <span className="text-ink">{prize.code}</span>
                 </p>
               )}
             </Panel>
@@ -107,28 +110,36 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
               )}
             </Panel>
 
+            {/* Two boxes rather than one, because they answer two questions
+                and were stacked under a heading that had to name both. A place
+                is a fact about the event; the tags are what it is about, and an
+                event can have either without the other. */}
             {(hackathon.location !== null || hackathon.tags.length > 0) && (
-              <Panel label="Where and what">
+              <div className="grid border-b border-rule sm:grid-cols-2 sm:divide-x sm:divide-rule">
                 {hackathon.location !== null && (
-                  <p className="flex items-center gap-1.5 text-[0.9375rem] font-semibold text-ink">
-                    <Pin />
-                    {hackathon.location}
-                  </p>
+                  <Panel label="Where" bare>
+                    <p className="flex items-center gap-1.5 text-[0.9375rem] font-semibold text-ink">
+                      <Pin />
+                      {hackathon.location}
+                    </p>
+                  </Panel>
                 )}
 
                 {hackathon.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {hackathon.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="bg-paper-sunk px-2 py-1 text-[0.8125rem] text-ink-soft"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+                  <Panel label="About" bare>
+                    <div className="flex flex-wrap gap-1.5">
+                      {hackathon.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="bg-paper-sunk px-2 py-1 text-[0.8125rem] text-ink-soft"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </Panel>
                 )}
-              </Panel>
+              </div>
             )}
 
             {/* The way in, at the foot of the column that argues for it. It sat
@@ -203,14 +214,17 @@ function Picture({ hackathon }: { hackathon: HackathonDetail }) {
 function Panel({
   label,
   last = false,
+  bare = false,
   children,
 }: {
   label: string;
   last?: boolean;
+  /** Inside a row that draws its own edges, so this draws none of its own. */
+  bare?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`p-5 ${last ? "" : "border-b border-rule"}`}>
+    <div className={`p-5 ${last || bare ? "" : "border-b border-rule"}`}>
       <p className="label text-ink-faint">{label}</p>
 
       <div className="mt-3">{children}</div>
@@ -297,31 +311,28 @@ function Countdown({
  * chain is quoting, and the capitals were costing legibility for a distinction
  * that does not apply here.
  */
+/**
+ * One deadline, at the weight every other deadline is set in.
+ *
+ * It used to print the window a stage runs in — opens, an arrow, closes — and
+ * to bold whichever one was live. Two of the four rows have no opening at all,
+ * so half the list carried a date and an arrow and half carried a date, and the
+ * bolding made that read as importance rather than as shape. Every row is a
+ * deadline; the green line above already says which one is running.
+ */
 function Span({ span }: { span: Window }) {
-  const lit = span.standing === "now";
-
   return (
     <li className="flex items-baseline justify-between gap-4">
       <span
         className={`text-[0.875rem] ${
-          lit ? "font-bold text-ink" : span.standing === "past" ? "text-ink-faint" : "text-ink-soft"
+          span.standing === "past" ? "text-ink-faint" : "text-ink-soft"
         }`}
       >
         {span.label}
       </span>
 
-      <span
-        className={`tabular shrink-0 text-[0.8125rem] ${
-          lit ? "font-bold text-ink" : "text-ink-faint"
-        }`}
-      >
-        {span.to === null ? (
-          stamp(span.from)
-        ) : (
-          <>
-            {stamp(span.from)} <span className="text-ink-faint">→</span> {stamp(span.to)}
-          </>
-        )}
+      <span className="tabular shrink-0 text-[0.8125rem] text-ink-faint">
+        {stamp(span.to ?? span.from)}
       </span>
     </li>
   );
