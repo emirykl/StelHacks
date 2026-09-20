@@ -50,10 +50,10 @@ export interface ProjectedEvent {
 /**
  * One answer read from contract state while it was still live.
  *
- * Three things a page needs are in no event: the visibility and prize asset in
- * the constitution, a submission's URI, and the ranking itself. Soroban entries
- * expire, so these are read once at ingest and kept here rather than fetched
- * again later, when the contract may no longer be able to answer.
+ * Some things a page needs are in no event: the visibility, prize asset and
+ * judge bench in the constitution, a submission's URI, and the ranking itself.
+ * Soroban entries expire, so these are read once at ingest and kept here rather
+ * than fetched again later, when the contract may no longer be able to answer.
  */
 export interface StoredRead {
   contract_id: string;
@@ -66,6 +66,8 @@ export interface StoredRead {
 export interface HackathonStateRow {
   contract_id: string;
   organizer: string;
+  /** The judge addresses frozen in the constitution. */
+  judges: string[];
   constitution_hash: string;
   phase: number;
   visibility: number;

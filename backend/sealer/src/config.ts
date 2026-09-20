@@ -40,10 +40,15 @@ export const settings = {
   /**
    * How long between the rounds the service walks by itself.
    *
-   * The same half minute the clock uses, and for the same reason: this is the
+   * The same two minutes the clock uses, and for the same reason: this is the
    * longest a judging window can stay shut without its root being published,
    * and the clock will not let the phase move on until it is. Two services
-   * lapping at the same rate keep that handover inside a minute.
+   * lapping at the same rate keep that handover to a few minutes.
+   *
+   * It was half a minute on both. What that missed is that a lap is not free
+   * even when it finds nothing: each one reads the hackathons and then a phase
+   * apiece, and at that rate the reading alone outran a free tier's monthly
+   * egress against a database holding thirty megabytes.
    *
    * An empty setting is an absent one. `SEALER_EVERY_MS=""` is what an
    * environment file copied from the example contains, and read literally it
@@ -56,5 +61,5 @@ function every(): number {
   const written = process.env["SEALER_EVERY_MS"];
   const asked = written === undefined || written === "" ? Number.NaN : Number(written);
 
-  return Number.isFinite(asked) && asked > 0 ? asked : 30_000;
+  return Number.isFinite(asked) && asked > 0 ? asked : 120_000;
 }

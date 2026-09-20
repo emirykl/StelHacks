@@ -18,6 +18,14 @@
 -- its ballots again, which is the honest outcome rather than a guess written
 -- into somebody's vote.
 
+-- Emptied rather than converted, and said in SQL rather than left to whoever
+-- runs this. A sealed ballot is a digest over a voter and one team, and the new
+-- column has no honest value to give it: the ten points it would have to spend
+-- were never part of what that voter signed. Adding a non null column over rows
+-- that cannot have one would fail here anyway, so the choice is made in the
+-- open.
+delete from public.ballots;
+
 alter table public.ballots
   drop constraint ballots_team_id_positive;
 
@@ -33,19 +41,22 @@ alter table public.ballots
 -- reveal, and the collection service refuses it on intake. What is checked here
 -- is what no other reader should ever have to assume: a non empty array of
 -- objects, each naming a positive team and a positive weight.
+--
+-- Written as a JSON path rather than as a walk over `jsonb_array_elements`,
+-- because a check constraint may not contain a subquery. The path counts the
+-- entries that are well formed and the constraint insists that is all of them,
+-- which is the one phrasing that also catches an entry missing a field
+-- altogether: a missing key drops out of the filter rather than failing it.
 alter table public.ballots
   add constraint ballots_choices_shaped check (
     jsonb_typeof(choices) = 'array'
     and jsonb_array_length(choices) > 0
-    and not exists (
-      select 1
-      from jsonb_array_elements(choices) as choice
-      where jsonb_typeof(choice) <> 'object'
-        or jsonb_typeof(choice -> 'team') <> 'number'
-        or jsonb_typeof(choice -> 'weight') <> 'number'
-        or (choice ->> 'team')::numeric <= 0
-        or (choice ->> 'weight')::numeric <= 0
-    )
+    and jsonb_array_length(
+      jsonb_path_query_array(
+        choices,
+        '$[*] ? (@.team.type() == "number" && @.weight.type() == "number" && @.team > 0 && @.weight > 0)'
+      )
+    ) = jsonb_array_length(choices)
   );
 
 comment on column public.ballots.choices is

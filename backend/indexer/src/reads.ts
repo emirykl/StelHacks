@@ -6,9 +6,9 @@ import type { ProjectedEvent, StoredRead } from "./records.js";
 /**
  * Asking the contract the three questions its events do not answer.
  *
- * `visibility` and `prize_asset` live in the constitution, a submission's URI is
- * absent from `ProjectSubmitted`, and the ranking is absent from `TrackRanked`,
- * which counts placings rather than naming them.
+ * `visibility`, `prize_asset` and the judge bench live in the constitution, a
+ * submission's URI is absent from `ProjectSubmitted`, and the ranking is absent
+ * from `TrackRanked`, which counts placings rather than naming them.
  *
  * The asking happens here, at ingest, and not at rebuild time. Soroban entries
  * expire, and a finished hackathon is one nobody writes to, so its state goes
@@ -63,7 +63,11 @@ async function ask(client: HackathonCore, event: ProjectedEvent): Promise<Answer
         return {
           kind: "constitution",
           key: "",
-          data: { visibility: rules.visibility, prize_asset: rules.prize_asset },
+          data: {
+            visibility: rules.visibility,
+            prize_asset: rules.prize_asset,
+            judges: rules.judges.map((assignment) => assignment.judge),
+          },
         };
       }
 

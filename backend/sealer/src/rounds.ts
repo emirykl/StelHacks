@@ -39,8 +39,8 @@ const REVEAL = 5;
  *
  * Every one of them is an ordinary state of an event that is simply somewhere
  * else in its life, or of an entry the contract is right to leave out: a window
- * still open, a root already published, a judge who stepped away, a voter on
- * the team they voted for. Read by code rather than by message, because the
+ * still open, a root already published, a judge who stepped away, a voter who
+ * is not eligible. Read by code rather than by message, because the
  * generated client reports an error's doc comment rather than its name.
  */
 const EXPECTED = new Set(
@@ -55,7 +55,6 @@ const EXPECTED = new Set(
     "NotJudge",
     "JudgeRecused",
     "VoterNotEligible",
-    "SelfVoteRejected",
     "NotFound",
     "DisqualificationUnresolved",
   ].map((name) => {
@@ -127,29 +126,32 @@ export async function round(contract: string): Promise<string[]> {
   }
 
   const said: string[] = [];
-  const [scorecards, ballots] = await Promise.all([
-    heldScorecards(contract),
-    heldBallots(contract),
-  ]);
 
   if (at === JUDGING) {
+    /* Building the roots needs only the signed leaves. The private bodies are
+       Sub Rosa tlock ciphertext and deliberately cannot be opened yet. */
+    const [scoreLeaves, ballotLeaves] = await Promise.all([
+      leaves(contract, "scorecards"),
+      leaves(contract, "ballots"),
+    ]);
+
     /* Nothing to commit to is not a root of nothing. An empty tree would still
        be a digest the contract accepted, and it would close the window on a
        hackathon whose judges had simply not finished. */
-    if (scorecards.length > 0) {
+    if (scoreLeaves.length > 0) {
       const failed = await put(
         await client.publish_score_root({
-          root: Buffer.from(seal(await leaves(contract, "scorecards")).root),
+          root: Buffer.from(seal(scoreLeaves).root),
         }),
       );
 
       said.push(...report(contract, "the score root", failed));
     }
 
-    if (ballots.length > 0) {
+    if (ballotLeaves.length > 0) {
       const failed = await put(
         await client.publish_ballot_root({
-          root: Buffer.from(seal(await leaves(contract, "ballots")).root),
+          root: Buffer.from(seal(ballotLeaves).root),
         }),
       );
 
@@ -159,10 +161,15 @@ export async function round(contract: string): Promise<string[]> {
     return said;
   }
 
+  const [scorecards, ballots] = await Promise.all([
+    heldScorecards(contract),
+    heldBallots(contract),
+  ]);
+
   /*
     Reveal. Each entry carries its own proof, so they go one at a time and one
     that the contract turns away leaves the rest untouched — a judge who recused
-    themselves, a voter on the team they chose.
+    themselves, a voter who is no longer eligible.
 
     Held nothing, nothing to open. A tree cannot be built from no leaves, and an
     event that reached the reveal with an empty table is the ordinary shape of a

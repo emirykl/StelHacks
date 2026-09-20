@@ -36,10 +36,16 @@ export const settings = {
    * How long between laps.
    *
    * This is the worst case a deadline can be late by, so it is the number that
-   * decides whether the product feels automatic. Thirty seconds is short enough
-   * that nobody watching a countdown reach zero sees a stale phase, and long
-   * enough that a quiet week of hackathons is a handful of simulate calls a
-   * minute against RPC.
+   * decides whether the product feels automatic. It was thirty seconds, which
+   * was chosen against RPC and without counting what each lap also reads from
+   * Postgres: two queries, every lap, for as long as the process is up. Three
+   * services lapping on that reasoning spent a free tier's whole monthly egress
+   * on asking a thirty megabyte database whether anything had happened.
+   *
+   * Two minutes. A countdown that reaches zero can show a stale phase for that
+   * long, which is the honest cost and a small one: the contract enforces the
+   * deadline whatever this process does, and the manage page still offers the
+   * call to anybody who does not want to wait.
    */
   everyMs: every(),
 } as const;
@@ -54,5 +60,5 @@ function every(): number {
   const written = process.env["CLOCK_EVERY_MS"];
   const asked = written === undefined || written === "" ? Number.NaN : Number(written);
 
-  return Number.isFinite(asked) && asked > 0 ? asked : 30_000;
+  return Number.isFinite(asked) && asked > 0 ? asked : 120_000;
 }

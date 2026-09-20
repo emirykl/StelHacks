@@ -1,15 +1,15 @@
 import { createServer } from "node:http";
 
-import { ballotLeaf, scorecardLeaf, toHex, verifyBallot, verifyScorecard } from "@stelhacks/sdk";
+import { fromHex, toHex, verifySealed } from "@stelhacks/sdk";
 
 import { settings } from "./config.js";
 import { core, sealer } from "./core.js";
 import { issue } from "./receipt.js";
 import { proofFor, seal } from "./seal.js";
-import { ballotRules, fits } from "./rules.js";
-import { contractOf, isBallot, isRecord, isScorecard } from "./validate.js";
+import { contractOf, isRecord } from "./validate.js";
 import { rounds } from "./rounds.js";
 import { keepBallot, keepScorecard, leaves, phaseOf } from "./store.js";
+import { acceptsSeal, isSealedInput } from "./tlock.js";
 
 /**
  * The sealed collection service.
@@ -22,6 +22,7 @@ import { keepBallot, keepScorecard, leaves, phaseOf } from "./store.js";
  *   POST /scorecard   take one, hand back a receipt
  *   POST /ballot      the same, for the crowd
  *   POST /seal        build the tree and publish the root on chain
+ *   GET  /root        the root it would publish, for a sealer that is not us
  *   GET  /proof       the inclusion proof for one leaf, from the moment the
  *                     root exists
  *
@@ -48,17 +49,27 @@ async function takeScorecard(raw: unknown): Promise<unknown | Failure> {
   }
 
   const contract = contractOf(raw);
+  const team = raw["team"];
+  const judge = raw["judge"];
+  const leafHex = raw["leaf"];
   const signature = raw["signature"];
-  const feedback = raw["feedback"];
 
-  if (contract === null || !isScorecard(raw["scorecard"]) || typeof signature !== "string") {
-    return refuse(400, "a submission needs a contract, a scorecard and a signature");
-  }
-  if (feedback !== undefined && typeof feedback !== "string") {
-    return refuse(400, "feedback has to be text");
+  if (
+    contract === null ||
+    !Number.isInteger(team) ||
+    (team as number) < 1 ||
+    typeof judge !== "string" ||
+    !/^G[A-Z2-7]{55}$/.test(judge) ||
+    typeof leafHex !== "string" ||
+    !/^[0-9a-f]{64}$/.test(leafHex) ||
+    typeof signature !== "string" ||
+    !/^[0-9a-f]{128}$/.test(signature) ||
+    !isSealedInput(raw["sealed"])
+  ) {
+    return refuse(400, "a submission needs its public identity, signed leaf and sealed card");
   }
 
-  const body = { contract, scorecard: raw["scorecard"], signature, feedback };
+  const body = { contract, team: team as number, judge, leafHex, signature, sealed: raw["sealed"] };
   const phase = await phaseOf(body.contract);
 
   if (phase === null) {
@@ -68,9 +79,13 @@ async function takeScorecard(raw: unknown): Promise<unknown | Failure> {
     return refuse(409, "this hackathon is not collecting scorecards");
   }
 
-  const leaf = scorecardLeaf(body.scorecard);
+  if (!(await acceptsSeal(body.contract, body.sealed))) {
+    return refuse(400, "the card is not sealed to this hackathon's judging deadline");
+  }
+
+  const leaf = fromHex(body.leafHex);
   const signed = {
-    signer: body.scorecard.judge,
+    signer: body.judge,
     leaf,
     signature: Buffer.from(body.signature, "hex"),
   };
@@ -78,18 +93,17 @@ async function takeScorecard(raw: unknown): Promise<unknown | Failure> {
   // The signature is what makes the entry the judge's rather than the service's.
   // Without this check the service could write whatever it liked into the table
   // and the tree would faithfully commit to it.
-  if (!verifyScorecard(body.scorecard, signed)) {
-    return refuse(400, "that signature does not cover that scorecard");
+  if (!verifySealed(signed)) {
+    return refuse(400, "that signature does not cover that scorecard leaf");
   }
 
   await keepScorecard({
     contract: body.contract,
-    team: body.scorecard.team,
-    judge: body.scorecard.judge,
-    scores: body.scorecard.scores,
-    feedback: body.feedback ?? null,
-    leaf: toHex(leaf),
+    team: body.team,
+    judge: body.judge,
+    leaf: body.leafHex,
     signature: body.signature,
+    sealed: body.sealed,
   });
 
   return issue(leaf, sealer, Math.floor(Date.now() / 1000));
@@ -102,19 +116,23 @@ async function takeBallot(raw: unknown): Promise<unknown | Failure> {
 
   const contract = contractOf(raw);
   const voter = raw["voter"];
-  const choices = raw["choices"];
+  const leafHex = raw["leaf"];
   const signature = raw["signature"];
 
   if (
     contract === null ||
     typeof voter !== "string" ||
-    !isBallot(choices) ||
-    typeof signature !== "string"
+    !/^G[A-Z2-7]{55}$/.test(voter) ||
+    typeof leafHex !== "string" ||
+    !/^[0-9a-f]{64}$/.test(leafHex) ||
+    typeof signature !== "string" ||
+    !/^[0-9a-f]{128}$/.test(signature) ||
+    !isSealedInput(raw["sealed"])
   ) {
-    return refuse(400, "a ballot needs a contract, a voter, its choices and a signature");
+    return refuse(400, "a ballot needs its public identity, signed leaf and sealed choices");
   }
 
-  const body = { contract, voter, choices, signature };
+  const body = { contract, voter, leafHex, signature, sealed: raw["sealed"] };
   const phase = await phaseOf(body.contract);
 
   if (phase === null) {
@@ -124,32 +142,27 @@ async function takeBallot(raw: unknown): Promise<unknown | Failure> {
     return refuse(409, "this hackathon is not collecting ballots");
   }
 
-  const rules = await ballotRules(body.contract);
-
-  if (!fits(body.choices, rules)) {
-    return refuse(
-      400,
-      `this hackathon gives a wallet ${rules.power} points to place across at most ${rules.maxChoices} projects, all of which have to be spent`,
-    );
+  if (!(await acceptsSeal(body.contract, body.sealed))) {
+    return refuse(400, "the ballot is not sealed to this hackathon's judging deadline");
   }
 
-  const leaf = ballotLeaf(body.voter, body.choices);
+  const leaf = fromHex(body.leafHex);
   const signed = {
     signer: body.voter,
     leaf,
     signature: Buffer.from(body.signature, "hex"),
   };
 
-  if (!verifyBallot(body.voter, body.choices, signed)) {
-    return refuse(400, "that signature does not cover that ballot");
+  if (!verifySealed(signed)) {
+    return refuse(400, "that signature does not cover that ballot leaf");
   }
 
   await keepBallot({
     contract: body.contract,
     voter: body.voter,
-    choices: body.choices,
-    leaf: toHex(leaf),
+    leaf: body.leafHex,
     signature: body.signature,
+    sealed: body.sealed,
   });
 
   return issue(leaf, sealer, Math.floor(Date.now() / 1000));
@@ -196,6 +209,30 @@ async function publish(raw: unknown) {
   await call.signAndSend();
 
   return { root: toHex(sealed.root), sealed: held.length };
+}
+
+/**
+ * The root this service would publish, without publishing it.
+ *
+ * For the one case where it cannot: the constitution names an address and the
+ * contract asks that exact key to authorize the call, so a hackathon frozen
+ * with somebody else as its sealer leaves this process holding every card and
+ * unable to put a digest on chain. There is no fix for such an event from here
+ * — the document is frozen — and the party it named can still do it, provided
+ * something hands them the root.
+ *
+ * The root is a pure function of the leaves held, which is why handing it out
+ * gives nothing away and settles nothing. Whoever signs it is still the address
+ * the rules announced, and the contract still refuses a second one.
+ */
+async function rootOf(contract: string, kind: "scorecards" | "ballots") {
+  const held = await leaves(contract, kind);
+
+  if (held.length === 0) {
+    return refuse(404, "nothing is held for that hackathon");
+  }
+
+  return { root: toHex(seal(held).root), sealed: held.length };
 }
 
 /** The inclusion proof for one leaf, rebuilt from what the service holds. */
@@ -254,6 +291,15 @@ const routes = createServer((request, response) => {
       answer(200, result);
     }
   };
+
+  if (request.method === "GET" && url.pathname === "/root") {
+    const contract = url.searchParams.get("contract") ?? "";
+    const kind = url.searchParams.get("kind") === "ballots" ? "ballots" : "scorecards";
+
+    rootOf(contract, kind).then(settle, (reason) => answer(500, { error: String(reason) }));
+
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/proof") {
     const contract = url.searchParams.get("contract") ?? "";

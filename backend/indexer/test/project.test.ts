@@ -70,7 +70,7 @@ function log(): { events: ProjectedEvent[]; reads: StoredRead[] } {
       ledger: 102,
       kind: "constitution",
       key: "",
-      data: { visibility: 0, prize_asset: ASSET },
+      data: { visibility: 0, prize_asset: ASSET, judges: [JUDGE] },
     },
     {
       contract_id: CONTRACT,
@@ -159,6 +159,7 @@ describe("what the log says about one hackathon", () => {
   it("takes the visibility from the constitution, which no event carries", () => {
     expect(rows.hackathon_state[0]!.visibility).toBe(0);
     expect(rows.hackathon_state[0]!.prize_asset).toBe(ASSET);
+    expect(rows.hackathon_state[0]!.judges).toEqual([JUDGE]);
     expect(rows.hackathon_state[0]!.vault_id).toBe(VAULT);
   });
 

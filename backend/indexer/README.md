@@ -27,10 +27,11 @@ does. Losing the log is the only thing here that cannot be undone.
 
 ## Three things that are not in any event
 
-`visibility` and `prize_asset` live in the constitution, a submission's `uri` is
-absent from `ProjectSubmitted`, and the ranking is absent from `TrackRanked`,
-which counts placings rather than naming them. All three are read from contract
-state at ingest, while the state is still live, and kept in `chain_reads`.
+`visibility`, `prize_asset` and the judge bench live in the constitution, a
+submission's `uri` is absent from `ProjectSubmitted`, and the ranking is absent
+from `TrackRanked`, which counts placings rather than naming them. They are read
+from contract state at ingest, while the state is still live, and kept in
+`chain_reads`.
 Soroban entries expire, so a rebuild that called the contract again would work
 today and fail in a year. Decision 22 has the reasoning.
 

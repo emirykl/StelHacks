@@ -39,7 +39,12 @@ interface Event {
  * way it is ever written; there is no client path to it and the tests below
  * check that too.
  */
-async function publish(visibility: number | null, participant?: string): Promise<Event> {
+async function publish(
+  visibility: number | null,
+  participant?: string,
+  organizer = someAddress(),
+  judges: string[] = [],
+): Promise<Event> {
   const contract = someContract();
   const title = `project-${contract.slice(1, 9)}`;
   const admin = backend();
@@ -56,7 +61,8 @@ async function publish(visibility: number | null, participant?: string): Promise
     await seed(
       admin.from("hackathon_state").insert({
         contract_id: contract,
-        organizer: someAddress(),
+        organizer,
+        judges,
         constitution_hash: "\\x00",
         phase: 2,
         visibility,
@@ -103,20 +109,34 @@ async function unpublish(event: Event): Promise<void> {
 
 let insider: TestUser;
 let outsider: TestUser;
+let organizerUser: TestUser;
+let judgeUser: TestUser;
 let insiderAddress: string;
+let organizerAddress: string;
+let judgeAddress: string;
 const events: Event[] = [];
 
 beforeAll(async () => {
-  insider = await signUp();
-  outsider = await signUp();
+  [insider, outsider, organizerUser, judgeUser] = await Promise.all([
+    signUp(),
+    signUp(),
+    signUp(),
+    signUp(),
+  ]);
 
   // The address is bound the way the verifier binds it, after a signature it
   // has already checked. No client can do this, which is what makes holding an
   // address mean something.
   insiderAddress = someAddress();
-  await backend()
-    .from("wallet_links")
-    .insert({ address: insiderAddress, profile_id: insider.id });
+  organizerAddress = someAddress();
+  judgeAddress = someAddress();
+  await seed(
+    backend().from("wallet_links").insert([
+      { address: insiderAddress, profile_id: insider.id },
+      { address: organizerAddress, profile_id: organizerUser.id },
+      { address: judgeAddress, profile_id: judgeUser.id },
+    ]),
+  );
 });
 
 afterAll(async () => {
@@ -125,6 +145,8 @@ afterAll(async () => {
   }
   await remove(insider);
   await remove(outsider);
+  await remove(organizerUser);
+  await remove(judgeUser);
 });
 
 async function track(event: Event): Promise<Event> {
@@ -206,11 +228,27 @@ describe("a gallery open to participants only", () => {
     expect(mine.data).toHaveLength(1);
     expect(notMine.data).toHaveLength(0);
   });
+
+  it("is readable by the organizer and judges without admitting them as participants", async () => {
+    const event = await track(
+      await publish(PARTICIPANTS, undefined, organizerAddress, [judgeAddress]),
+    );
+
+    const [asOrganizer, asJudge] = await Promise.all([
+      organizerUser.client.from("projects").select("title").eq("contract_id", event.contract),
+      judgeUser.client.from("projects").select("title").eq("contract_id", event.contract),
+    ]);
+
+    expect(asOrganizer.data).toHaveLength(1);
+    expect(asJudge.data).toHaveLength(1);
+  });
 });
 
 describe("a restricted gallery", () => {
-  it("is closed to everybody who comes through the public API", async () => {
-    const event = await track(await publish(RESTRICTED, insiderAddress));
+  it("is closed to visitors and participants", async () => {
+    const event = await track(
+      await publish(RESTRICTED, insiderAddress, organizerAddress, [judgeAddress]),
+    );
 
     const asVisitor = await visitor()
       .from("projects")
@@ -223,6 +261,33 @@ describe("a restricted gallery", () => {
 
     expect(asVisitor.data).toHaveLength(0);
     expect(asParticipant.data).toHaveLength(0);
+  });
+
+  it("is readable by the organizer and a named judge", async () => {
+    const event = await track(
+      await publish(RESTRICTED, insiderAddress, organizerAddress, [judgeAddress]),
+    );
+
+    const [asOrganizer, asJudge] = await Promise.all([
+      organizerUser.client.from("projects").select("title").eq("contract_id", event.contract),
+      judgeUser.client.from("projects").select("title").eq("contract_id", event.contract),
+    ]);
+
+    expect(asOrganizer.data).toHaveLength(1);
+    expect(asJudge.data).toHaveLength(1);
+  });
+
+  it("is closed to a judge from another hackathon", async () => {
+    const event = await track(
+      await publish(RESTRICTED, insiderAddress, organizerAddress, [someAddress()]),
+    );
+
+    const { data } = await judgeUser.client
+      .from("projects")
+      .select("title")
+      .eq("contract_id", event.contract);
+
+    expect(data).toHaveLength(0);
   });
 });
 
@@ -322,15 +387,20 @@ describe("the derived tables", () => {
    * Opening a closed gallery by rewriting its visibility would be the same
    * attack one table over.
    */
-  it("refuse a visibility change from somebody signed in", async () => {
+  it("refuse visibility and judge changes from somebody signed in", async () => {
     const event = await track(await publish(RESTRICTED, insiderAddress));
 
-    const { error } = await insider.client
+    const visibility = await insider.client
       .from("hackathon_state")
       .update({ visibility: PUBLIC })
       .eq("contract_id", event.contract);
+    const judges = await insider.client
+      .from("hackathon_state")
+      .update({ judges: [insiderAddress] })
+      .eq("contract_id", event.contract);
 
-    expect(error?.code).toBe("42501");
+    expect(visibility.error?.code).toBe("42501");
+    expect(judges.error?.code).toBe("42501");
   });
 });
 

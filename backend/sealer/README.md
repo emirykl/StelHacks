@@ -1,22 +1,27 @@
 # Sealer
 
-Holds scorecards and ballots during the judging window, and publishes one digest
-committing to all of them when it closes.
+Holds Sub Rosa time-lock ciphertext for scorecards and ballots during judging,
+and publishes one digest committing to all signed leaves when the window closes.
 
 ```bash
 SEALER_SECRET_KEY=S... npm start
 ```
 
-## The only place the product asks for trust
+## What is private, and what still asks for trust
 
-Everything else in StelHacks is verifiable without believing anybody. This is
-not: between a judge submitting and the root going on chain, this service holds
-something nobody else can read. Being precise about what that lets it do is more
-useful than promising it will behave.
+The browser encrypts each private body with `@sub-rosa/tlock` for the first Drand
+quicknet round at or after the judging deadline frozen in the constitution. The
+service independently derives that round and rejects an earlier envelope. Until
+the beacon exists, the database, organizer and service-role process all have
+only ciphertext; Supabase RLS is an additional boundary, not the secrecy claim.
 
-**It cannot change an entry.** The judge signs the leaf, and the tree commits to
-that same leaf. A scorecard altered after submission no longer matches the
-signature given for it, and the signature travels with it.
+After the deadline the service can decrypt and reveal the bodies. This is
+deadline privacy, not permanent anonymity. The remaining trust is availability:
+the service can refuse or omit an entry, but it cannot do either quietly.
+
+**It cannot change an entry.** The judge or voter signs the plaintext leaf before
+it is encrypted, and the tree commits to that same leaf. A body altered after
+submission no longer matches its signature and commitment.
 
 **It cannot deny receiving one.** Every intake returns a receipt signed by the
 sealer's own key, covering the leaf and the moment it arrived. The timestamp is
@@ -28,15 +33,15 @@ leaf has no proof under that root, the service dropped it, and no explanation
 reconciles the two. Anybody can run that check; `omitted()` in `src/seal.ts` is
 it, and `test/omission.test.ts` is a dishonest service being caught by it.
 
-So the worst it can do is refuse an entry to your face, which is a different
-kind of problem and a visible one.
+So the worst it can do is refuse or visibly omit an entry. It cannot inspect
+scores early and selectively censor them based on their contents.
 
 ## Routes
 
 | | |
 |---|---|
-| `POST /scorecard` | Take one, hand back a receipt |
-| `POST /ballot` | The same, for the crowd |
+| `POST /scorecard` | Take a signed, time-locked card and return a receipt |
+| `POST /ballot` | The same for a community ballot |
 | `POST /seal` | Build the tree and publish the root on chain |
 | `GET /proof` | The inclusion proof for one leaf |
 
@@ -55,7 +60,7 @@ process also walks every hackathon on a timer, in `src/rounds.ts`:
 | When | What |
 |---|---|
 | Judging, window shut | Publish the root committing to everything held |
-| Reveal | Open every scorecard and ballot under it |
+| Reveal | Fetch the Drand beacon, decrypt and open every valid entry under it |
 | Reveal, all opened | Rank, since nothing is left to wait for |
 
 `POST /seal` stays, and does the first of those on demand.

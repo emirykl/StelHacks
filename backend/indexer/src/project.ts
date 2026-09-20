@@ -66,6 +66,7 @@ export function project(events: readonly ProjectedEvent[], reads: readonly Store
         state.set(contract, {
           contract_id: contract,
           organizer,
+          judges: [],
           constitution_hash: "\\x",
           phase: Phase.Draft,
           visibility: 2,
@@ -86,6 +87,7 @@ export function project(events: readonly ProjectedEvent[], reads: readonly Store
           // which is the same direction the policy fails in.
           visibility: typeof locked["visibility"] === "number" ? locked["visibility"] : 2,
           prize_asset: locked["prize_asset"] === undefined ? null : text(locked["prize_asset"]),
+          judges: addresses(locked["judges"]),
         });
         break;
       }
@@ -406,4 +408,15 @@ function bytes(value: unknown): string {
  */
 function address(value: unknown): string | null {
   return typeof value === "string" && /^G[A-Z2-7]{55}$/.test(value) ? value : null;
+}
+
+/** Only well-formed account addresses from a constitution become an RLS role. */
+function addresses(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(address)
+    .filter((candidate): candidate is string => candidate !== null);
 }
