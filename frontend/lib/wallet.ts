@@ -206,6 +206,52 @@ export async function signTransaction(xdr: string): Promise<string> {
 }
 
 /**
+ * Sign one address's half of a call that needs two signatures.
+ *
+ * `add_member` requires the captain and the joiner to authorize the same
+ * invocation, and they are never at the same keyboard. Soroban's answer is that
+ * each address signs its own authorization entry, so the one who is not
+ * submitting can sign theirs early and hand it over.
+ *
+ * What comes back carries a signature expiration ledger, which is what makes a
+ * request go stale rather than sit there forever. The surface that stores one is
+ * responsible for saying so when it lapses.
+ */
+export async function signAuthEntry(xdr: string): Promise<string> {
+  const instance = await kit();
+
+  try {
+    const { signedAuthEntry } = await instance.signAuthEntry(xdr, {
+      networkPassphrase: network,
+    });
+
+    return signedAuthEntry;
+  } catch (thrown) {
+    throw new Error(explain(thrown));
+  }
+}
+
+/**
+ * A wallet's signature in the encoding the server verifies.
+ *
+ * Wallets hand back base64 and `signedByOrganizer` reads hex, and each new
+ * caller was converting on its own or, twice, forgetting to. A signature in the
+ * wrong encoding fails as "not the organizer", which is the same message a
+ * forgery gets, so the mistake is invisible until somebody wonders why their
+ * team has no name.
+ */
+export async function proveAddressHex(address: string, challenge: string): Promise<string> {
+  const raw = atob(await proveAddress(address, challenge));
+  let out = "";
+
+  for (let index = 0; index < raw.length; index += 1) {
+    out += raw.charCodeAt(index).toString(16).padStart(2, "0");
+  }
+
+  return out;
+}
+
+/**
  * Sign the server's challenge.
  *
  * The wallet signs a plain message rather than a transaction, because nothing
