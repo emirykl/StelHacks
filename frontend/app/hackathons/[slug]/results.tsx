@@ -116,9 +116,41 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
     };
   }, [asset, address]);
 
+  /*
+    Something to read before there is anything to read.
+
+    This drew nothing until a ranking existed, so the tab a reader clicked on
+    the first day was an empty page — indistinguishable from one that had failed
+    to load. A hackathon spends most of its life in that state.
+  */
   if (results === null || results.length === 0) {
-    return null;
+    return (
+      <section className="border-t border-rule">
+        <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
+          <h2 className="text-[2rem] leading-tight">Results</h2>
+
+          <p className="mt-4 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+            Nothing is ranked yet. When judging closes, the contract works out
+            the placings and they appear here — the scores, what settled each
+            tie, and what was paid.
+          </p>
+        </div>
+      </section>
+    );
   }
+
+  /*
+    Where this wallet's own team came, whether or not that place pays.
+
+    The podium holds three and a prize table often holds fewer. Everybody else
+    read the board looking for a row about themselves, which is the reading the
+    board is worst at: it is sorted by rank and they do not know their rank.
+  */
+  const mine = address === null
+    ? null
+    : results
+        .flatMap((result) => result.places.map((place) => ({ ...place, track: result.track })))
+        .find((place) => place.members.includes(address)) ?? null;
 
   /* Whether this wallet has already been paid at this event, which is what
      makes cashing out a thing it can do. */
@@ -193,6 +225,19 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
             machinery". It is a results table, and the thing worth emphasising
             is who won rather than that a contract worked it out. */}
         <h2 className="text-[2rem] leading-tight">Results</h2>
+
+        {/* Said before the podium, because somebody who did not make it onto one
+            is still looking for themselves and should not have to search a
+            table sorted by a number they do not know. */}
+        {mine !== null && (
+          <p className="mt-3 text-[1rem] leading-relaxed text-ink">
+            {mine.rank <= 3 ? "Congratulations. " : ""}
+            Your team placed{" "}
+            <span className="font-medium">{ordinal(mine.rank)}</span> in{" "}
+            {mine.track}
+            {mine.paid ? " and the prize has been paid." : "."}
+          </p>
+        )}
 
         {/*
           Only when it is this wallet's problem, and only when it is a problem.

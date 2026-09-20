@@ -186,6 +186,33 @@ export async function watch(onChange: (address: string | undefined) => void): Pr
 }
 
 /**
+ * Which network the wallet itself is pointed at.
+ *
+ * Asked rather than assumed, because a wallet extension has its own network
+ * setting and nothing keeps it in step with this deployment's. Signing across
+ * that mismatch fails somewhere deep in whichever library notices first, with a
+ * message about stacks or bytes rather than about the one thing that is wrong.
+ */
+export async function walletNetwork(): Promise<string | null> {
+  try {
+    const instance = await kit();
+
+    return (await instance.getNetwork()).networkPassphrase;
+  } catch {
+    /* A wallet that will not say is not evidence of a mismatch, and refusing to
+       go on because of one would be worse than the mismatch. */
+    return null;
+  }
+}
+
+/** Whether the wallet and this deployment are on the same network. */
+export async function onTheSameNetwork(): Promise<boolean> {
+  const theirs = await walletNetwork();
+
+  return theirs === null || network === undefined || theirs === network;
+}
+
+/**
  * Hand a built transaction to the wallet and get the signed bytes back.
  *
  * The kit talks to the extension; nothing here sees a key. What comes back is

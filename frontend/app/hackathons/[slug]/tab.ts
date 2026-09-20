@@ -10,7 +10,10 @@
 
 export type Tab = "details" | "projects" | "results" | "hackers" | "find-team";
 
-export const TABS: Tab[] = ["details", "projects", "results", "hackers", "find-team"];
+/* Results last, because it is the tab that is empty for most of an event and
+   the one people return for after it. A tab that says "not yet" for three days
+   should not sit between two that always have something in them. */
+export const TABS: Tab[] = ["details", "projects", "hackers", "find-team", "results"];
 
 export const TAB_NAMES: Record<Tab, string> = {
   details: "Details",

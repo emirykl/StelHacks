@@ -221,7 +221,22 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
     setStage({ at: "starting" });
 
     try {
-      const { authenticate } = await import("../../../lib/anchor");
+      const [{ authenticate }, { onTheSameNetwork }] = await Promise.all([
+        import("../../../lib/anchor"),
+        import("../../../lib/wallet"),
+      ]);
+
+      /*
+        Checked before anything is signed.
+
+        A wallet on a different network than this deployment fails several steps
+        later, inside a library, with a message about the shape of some bytes.
+        Asking first turns that into the sentence somebody can act on, which is
+        that their extension is on the wrong network.
+      */
+      if (!(await onTheSameNetwork())) {
+        throw new Error("Your wallet is on a different network. Switch it to testnet and try again.");
+      }
 
       token.current ??= await authenticate(anchor, address);
 
@@ -249,6 +264,12 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
       setStage({ at: "running", transfer });
     } catch (thrown) {
       opened?.close();
+
+      /* The token is dropped as well as the stage. It is bound to the wallet
+         that proved itself, so a failure somebody fixes by switching accounts
+         or networks would otherwise be retried with the old one. */
+      token.current = null;
+
       setStage({ at: "failed", why: thrown instanceof Error ? thrown.message : "that did not work" });
     }
   }
