@@ -1,0 +1,50 @@
+<!doctype html>
+<!--
+  The one page this service serves, and the reason it exists twice over.
+
+  Vercel refuses a build with no output directory, so something has to be here.
+  Given that, it may as well answer the question somebody typing the bare URL is
+  actually asking, which is what they have reached and whether it is up.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StelHacks sealer</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0b0b0d;
+        color: #e8e8ea;
+        font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      main { max-width: 34rem; padding: 2rem; }
+      h1 { font-size: 1rem; font-weight: 600; margin: 0 0 1rem; }
+      p { color: #a1a1a8; margin: 0 0 1rem; }
+      table { border-collapse: collapse; width: 100%; }
+      td { padding: 0.25rem 0; vertical-align: top; }
+      td:first-child { color: #e8e8ea; padding-right: 1.5rem; white-space: nowrap; }
+      td:last-child { color: #a1a1a8; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>StelHacks sealer</h1>
+      <p>
+        Holds sealed scorecards and ballots during judging, and publishes one
+        digest committing to all of them when the window closes. It decides
+        nothing: the root is a function of the entries it holds.
+      </p>
+      <table>
+        <tr><td>POST /scorecard</td><td>take a signed, time-locked card</td></tr>
+        <tr><td>POST /ballot</td><td>the same, for the crowd</td></tr>
+        <tr><td>POST /seal</td><td>publish the root on chain</td></tr>
+        <tr><td>GET /root</td><td>the root it would publish</td></tr>
+        <tr><td>GET /proof</td><td>the inclusion proof for one leaf</td></tr>
+      </table>
+    </main>
+  </body>
+</html>

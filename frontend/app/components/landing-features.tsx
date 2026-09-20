@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "../page.module.css";
+import { SubRosaSeal } from "./sub-rosa";
 
 /**
  * The five panels, four of them with a drawing.
@@ -40,6 +41,10 @@ const features = [
     accent: "YOU DECIDE.",
     description: "Full jury. Weighted jury and community vote. Full community vote. All onchain.",
     art: "/landing/judge.jpeg",
+    /* The one panel that credits somebody else. Whichever of the three is
+       chosen, what is cast stays shut until the deadline, and that is Sub
+       Rosa's time lock rather than ours. */
+    sealed: true,
   },
   {
     label: "Escrow",
@@ -61,6 +66,7 @@ const features = [
   accent: string;
   description: string;
   art: string | null;
+  sealed?: boolean;
 }[];
 
 /** Native scrolling pins one viewport while its feature panels advance. */
@@ -142,6 +148,13 @@ export function LandingFeatures() {
                 <div className={styles.featureWords}>
                   <h2 className={styles.sectionTitle}>{feature.title}<br /><span>{feature.accent}</span></h2>
                   <p className={styles.featureDescription}>{feature.description}</p>
+
+                  {/* `in` rather than a flag on all five: only one panel owes
+                      anybody a credit, and four fields reading false would say
+                      the other four were candidates for one. */}
+                  {"sealed" in feature && (
+                    <SubRosaSeal on="night" className={styles.featureCredit} />
+                  )}
                 </div>
 
                 {/* The alt is empty because every one of these draws the

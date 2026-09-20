@@ -43,6 +43,7 @@ scores early and selectively censor them based on their contents.
 | `POST /scorecard` | Take a signed, time-locked card and return a receipt |
 | `POST /ballot` | The same for a community ballot |
 | `POST /seal` | Build the tree and publish the root on chain |
+| `GET /root` | The root it would publish, for a sealer that is not us |
 | `GET /proof` | The inclusion proof for one leaf |
 
 The proof route answers from the moment the root exists rather than at some
@@ -74,6 +75,26 @@ It also has to happen in that order, and the clock is what holds it: a root can
 only be published while the hackathon is in Judging, so a phase moved on early
 would strand every score in a service that could no longer publish them.
 `backend/clock` checks for the root before it leaves that phase.
+
+## Where this runs
+
+Two shapes, one set of routes. `src/routes.ts` answers requests and knows
+nothing about what carried them; `src/server.ts` is the long lived process that
+listens on a port, and `api/[...path].ts` is the same routes as one Vercel
+function per request. Neither adapter contains a check of its own, because a
+second copy of the intake rules is how a deployment starts accepting what the
+service refuses.
+
+The Vercel project is `stelhacks-backend`, rooted at this directory, and
+`vercel.json` rewrites `/scorecard` to `/api/scorecard` so the public paths stay
+the ones the judging page already asks for. Moving the service behind it is a
+change of `NEXT_PUBLIC_SEALER_URL` in the frontend and nothing else.
+
+What does not come along is the timer below. A function lives for one request,
+so a deployment whose routes are functions still needs `npm start` running
+somewhere for a judging window to close by itself. `POST /seal` is the manual
+version of the first row of that table and works from the deployment; the reveal
+and the ranking do not.
 
 ## Two details that carry weight
 

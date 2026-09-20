@@ -28,6 +28,7 @@ yarn-error.log*
 
 # Local working notes
 docs/roadmap.md
+docs/pitch-assets/
 
 # Editors and OS
 .DS_Store
@@ -37,3 +38,6 @@ docs/roadmap.md
 
 # Soroban test snapshots
 test_snapshots/
+
+# Vercel
+.vercel

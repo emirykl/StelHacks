@@ -188,6 +188,9 @@
 .sectionTitle { font-size: clamp(3rem, 5.8vw, 7rem); }
 .sectionTitle > span { color: var(--landing-accent); }
 .featureDescription { max-width: 33rem; margin-top: 2rem; color: #b8b8ae; font-size: clamp(1rem, 1.5vw, 1.25rem); line-height: 1.6; text-wrap: pretty; }
+/* A credit, not a claim: it sits under the sentence it belongs to at the size
+   a footnote would, and the panel reads the same with it covered up. */
+.featureCredit { margin-top: 1.75rem; }
 .featureTrack :focus-visible { outline-color: var(--landing-accent); }
 
 /*
@@ -246,6 +249,7 @@
   .featureArt { display: none; }
   .sectionTitle { font-size: clamp(2rem, 8.2vw, 4rem); }
   .featureDescription { margin-top: 1.5rem; font-size: 1rem; }
+  .featureCredit { margin-top: 1.25rem; }
   .joinTitle { font-size: clamp(3rem, 12vw, 6rem); }
   .joinActions { align-items: flex-start; flex-direction: column; margin-top: 2rem; }
 }
@@ -259,6 +263,7 @@
   .featurePin { padding-block: 1rem; }
   .sectionTitle { font-size: clamp(2rem, 9svh, 3.5rem); }
   .featureDescription { margin-top: 1rem; font-size: 0.9375rem; }
+  .featureCredit { margin-top: 1rem; }
   .joinTitle { font-size: clamp(3rem, 18svh, 6rem); }
   .joinActions { margin-top: 1.5rem; }
 }

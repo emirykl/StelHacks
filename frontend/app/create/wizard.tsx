@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button, ButtonLink } from "../components/primitives";
+import { SubRosaSeal } from "../components/sub-rosa";
 import { TagField } from "../components/tag-field";
 import { ImagePicker } from "./image-picker";
 import { useWallet } from "../components/wallet-context";
@@ -1082,6 +1083,12 @@ export function Wizard({
         </button>
         </>
         )}
+
+        {/* Both branches end here, because both of them seal something: the
+            scorecards when judges decide, the ballots when the crowd does. */}
+        <div className="mt-10 flex justify-end border-t border-rule pt-5">
+          <SubRosaSeal />
+        </div>
       </Section>
 
       {/*

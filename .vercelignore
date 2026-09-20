@@ -1,0 +1,30 @@
+# Both Vercel projects deploy from this monorepo: frontend/ is the web app and
+# backend/sealer/ is the request-driven API. Keep both source trees (and sdk/,
+# which the sealer builds), while excluding credentials and generated output.
+.git/
+.github/
+.agents/
+.codex/
+
+contracts/
+docs/
+fixtures/
+
+node_modules/
+dist/
+build/
+.next/
+out/
+target/
+.stellar/
+.vercel/
+
+.env
+.env.*
+!.env.example
+
+*.wasm
+*.tsbuildinfo
+
+*.log
+.DS_Store
