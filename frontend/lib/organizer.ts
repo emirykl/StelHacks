@@ -23,8 +23,20 @@
 /** How long a signed challenge is worth anything, in seconds. */
 export const WINDOW_SECONDS = 300;
 
-export function challengeFor(contract: string, account: string, issuedAt: number): string {
-  return `stelhacks.v1.metadata:${contract}:${account}:${issuedAt}`;
+export function challengeFor(
+  contract: string,
+  account: string,
+  issuedAt: number,
+  /**
+   * What the signature is for.
+   *
+   * Named in the message so one cannot be replayed as another. A signature
+   * proving somebody holds the organizer's key long enough to edit an event
+   * page should not also be a signature that names a team.
+   */
+  purpose: "metadata" | "team" = "metadata",
+): string {
+  return `stelhacks.v1.${purpose}:${contract}:${account}:${issuedAt}`;
 }
 
 /**
@@ -56,14 +68,17 @@ export async function signedByOrganizer({
   account,
   issuedAt,
   signature,
+  purpose = "metadata",
   now,
 }: {
+  /** The address the signature has to have come from. */
   organizer: string;
   contract: string;
   account: string;
   issuedAt: number;
   /** Hex. */
   signature: string;
+  purpose?: "metadata" | "team";
   now?: number;
 }): Promise<boolean> {
   const { Keypair, StrKey, hash } = await import("@stellar/stellar-sdk/base");
@@ -76,7 +91,7 @@ export async function signedByOrganizer({
     return false;
   }
 
-  const message = challengeFor(contract, account, issuedAt);
+  const message = challengeFor(contract, account, issuedAt, purpose);
   const payload = hash(Buffer.from(`Stellar Signed Message:\n${message}`, "utf8"));
 
   try {

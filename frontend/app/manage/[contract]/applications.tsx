@@ -56,7 +56,7 @@ export function Applications({
   if (applicants === null) {
     return (
       <section>
-        <SpecLabel index="03">Applications</SpecLabel>
+        <SpecLabel index="3">Applications</SpecLabel>
         <p className="mt-6 label text-ink-faint">Reading the log</p>
       </section>
     );
@@ -66,7 +66,7 @@ export function Applications({
 
   return (
     <section>
-      <SpecLabel index="03">Applications</SpecLabel>
+      <SpecLabel index="3">Applications</SpecLabel>
 
       {applicants.length === 0 ? (
         <p className="mt-6 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
@@ -78,7 +78,7 @@ export function Applications({
             {applicants.map((applicant, index) => (
               <SpecRow
                 key={applicant.address}
-                index={String(index + 1).padStart(2, "0")}
+                index={String(index + 1)}
                 label={applicant.status}
                 mark={applicant.status === "pending"}
               >

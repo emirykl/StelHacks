@@ -45,7 +45,7 @@ export function Screening({
   if (entries === null) {
     return (
       <section>
-        <SpecLabel index="04">Screening</SpecLabel>
+        <SpecLabel index="4">Screening</SpecLabel>
         <p className="mt-6 label text-ink-faint">Reading the entries</p>
       </section>
     );
@@ -78,7 +78,7 @@ export function Screening({
 
   return (
     <section>
-      <SpecLabel index="04">Screening</SpecLabel>
+      <SpecLabel index="4">Screening</SpecLabel>
 
       {entries.length === 0 ? (
         <p className="mt-6 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
@@ -90,7 +90,7 @@ export function Screening({
             {entries.map((entry) => (
               <SpecRow
                 key={entry.team}
-                index={String(entry.team).padStart(2, "0")}
+                index={String(entry.team)}
                 label={entry.track}
                 mark={!entry.invalid}
               >
