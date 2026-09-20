@@ -6,13 +6,11 @@ import { PROVIDER_NAMES, type Provider } from "../../lib/providers";
 import { browserClient } from "../../lib/supabase/client";
 
 /**
- * The other ways in.
+ * The ways in.
  *
- * Same layer as the email code and no more powerful: whichever of these
- * somebody uses, what arrives is an address and a session. None of them can
- * sign anything on chain, and a wallet still has to be attached afterwards. A
- * Google account here buys exactly what a Gmail address typed into the box
- * above buys, which is a name.
+ * Whichever of these somebody uses, what arrives is an address and a session.
+ * None of them can sign anything on chain, and a wallet still has to be
+ * attached afterwards. A Google account here buys a name and nothing more.
  *
  * The marks are drawn rather than fetched. Every provider publishes an SVG on a
  * CDN and using one would make this page ask a third party for an image before
@@ -62,13 +60,10 @@ export function OAuthButtons({
   }
 
   return (
+    /* No "or" rule above these any more. It separated them from an email form
+       that is gone, and a divider with one thing on either side of it draws a
+       line between a heading and a button. */
     <div className="grid gap-3">
-      <div className="flex items-center gap-4">
-        <span className="h-px flex-1 bg-rule" />
-        <span className="label text-ink-faint">or</span>
-        <span className="h-px flex-1 bg-rule" />
-      </div>
-
       {providers.map((provider) => (
         <button
           key={provider}

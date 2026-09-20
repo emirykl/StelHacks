@@ -1,23 +1,28 @@
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
-import { Eyebrow, Measure } from "../components/primitives";
-import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../components/spec";
+import { AvatarPicker } from "./avatar-picker";
+import { WalletLink } from "./wallet-link";
+import { Measure } from "../components/primitives";
+import { countriesByName } from "../../lib/countries";
+import { ProfileForm } from "./profile-form";
 import { SignOut } from "../components/session";
-import { Wallet } from "./wallet";
 import { currentUser, serverClient } from "../../lib/supabase/server";
+import { nameOf, profileOf, type Profile } from "../../lib/profile";
 
 /**
- * Your account, in the order the two halves actually depend on each other.
+ * Everything about the account somebody can change.
  *
- * An email says who you are. A wallet says what you hold. They are separate
- * layers and neither is a login for the other, but they are not
- * interchangeable in time: a wallet is attached to a profile, so there has to
- * be a profile first.
+ * This was the profile for a while and it was two pages wearing one name. A
+ * profile is read: it shows what has been filled in and nothing else, and
+ * `/u/[username]` is where that lives now. Settings is worked: every field is a
+ * box whether or not it holds anything, the empty ones are the point, and the
+ * page ends in a save.
  *
- * That is why the wallet section is absent rather than disabled when nobody is
- * signed in. Connecting without a session cannot be finished at all, because a
- * challenge is issued to a person and there is nobody to issue it to. Offering
- * the button anyway would show an address and then have nowhere to put it.
+ * The wallet is not on it. It was, at the top, on the argument that it is the
+ * only thing that decides what somebody can do — but the header carries it on
+ * every page including this one, and two controls for one connection is one of
+ * them showing a stale answer eventually.
  */
 
 /** Read fresh. A page that shows a stale session is showing somebody else's. */
@@ -33,60 +38,94 @@ export default async function Account() {
     redirect("/login?next=%2Faccount");
   }
 
-  return (
-    <main className="flex-1">
-      <section className="border-b border-rule">
-        <Measure wide className="py-16 sm:py-20">
-          <Eyebrow>Your account</Eyebrow>
-
-          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">Account</h1>
-        </Measure>
-      </section>
-
-      <section className="hatch">
-        <Measure wide className="py-16">
-          <SignedIn user={user} />
-        </Measure>
-      </section>
-    </main>
-  );
-}
-
-async function SignedIn({ user }: { user: { id: string; email?: string | undefined } }) {
   const db = await serverClient();
 
   /* Created by a trigger the moment the account exists, so this is a read
      rather than an upsert. A page that had to create a profile would be a
      second, weaker place where identity begins. */
-  const { data: profile } = (await db
-    ?.from("profiles")
-    .select("username")
-    .eq("id", user.id)
-    .maybeSingle()) ?? { data: null };
+  const profile = db === null ? null : await profileOf(db, user.id);
+
+  /*
+    What the provider told us about them, which is a suggestion and never a
+    value. Google hands over a name and a picture; both are offered as defaults
+    and neither is written to the profile behind somebody's back, because a
+    field that fills itself in is a field nobody knows they can change.
+  */
+  const meta = user.user_metadata as Record<string, unknown> | undefined;
+  const suggestedName = pick(meta, "full_name") ?? pick(meta, "name");
+  const suggestedAvatar = pick(meta, "avatar_url") ?? pick(meta, "picture");
+
+  const name = nameOf(profile, suggestedName);
+  const avatar = profile?.avatarUrl ?? suggestedAvatar;
 
   return (
-    <>
-      <SpecLabel index="01">Identity</SpecLabel>
+    <main className="flex-1">
+      <section className="border-b border-rule">
+        <Measure wide className="py-12 sm:py-14">
+          {/* The title on its own line, above everything it titles. Beside the
+              portrait it was competing with a face for the top left corner and
+              no amount of nudging it up made it read as the name of the page
+              rather than as a label on the picture. */}
+          <h1 className="text-[clamp(2rem,4.5vw,3rem)]">Settings</h1>
 
-      <div className="mt-8">
-        <SpecRows>
-          <SpecRow index="01" label="Signed in as">
-            <SpecValue>{user.email ?? "no address on this account"}</SpecValue>
-          </SpecRow>
+          <div className="mt-9 flex min-w-0 items-center gap-4">
+            <AvatarPicker userId={user.id} src={avatar} name={name} />
 
-          <SpecRow index="02" label="Username">
-            <SpecValue>{profile?.username ?? "not created yet"}</SpecValue>
-          </SpecRow>
-        </SpecRows>
-      </div>
+            <p className="min-w-0 truncate text-[1.125rem] text-ink">{name}</p>
+          </div>
+        </Measure>
+      </section>
 
-      <div className="mt-6">
-        <SignOut />
-      </div>
+      <Measure wide className="py-14">
+        <div className="grid max-w-[52rem] gap-14">
+          {profile === null ? (
+            <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
+              Your profile could not be read on this deployment, so there is
+              nothing to edit here yet.
+            </p>
+          ) : (
+            <ProfileForm
+              profile={profile}
+              email={user.email ?? null}
+              countries={countriesByName()}
+              suggestedName={suggestedName}
+            />
+          )}
 
-      <div className="mt-16">
-        <Wallet />
-      </div>
-    </>
+          {/* Above the sign out, because it is the last thing somebody sets up
+              rather than the last thing they do. */}
+          <Block title="Wallet">
+            <WalletLink />
+          </Block>
+
+          <Block title="Session">
+            <SignOut />
+          </Block>
+        </div>
+      </Measure>
+    </main>
   );
+}
+
+/**
+ * A section, named and nothing else.
+ *
+ * Each of these carried a line of grey explanation under its heading and all of
+ * them said something the section below already showed. A page that explains
+ * itself twice reads as a page that does not trust the reader to look.
+ */
+function Block({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-[1.375rem]">{title}</h2>
+
+      <div className="mt-6">{children}</div>
+    </section>
+  );
+}
+
+function pick(meta: Record<string, unknown> | undefined, field: string): string | null {
+  const value = meta?.[field];
+
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
 }

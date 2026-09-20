@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
 import { OAuthButtons } from "../components/oauth";
-import { SignIn } from "../components/session";
 import { authConfigured, currentUser } from "../../lib/supabase/server";
 import { providersOffered } from "../../lib/providers";
 
@@ -14,14 +13,16 @@ import { providersOffered } from "../../lib/providers";
  * the only link that took them anywhere.
  *
  * The page is split. On the left the artwork, which is the one place in this
- * product where a picture is doing the talking. On the right the form, and
+ * product where a picture is doing the talking. On the right the way in, and
  * under it the line that matters: an account is a name and nothing else. Saying
- * that limit before the field rather than after it is deliberate, because
+ * that limit before the button rather than after it is deliberate, because
  * somebody handing over an address deserves to know what it buys.
  *
- * The order of the three ways in is the order of how much they cost the
- * reader. The email code needs nothing but an inbox. Google and GitHub need an
- * account somewhere else and appear only where they have been wired up.
+ * There is one way in and it is a provider somebody already has. A one time
+ * code to an inbox sat above it and offering both made this the only screen in
+ * the product asking a person to choose between two doors into the same room,
+ * before they knew what was on the other side. The email address still arrives
+ * either way, because that is all the provider hands over.
  */
 
 export const dynamic = "force-dynamic";
@@ -47,8 +48,16 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
 
   const providers = providersOffered();
 
+  /* Configured and something wired up are two different things, and only both
+     together mean there is a button here that works. */
+  const wayIn = authConfigured() && providers.length > 0;
+
   return (
-    <main className="relative flex-1 overflow-hidden bg-night">
+    /* Pulled up by the height the header occupies, so the artwork starts at the
+       very top of the window and the header floats on it. Without this the
+       picture begins under a band of paper and the header's own edges vanish
+       into it. */
+    <main data-solo className="relative -mt-19 flex-1 overflow-hidden bg-night">
       {/* The whole page, not half of it. A split screen gives the artwork a
           column and a hard edge down the middle; letting it run under
           everything makes it the room the form is standing in, which is what a
@@ -59,7 +68,7 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
         className="absolute inset-0 size-full object-cover"
       />
 
-      <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[96rem] items-center justify-center px-6 py-12 lg:justify-end lg:px-12">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-[96rem] items-center justify-center px-6 pt-31 pb-12 lg:justify-end lg:px-12">
         {/*
           The one card in this product that casts a real shadow.
 
@@ -73,21 +82,15 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
           <h1 className="text-[2rem]">Welcome</h1>
 
           <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
-            {authConfigured()
-              ? offered(providers.length)
+            {wayIn
+              ? "Continue with an account you already have. Nothing to fill in and no password to keep."
               : "Sign in is not configured on this deployment."}
           </p>
 
-          {authConfigured() ? (
-            <>
-              <div className="mt-7">
-                <SignIn next={next} />
-              </div>
-
-              <div className="mt-6">
-                <OAuthButtons providers={providers} next={next} />
-              </div>
-            </>
+          {wayIn ? (
+            <div className="mt-7">
+              <OAuthButtons providers={providers} next={next} />
+            </div>
           ) : (
             /* Said plainly rather than shown as a button that fails. A
                deployment without the keys is one where signing in does not
@@ -107,11 +110,4 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
       </div>
     </main>
   );
-}
-
-/** What is on offer, named rather than left to be discovered by scrolling. */
-function offered(count: number): string {
-  return count === 0
-    ? "Put in an address you can read and a six digit code arrives. No password."
-    : "Continue with an email code, or with an account you already have.";
 }
