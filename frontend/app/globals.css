@@ -78,6 +78,16 @@
   --color-verified: oklch(62% 0.14 155);
   --color-broken: oklch(58% 0.19 27);
 
+  /* A third red, and it is not the same argument as `broken`.
+
+     `broken` reports: a signature did not check, a save was refused, a digest
+     does not match. It is the colour of a fact. This one is the colour of a
+     control that takes something away and cannot be pressed again to get it
+     back, and it is darker and further from orange so it reads as blood rather
+     than as a warning triangle. Sharing one token made signing out look like an
+     error message about signing out. */
+  --color-danger: oklch(49% 0.21 26);
+
   /* Lines ------------------------------------------------------------------
      Hairlines, not borders. A rule you can see the weight of is a rule that
      competes with the content it is separating. */
@@ -186,6 +196,22 @@
     background: var(--color-signal);
     color: var(--color-signal-ink);
   }
+
+  /*
+    A page that is the whole window, with nothing after it.
+
+    Sign in is one: a picture that fills the screen, one button on it, and no
+    reason to scroll. The footer underneath was a strip of links about the
+    testnet arriving under a door somebody has not walked through yet, and its
+    only effect was to put a scrollbar on a page with nothing further down.
+
+    The page says this about itself rather than the footer keeping a list of
+    routes it hides on. That list is the thing that goes stale: a second page
+    like this one would be added and nobody would think to edit the footer.
+  */
+  body:has(main[data-solo]) > footer {
+    display: none;
+  }
 }
 
 @layer utilities {
@@ -269,6 +295,33 @@
     line-height: 1;
   }
 
+  /*
+    A tick that draws itself, for a step that has just been completed.
+
+    The one moving thing on the organizer's checklist, and it moves for the one
+    event worth noticing: a step going from pending to done, on a page somebody
+    is already looking at while their wallet signs. Drawn rather than faded in,
+    because a stroke that is still being made reads as something happening and a
+    shape appearing at full opacity reads as a page that redrew.
+
+    The reduced motion block below turns this into an instantly complete tick
+    rather than none at all, which is what somebody who asked for less motion
+    wants: the state, without the performance.
+  */
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .tick {
+    stroke-dasharray: 1;
+    animation: draw 0.4s var(--ease-settle) forwards;
+  }
+
   /* The grain that makes a flat surface read as printed. Kept separate from
      the halftone so a surface can carry one without the other. */
   .grain {
@@ -294,6 +347,13 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+    }
+
+    /* Finished rather than absent. The rule above collapses the animation to
+       nothing, and a dashed stroke with no animation to close it would leave
+       the tick invisible: the state would be lost along with the motion. */
+    .tick {
+      stroke-dasharray: none;
     }
   }
 }

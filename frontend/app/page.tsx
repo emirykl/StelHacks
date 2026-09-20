@@ -1,3 +1,4 @@
+import { ApplyTrigger } from "./components/organizer-apply";
 import { ButtonLink, Badge, Display, Eyebrow, Measure, Rule } from "./components/primitives";
 
 /**
@@ -98,7 +99,7 @@ function Promise() {
           {removed.map((item, index) => (
             <div key={item.before}>
               <p className="tabular text-[0.75rem] text-ink-faint">
-                {String(index + 1).padStart(2, "0")}
+                {index + 1}
               </p>
 
               <Rule className="mt-3" />
@@ -119,6 +120,13 @@ function Promise() {
 /**
  * The inverted section, which is the editorial layout's way of changing
  * register partway down a page.
+ *
+ * One of the three cards does something now. It described what an organizer
+ * gets and then offered nowhere to become one, which made the middle of the
+ * three a dead end on a page whose other two panels are also dead ends by
+ * design: a builder browses and a judge is invited. Only this one has an action
+ * behind it, and it is the action the whole product needs somebody to take
+ * before any of the rest of it has anything to show.
  */
 function Audiences() {
   const forWhom = [
@@ -131,6 +139,9 @@ function Audiences() {
       who: "For organizers",
       what:
         "You keep every power you need, disqualification and cancellation included. You announce them before the lock and leave a reason when you use them.",
+      /* Not everybody who reads this can open one, and saying so here is
+         cheaper than letting somebody find out at the end of a wizard. */
+      apply: "Apply to organize",
     },
     {
       who: "For judges",
@@ -153,6 +164,22 @@ function Audiences() {
               <p className="mt-4 text-[0.9375rem] leading-relaxed text-night-ink-soft">
                 {item.what}
               </p>
+
+              {/* The whole card is not the target. A panel of prose that opens
+                  a dialog anywhere you press it is a card people open by
+                  accident while selecting a sentence to read twice. */}
+              {item.apply !== undefined && (
+                <ApplyTrigger className="group mt-6 inline-flex items-center gap-2 text-[0.9375rem] text-night-ink transition-colors duration-150 ease-settle hover:text-signal">
+                  {item.apply}
+
+                  <span
+                    aria-hidden
+                    className="transition-transform duration-150 ease-settle group-hover:translate-x-0.5"
+                  >
+                    →
+                  </span>
+                </ApplyTrigger>
+              )}
             </div>
           ))}
         </div>
