@@ -213,7 +213,25 @@ function Picture({
         }`}
       >
         {running && <span aria-hidden className="size-1.5 rounded-full bg-paper" />}
-        {shut && !finished ? "Closed" : phaseName(hackathon.phase)}
+        {/*
+          "Closed" while the event is still Open, and while the phase is not
+          known at all.
+
+          The first is the one stage where the phase would otherwise say a door
+          is open that is not. Past it the phase name is the more useful word
+          and just as honest — nobody joins a hackathon in Judging or Settlement
+          either, and "Closed" on an event that has already paid its winner
+          tells somebody less than the truth does.
+
+          The second is the case this was first written without. A phase is read
+          from what the indexer recorded and a deadline is read from the chain,
+          so an event the indexer has not reached yet has a real deadline and no
+          phase. Falling through to `phaseName` printed "Not published yet" over
+          a hackathon that was published, funded and settled.
+        */}
+        {shut && (hackathon.phase === null || hackathon.phase === 2)
+          ? "Closed"
+          : phaseName(hackathon.phase)}
       </span>
     </div>
   );
