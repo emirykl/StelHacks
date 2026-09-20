@@ -1,3 +1,6 @@
+import Link from "next/link";
+
+import { Mark } from "../../components/marks";
 import { Measure } from "../../components/primitives";
 import { SpecHeading, SpecLabel } from "../../components/spec";
 import { hackersOf, type Hacker } from "../../../lib/hackers";
@@ -20,7 +23,7 @@ export async function Hackers({ contractId }: { contractId: string }) {
 
   return (
     <Measure wide className="py-14">
-      <SpecLabel index="01">Approved</SpecLabel>
+      <SpecLabel index="1">Approved</SpecLabel>
 
       <SpecHeading className="mt-3">
         {hackers.length === 0
@@ -48,30 +51,88 @@ export async function Hackers({ contractId }: { contractId: string }) {
 /**
  * One person, or one address that has not become a person yet.
  *
- * The address is always shown and always shown in full type, because it is the
- * part anybody can go and check. The name sits above it as the friendlier
- * label, never instead of it.
+ * The name leads when there is one and the address leads when there is not.
+ * The earlier version printed "no account attached" in that first slot, which
+ * spent the most prominent line on the platform's own bookkeeping — the person
+ * reading it did not do anything wrong, and neither did the address.
+ *
+ * A named row is a link to their profile. An anonymous one is not, because
+ * there is nothing on the other side of it.
  */
 function One({ hacker }: { hacker: Hacker }) {
   const named = hacker.displayName ?? hacker.username;
+  const links = linksOf(hacker);
 
-  return (
-    <li className="flex items-center gap-3 border border-rule bg-paper p-4">
+  const inside = (
+    <>
       <Avatar hacker={hacker} />
 
       <div className="min-w-0">
         {named === null ? (
-          <p className="label text-ink-faint">no account attached</p>
+          <p className="tabular truncate text-[0.875rem] text-ink">{shorten(hacker.address)}</p>
         ) : (
-          <p className="truncate text-[0.9375rem] font-medium text-ink">{named}</p>
+          <>
+            <p className="truncate text-[0.9375rem] font-medium text-ink">{named}</p>
+            <p className="tabular mt-1 truncate text-[0.75rem] text-ink-soft">
+              {shorten(hacker.address)}
+            </p>
+          </>
         )}
-
-        <p className="tabular mt-1 truncate text-[0.75rem] text-ink-soft">
-          {shorten(hacker.address)}
-        </p>
       </div>
+    </>
+  );
+
+  return (
+    <li className="flex items-center gap-3 border border-rule bg-paper p-4">
+      {hacker.username === null ? (
+        <div className="flex min-w-0 flex-1 items-center gap-3">{inside}</div>
+      ) : (
+        <Link
+          href={`/u/${hacker.username}`}
+          className="flex min-w-0 flex-1 items-center gap-3 transition-opacity duration-150 ease-settle hover:opacity-70"
+        >
+          {inside}
+        </Link>
+      )}
+
+      {links.length > 0 && (
+        /* Outside the profile link rather than inside it. Nesting an anchor in
+           an anchor is invalid and browsers resolve it by dropping one, so the
+           GitHub mark would have quietly opened the profile instead. */
+        <ul className="flex shrink-0 items-center gap-0.5">
+          {links.map((link) => (
+            <li key={link.key}>
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={link.title}
+                title={link.title}
+                className="grid size-7 place-items-center rounded-full text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
+              >
+                <Mark where={link.key} className="size-4" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
+}
+
+/** The places a hacker can be found, in the order the profile page lists them. */
+function linksOf(hacker: Hacker) {
+  return [
+    hacker.github === null
+      ? null
+      : { key: "github" as const, title: "GitHub", href: `https://github.com/${hacker.github}` },
+    hacker.x === null
+      ? null
+      : { key: "x" as const, title: "X", href: `https://x.com/${hacker.x}` },
+    hacker.linkedin === null
+      ? null
+      : { key: "linkedin" as const, title: "LinkedIn", href: hacker.linkedin },
+  ].filter((link) => link !== null);
 }
 
 /**

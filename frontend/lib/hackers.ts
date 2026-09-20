@@ -22,6 +22,10 @@ export interface Hacker {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /** The places they said they can be found, absent unless they filled them in. */
+  github: string | null;
+  linkedin: string | null;
+  x: string | null;
   /** Where in the ledger they were approved, which is the order they arrived. */
   approvedAtLedger: number;
 }
@@ -71,22 +75,47 @@ export async function hackersOf(contractId: string, limit = 60): Promise<Hacker[
      whole site to answer a question about one event. */
   const ids = [...new Set(owner.values())];
 
-  const { data: people } =
-    ids.length === 0
-      ? { data: [] }
-      : await db.from("profiles").select("id, username, display_name, avatar_url").in("id", ids);
+  const { data: people } = ids.length === 0 ? { data: [] } : await profilesOf(ids);
 
-  const person = new Map((people ?? []).map((row) => [String(row.id), row]));
+  const person = new Map((people ?? []).map((row) => [String(row["id"]), row]));
 
   return approved.map((row) => {
     const found = person.get(owner.get(String(row.address)) ?? "");
 
     return {
       address: String(row.address),
-      username: found === undefined ? null : String(found.username),
-      displayName: (found?.display_name as string | null) ?? null,
-      avatarUrl: (found?.avatar_url as string | null) ?? null,
+      username: found === undefined ? null : String(found["username"]),
+      displayName: (found?.["display_name"] as string | null) ?? null,
+      avatarUrl: (found?.["avatar_url"] as string | null) ?? null,
+      github: (found?.["github_username"] as string | null) ?? null,
+      linkedin: (found?.["linkedin_url"] as string | null) ?? null,
+      x: (found?.["x_username"] as string | null) ?? null,
       approvedAtLedger: Number(row.approved_at_ledger),
     };
   });
+}
+
+/**
+ * The profiles behind those addresses, links included where the schema has
+ * caught up.
+ *
+ * `x_username` arrived in a later migration than the rest, and asking for a
+ * column that is not there yet fails the whole select rather than that one
+ * field: the guest list would lose every name to prove one link column is
+ * missing. The profile page learned this first; this is the same fallback.
+ */
+async function profilesOf(ids: string[]): Promise<{ data: Record<string, unknown>[] | null }> {
+  const withLinks = await db!
+    .from("profiles")
+    .select("id, username, display_name, avatar_url, github_username, linkedin_url, x_username")
+    .in("id", ids);
+
+  if (withLinks.error === null) {
+    return withLinks;
+  }
+
+  return db!
+    .from("profiles")
+    .select("id, username, display_name, avatar_url, github_username, linkedin_url")
+    .in("id", ids);
 }
