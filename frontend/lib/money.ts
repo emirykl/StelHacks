@@ -12,20 +12,43 @@
  * print an estimate in the place where the product promises a fact.
  */
 
-/** The wrapped native lumen on testnet, and the USDC most events pay in. */
-const KNOWN: Record<string, { code: string; dollars: "one-to-one" | "quoted" }> = {
-  CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC: {
+/**
+ * The two tokens a prize can be paid in: the native lumen and USDC.
+ *
+ * Both as their Stellar Asset Contract addresses, because that is what the
+ * constitution stores and what the vault is bound against. There is no third
+ * option and the create form offers exactly these, which is the point of the
+ * list being here rather than in the form: an asset the form could offer but
+ * this file did not recognise would have its prize printed as an unknown token
+ * on every card that showed it.
+ */
+export const PRIZE_ASSETS = [
+  {
     code: "XLM",
+    name: "Lumens",
+    contract: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
     dollars: "quoted",
   },
-  CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA: {
+  {
     code: "USDC",
+    name: "USD Coin",
+    contract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
     /* A dollar stablecoin is quoted at a dollar rather than looked up. Asking a
        price feed what a dollar is worth would add a dependency and a way to be
        wrong about the one asset that cannot be. */
     dollars: "one-to-one",
   },
-};
+] as const satisfies readonly {
+  code: string;
+  name: string;
+  contract: string;
+  dollars: "one-to-one" | "quoted";
+}[];
+
+const KNOWN: Record<string, { code: string; dollars: "one-to-one" | "quoted" }> =
+  Object.fromEntries(
+    PRIZE_ASSETS.map((asset) => [asset.contract, { code: asset.code, dollars: asset.dollars }]),
+  );
 
 export interface Worth {
   /** The token's own symbol, or a shortened address when it is not one we know. */
@@ -45,7 +68,7 @@ export interface Worth {
 let quoted: { price: number; at: number } | null = null;
 const QUOTE_TTL_MS = 15 * 60 * 1000;
 
-async function lumenPrice(): Promise<number | null> {
+export async function lumenPrice(): Promise<number | null> {
   if (quoted !== null && Date.now() - quoted.at < QUOTE_TTL_MS) {
     return quoted.price;
   }
@@ -140,4 +163,21 @@ function round(value: number): string {
   }
 
   return value < 0.01 ? "<0.01" : value.toFixed(2);
+}
+
+/**
+ * A token amount in its seven decimals, written the way a person would.
+ *
+ * The fraction is kept when there is one. Rounding to whole units printed a
+ * prize of ten thousand stroops as "0", which is the one number on a funding
+ * screen that must never read as nothing when it is not.
+ */
+export function units(amount: bigint): string {
+  const scale = BigInt(10_000_000);
+  const whole = amount / scale;
+  const fraction = (amount % scale).toString().padStart(7, "0").replace(/0+$/, "");
+
+  return fraction.length === 0
+    ? whole.toLocaleString("en-US")
+    : `${whole.toLocaleString("en-US")}.${fraction}`;
 }
