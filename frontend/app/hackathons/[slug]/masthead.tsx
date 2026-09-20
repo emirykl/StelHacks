@@ -153,6 +153,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
                 contractId={hackathon.contract_id}
                 slug={hackathon.slug}
                 registrationClosesAt={hackathon.rules?.schedule.registrationCloses ?? null}
+                communityVote={(hackathon.rules?.communityBps ?? 0) > 0}
               />
             </Panel>
           </div>
@@ -388,15 +389,29 @@ function Action({
   contractId,
   slug,
   registrationClosesAt,
+  communityVote,
 }: {
   phase: number | null;
   contractId: string;
   slug: string | null;
   /** When applying stops being possible, from the frozen rules. */
   registrationClosesAt: number | null;
+  /** Whether the rules give the crowd a share of the score at all. */
+  communityVote: boolean;
 }) {
   if (phase === null) {
     return null;
+  }
+
+  /* Judging, and the crowd has a say in it. This outranks the rest because it
+     is the only step with a deadline the reader cannot come back to: applying
+     is over by now, and the projects will still be there afterwards. */
+  if (phase === 4 && communityVote && slug !== null) {
+    return (
+      <ButtonLink href={`/hackathons/${slug}/vote`} className="shrink-0">
+        Cast your ballot
+      </ButtonLink>
+    );
   }
 
   if (phase < 2) {

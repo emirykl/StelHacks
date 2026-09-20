@@ -69,7 +69,7 @@ export const VISIBILITY = ["Public", "Participants", "Restricted"] as const;
  * in `contracts/hackathon-core/src/constitution/document.rs`, and the fixtures
  * both languages read are what catch it when it does not.
  */
-export const CONSTITUTION_VERSION = 4;
+export const CONSTITUTION_VERSION = 5;
 
 export interface Rules {
   /**
@@ -111,6 +111,16 @@ export interface Rules {
   /** How the final score splits, in basis points. The two total ten thousand. */
   judgeBps: number;
   communityBps: number;
+  /**
+   * The points one wallet has to place in the community vote, and how far it
+   * may spread them.
+   *
+   * Both are zero when the crowd has no share, which is the document saying
+   * there is no ballot rather than a ballot of nothing: a vote nobody casts
+   * describes nothing, so it says nothing.
+   */
+  votePower: number;
+  maxChoices: number;
   /**
    * Seconds between the ranking and the first payment, or zero for none.
    *
@@ -228,6 +238,8 @@ function shape(raw: Record<string, unknown>): Rules {
     },
     judgeBps: Number(vote["judge_bps"] ?? 0),
     communityBps: Number(vote["community_bps"] ?? 0),
+    votePower: Number(vote["power"] ?? 0),
+    maxChoices: Number(vote["max_choices"] ?? 0),
     settlementDelay: delayOf(discretion["settlement"]),
   };
 }
