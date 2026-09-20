@@ -263,13 +263,17 @@ async function check(
  * Read through the length rather than sliced at a constant. The constant would
  * be 4 and 68 and would be right today, and the next reader would have no way
  * to tell whether those were the format or somebody's measurement.
+ *
+ * `Uint8Array` and `DataView`, not `Buffer`. This file runs in a browser and
+ * `Buffer` is Node's — there is none on the page, and reaching for it threw
+ * from inside a bundler's shim with a message about call stacks that named
+ * nothing to do with what was wrong.
  */
-function signatureBytes(entry: unknown): Buffer {
-  const encoded = Buffer.from(
-    (entry as { signature: { toXDR(): Uint8Array } }).signature.toXDR(),
-  );
+function signatureBytes(entry: unknown): Uint8Array {
+  const encoded = (entry as { signature: { toXDR(): Uint8Array } }).signature.toXDR();
+  const length = new DataView(encoded.buffer, encoded.byteOffset, encoded.byteLength).getUint32(0);
 
-  return encoded.subarray(4, 4 + encoded.readUInt32BE(0));
+  return encoded.subarray(4, 4 + length);
 }
 
 /** Where a withdrawal has got to, in the anchor's own words. */
@@ -486,7 +490,7 @@ export async function completeWithdraw(
 
     const memo =
       memoType === "hash"
-        ? Memo.hash(Buffer.from(transfer.withdrawMemo ?? "", "base64").toString("hex"))
+        ? Memo.hash(hexFromBase64(transfer.withdrawMemo ?? ""))
         : memoType === "id"
           ? Memo.id(transfer.withdrawMemo ?? "")
           : memoType === "text"
@@ -715,6 +719,23 @@ export async function quote(
   } catch {
     return null;
   }
+}
+
+/**
+ * A base64 memo as the hex string `Memo.hash` wants.
+ *
+ * Written out rather than gone through `Buffer`, for the reason above: this
+ * runs on a page. `atob` is the browser's own and needs no polyfill.
+ */
+function hexFromBase64(value: string): string {
+  const raw = atob(value);
+  let hex = "";
+
+  for (let index = 0; index < raw.length; index += 1) {
+    hex += raw.charCodeAt(index).toString(16).padStart(2, "0");
+  }
+
+  return hex;
 }
 
 function shape(transaction: Record<string, unknown>): Transfer {

@@ -270,6 +270,12 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
          or networks would otherwise be retried with the old one. */
       token.current = null;
 
+      /* The whole thing to the console, the sentence to the page. A message
+         like "maximum call stack size exceeded" says nothing without the frames
+         under it, and the person who needs those frames is looking at a
+         developer console rather than at this card. */
+      console.error("cash out failed", thrown);
+
       setStage({ at: "failed", why: thrown instanceof Error ? thrown.message : "that did not work" });
     }
   }
