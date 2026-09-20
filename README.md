@@ -23,8 +23,17 @@ rather than removed.
 | Layers | Soroban contracts, data and services, web application, shared TypeScript SDK |
 | Constitution version | 6 |
 | Automated tests | 467 contract, 211 TypeScript, 50 database role |
-| Deployment | Both contracts on testnet; no mainnet deployment |
+| Deployment | Contracts on Stellar testnet; web application and sealer API on Vercel; no mainnet deployment |
 | Requirements document | `StelHacks-PRD.md`, in Turkish |
+
+### Public resources
+
+| Resource | Address |
+|:--|:--|
+| Production application | [stelhacks.vercel.app](https://stelhacks.vercel.app) |
+| Sealer API | [stelhacks-backend.vercel.app](https://stelhacks-backend.vercel.app) |
+| Project deck | [Google Slides](https://docs.google.com/presentation/d/15NyndM7yh3oVmPaOzdC2zTSMoqqdraxtDatDKL4-lbU/edit?slide=id.g3fbaf00d6e0_1_15#slide=id.g3fbaf00d6e0_1_15) |
+| Source repository | [github.com/emirykl/StelHacks](https://github.com/emirykl/StelHacks) |
 
 ## Contents
 
@@ -751,6 +760,17 @@ and the scope of a signature. Defects identified by these scripts are recorded i
 `docs/deployments.md`.
 
 ## Deployment record
+
+The production application is available at
+[stelhacks.vercel.app](https://stelhacks.vercel.app). The request driven sealer
+API is available at
+[stelhacks-backend.vercel.app](https://stelhacks-backend.vercel.app). They are
+maintained as separate Vercel projects. The application builds from `frontend`,
+and the API builds from `backend/sealer`. This separation gives each deployment
+an independent environment, build process and release history.
+
+The project presentation is maintained in the
+[StelHacks project deck](https://docs.google.com/presentation/d/15NyndM7yh3oVmPaOzdC2zTSMoqqdraxtDatDKL4-lbU/edit?slide=id.g3fbaf00d6e0_1_15#slide=id.g3fbaf00d6e0_1_15).
 
 Both contracts are deployed to testnet. Addresses, wasm hashes and upload
 transactions are recorded in `docs/deployments.md`. The recorded hashes are those
