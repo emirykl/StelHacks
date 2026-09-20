@@ -195,7 +195,7 @@ export async function round(contract: string): Promise<string[]> {
     const cast = seal(await leaves(contract, "ballots"));
 
     for (const ballot of ballots) {
-      const proof = proofFor(cast, ballotLeaf(ballot.voter, ballot.team));
+      const proof = proofFor(cast, ballotLeaf(ballot.voter, ballot.choices));
 
       if (proof === null) {
         said.push(`${contract}: a held ballot is not under its own root`);
@@ -206,12 +206,12 @@ export async function round(contract: string): Promise<string[]> {
       const failed = await put(
         await client.reveal_ballot({
           voter: ballot.voter,
-          team_id: ballot.team,
+          choices: ballot.choices,
           proof: proof.map((step) => Buffer.from(step)),
         }),
       );
 
-      said.push(...report(contract, `a ballot for team ${ballot.team}`, failed));
+      said.push(...report(contract, `the ballot from ${ballot.voter}`, failed));
     }
   }
 

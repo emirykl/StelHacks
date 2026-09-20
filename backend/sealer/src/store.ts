@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { fromHex, type Digest } from "@stelhacks/sdk";
+import { fromHex, type Digest, type VoteChoice } from "@stelhacks/sdk";
 
 import { settings } from "./config.js";
 
@@ -49,7 +49,7 @@ export async function keepScorecard(entry: {
 export async function keepBallot(entry: {
   contract: string;
   voter: string;
-  team: number;
+  choices: VoteChoice[];
   leaf: string;
   signature: string;
 }): Promise<void> {
@@ -57,7 +57,7 @@ export async function keepBallot(entry: {
     {
       contract_id: entry.contract,
       voter: entry.voter,
-      team_id: entry.team,
+      choices: entry.choices,
       leaf: `\\x${entry.leaf}`,
       signature: `\\x${entry.signature}`,
     },
@@ -118,17 +118,25 @@ export async function heldScorecards(contract: string): Promise<HeldScorecard[]>
   }));
 }
 
-export async function heldBallots(contract: string): Promise<{ voter: string; team: number }[]> {
+export async function heldBallots(
+  contract: string,
+): Promise<{ voter: string; choices: VoteChoice[] }[]> {
   const { data, error } = await db
     .from("ballots")
-    .select("voter, team_id")
+    .select("voter, choices")
     .eq("contract_id", contract);
 
   if (error !== null) {
     throw new Error(`could not read the ballots: ${error.message}`);
   }
 
-  return data.map((row) => ({ voter: String(row.voter), team: Number(row.team_id) }));
+  return data.map((row) => ({
+    voter: String(row.voter),
+    /* Stored as written rather than rebuilt, because the leaf was hashed over
+       this exact sequence and a round trip that reordered it would produce a
+       digest no proof matches. */
+    choices: row.choices as VoteChoice[],
+  }));
 }
 
 /**

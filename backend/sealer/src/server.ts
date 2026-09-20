@@ -6,7 +6,8 @@ import { settings } from "./config.js";
 import { core, sealer } from "./core.js";
 import { issue } from "./receipt.js";
 import { proofFor, seal } from "./seal.js";
-import { contractOf, isRecord, isScorecard } from "./validate.js";
+import { ballotRules, fits } from "./rules.js";
+import { contractOf, isBallot, isRecord, isScorecard } from "./validate.js";
 import { rounds } from "./rounds.js";
 import { keepBallot, keepScorecard, leaves, phaseOf } from "./store.js";
 
@@ -101,19 +102,19 @@ async function takeBallot(raw: unknown): Promise<unknown | Failure> {
 
   const contract = contractOf(raw);
   const voter = raw["voter"];
-  const team = raw["team"];
+  const choices = raw["choices"];
   const signature = raw["signature"];
 
   if (
     contract === null ||
     typeof voter !== "string" ||
-    typeof team !== "number" ||
+    !isBallot(choices) ||
     typeof signature !== "string"
   ) {
-    return refuse(400, "a ballot needs a contract, a voter, a team and a signature");
+    return refuse(400, "a ballot needs a contract, a voter, its choices and a signature");
   }
 
-  const body = { contract, voter, team, signature };
+  const body = { contract, voter, choices, signature };
   const phase = await phaseOf(body.contract);
 
   if (phase === null) {
@@ -123,21 +124,30 @@ async function takeBallot(raw: unknown): Promise<unknown | Failure> {
     return refuse(409, "this hackathon is not collecting ballots");
   }
 
-  const leaf = ballotLeaf(body.voter, body.team);
+  const rules = await ballotRules(body.contract);
+
+  if (!fits(body.choices, rules)) {
+    return refuse(
+      400,
+      `this hackathon gives a wallet ${rules.power} points to place across at most ${rules.maxChoices} projects, all of which have to be spent`,
+    );
+  }
+
+  const leaf = ballotLeaf(body.voter, body.choices);
   const signed = {
     signer: body.voter,
     leaf,
     signature: Buffer.from(body.signature, "hex"),
   };
 
-  if (!verifyBallot(body.voter, body.team, signed)) {
+  if (!verifyBallot(body.voter, body.choices, signed)) {
     return refuse(400, "that signature does not cover that ballot");
   }
 
   await keepBallot({
     contract: body.contract,
     voter: body.voter,
-    team: body.team,
+    choices: body.choices,
     leaf: toHex(leaf),
     signature: body.signature,
   });

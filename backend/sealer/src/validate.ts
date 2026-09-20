@@ -1,4 +1,4 @@
-import type { Scorecard } from "@stelhacks/sdk";
+import type { Scorecard, VoteChoice } from "@stelhacks/sdk";
 
 /**
  * Checking what arrived before believing any of it.
@@ -37,3 +37,41 @@ export function isScorecard(value: unknown): value is Scorecard {
   );
 }
 
+
+/**
+ * A ballot, checked for shape rather than for the rules it has to satisfy.
+ *
+ * The size of a ballot and how far it may be spread are frozen in the
+ * constitution, so they are read from the chain and checked in `server.ts`.
+ * What is here is what a body has to be before any of that is worth asking:
+ * whole positive numbers, each project named once, in the ascending order the
+ * contract hashes over. A ballot in another order would seal a digest the
+ * contract cannot reproduce, and the voter would find that out at the reveal
+ * rather than now.
+ */
+export function isBallot(value: unknown): value is VoteChoice[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return false;
+  }
+
+  let highest = 0;
+
+  for (const choice of value) {
+    if (!isRecord(choice)) {
+      return false;
+    }
+
+    const { team, weight } = choice;
+
+    if (!Number.isInteger(team) || !Number.isInteger(weight)) {
+      return false;
+    }
+    if ((team as number) <= highest || (weight as number) < 1) {
+      return false;
+    }
+
+    highest = team as number;
+  }
+
+  return true;
+}
