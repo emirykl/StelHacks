@@ -158,13 +158,24 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
     }
 
     /*
-      The tab is opened now, on the press, and pointed somewhere afterwards.
+      A tab is opened now, on the press, and pointed somewhere afterwards — but
+      only for the standard that has somewhere to point it.
 
       Proving the wallet takes a signature, and by the time that returns this is
-      no longer inside the gesture that a browser will open a window for. Opened
-      first and navigated later, it is the same tab either way and never blocked.
+      no longer inside the gesture a browser will open a window for. Opened
+      first and navigated later, it is never blocked.
+
+      Not with `noopener`, which was the first version of this and does not
+      work: it makes `window.open` return null by design, so there was no handle
+      to navigate and none to close either. The reference is dropped after the
+      tab has been sent on its way instead.
+
+      And not at all for SEP-6, which answers with an account and a memo rather
+      than a page. That opened a tab that could never be given a destination and
+      could not be closed, so pressing the button produced a blank tab and
+      nothing else.
     */
-    const opened = window.open("", "_blank", "noopener,noreferrer");
+    const opened = anchor.hosted === undefined ? null : window.open("", "_blank");
 
     setStage({ at: "starting" });
 
@@ -182,13 +193,16 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
       const transfer =
         open ?? (await open_(anchor, token.current, code, address, assetContract));
 
-      if (transfer.url !== undefined && opened !== null) {
-        opened.location.href = transfer.url;
-      } else {
-        /* Nothing to show them there. The programmatic flow answers with an
-           account and a memo rather than a page, so a blank tab left open would
-           be this product's own dead end. */
-        opened?.close();
+      if (opened !== null) {
+        if (transfer.url === undefined) {
+          opened.close();
+        } else {
+          opened.location.href = transfer.url;
+
+          /* Dropped once it has gone, so the anchor's page cannot reach back
+             through `window.opener` to the page that sent somebody there. */
+          opened.opener = null;
+        }
       }
 
       setStage({ at: "running", transfer });
