@@ -1,6 +1,9 @@
 import { AccountMenu } from "./account-menu";
+import { ApplyTrigger } from "./organizer-apply";
 import { Measure } from "./primitives";
-import { currentUser } from "../../lib/supabase/server";
+import { currentUser, serverClient } from "../../lib/supabase/server";
+import { isStaff, mayOrganize } from "../../lib/organizing";
+import { profileOf } from "../../lib/profile";
 
 /**
  * The frame every page is read inside.
@@ -12,14 +15,56 @@ import { currentUser } from "../../lib/supabase/server";
 export async function Header() {
   const user = await currentUser();
 
-  /* The bottom corners are rounded, which turns the hairline underneath into a
-     line that curls up as it reaches either edge rather than running off the
-     side of the screen. It is what makes the header read as a piece of
-     furniture sitting on the page instead of a band painted across it, and the
-     curl is small enough to be felt rather than noticed. */
+  /* Only for the handle, which is what the menu's Profile row links to. A menu
+     that had to guess the address would guess it wrong for anybody who has
+     changed their username. */
+  const db = user === null ? null : await serverClient();
+
+  /* Three reads for one menu, asked together rather than one after another.
+     The menu is on every page, so the difference between these being parallel
+     and being sequential is two round trips added to every request in the
+     product. */
+  const [profile, organizer, staff] =
+    db === null || user === null
+      ? [null, false, false]
+      : await Promise.all([profileOf(db, user.id), mayOrganize(db), isStaff(db)]);
+
+  /* A bar that floats rather than one painted across the top.
+
+     Only the bottom corners used to be rounded, and the curl was invisible
+     until something scrolled underneath it: at rest the header sat flush to
+     three edges of the window and the only thing anybody could see was one
+     straight line. So the hairline goes all the way around and the header is
+     held off every edge by the same gap, which makes the shape the same
+     whether the page has moved or not. The radius stays small enough to be
+     felt rather than noticed. */
   return (
-    <header className="sticky top-0 z-10 rounded-b-[1.25rem] border-b border-rule bg-paper/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center justify-between px-6">
+    <>
+      {/*
+        The strip the floating bar does not cover.
+
+        Holding the header off every edge leaves a gap above it and a margin
+        down each side, and the page scrolls through all three. A video panel
+        or a banner passing behind the bar arrived sharp in that gap and blurred
+        under the bar, so the one thing meant to read as a single sheet of glass
+        read as a pane with a hole cut round it.
+
+        This is that glass. It reaches to the bar's lower edge and fades out
+        rather than stopping on a line, because a blur that ends abruptly is
+        just a second edge to explain. It sits under the header and over the
+        page, and it takes no pointer events: it is a surface, not a control.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-[5.5rem] backdrop-blur-xl [mask-image:linear-gradient(to_bottom,black_0,black_4.75rem,transparent_5.5rem)]"
+      />
+
+      {/* The height is stated on the header itself rather than on the row
+          inside it, so the space this bar occupies is one number and not that
+          number plus two hairlines. The sign in page pulls its artwork up by
+          exactly this much and the difference was two pixels of scrollbar. */}
+      <header className="sticky top-3 z-20 mx-3 mt-3 h-16 rounded-[1.25rem] border border-rule bg-paper/92 backdrop-blur-xl">
+      <div className="mx-auto flex h-full w-full max-w-[96rem] items-center justify-between px-5 sm:px-6">
         <a href="/" className="flex items-center gap-2.5">
           {/* The mark ships on its own black tile rather than transparent. The
               art has a black laptop screen and a black shadow in it, so a
@@ -46,7 +91,7 @@ export async function Header() {
             <a
               key={href}
               href={href}
-              className="rounded-full px-3.5 py-2 text-[0.875rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
+              className="rounded-full px-4 py-2.5 text-[1rem] text-ink-soft transition-colors duration-150 ease-settle hover:bg-paper-sunk hover:text-ink"
             >
               {label}
             </a>
@@ -57,9 +102,16 @@ export async function Header() {
             way in, then the person, then the connected address beside them.
             "Browse" used to sit here and said the same thing as the Hackathons
             link beside it. */}
-        <AccountMenu email={user?.email ?? null} />
+        <AccountMenu
+          email={user?.email ?? null}
+          username={profile?.username ?? null}
+          avatarUrl={profile?.avatarUrl ?? null}
+          organizer={organizer}
+          staff={staff}
+        />
       </div>
-    </header>
+      </header>
+    </>
   );
 }
 
@@ -72,13 +124,20 @@ export function Footer() {
             Stellar testnet. Contract addresses and build hashes are published.
           </p>
 
-          <nav className="flex gap-5 text-[0.8125rem] text-ink-soft" aria-label="Elsewhere">
+          <nav className="flex flex-wrap gap-5 text-[0.8125rem] text-ink-soft" aria-label="Elsewhere">
             <a href="/how-it-works" className="hover:text-ink">
               How it works
             </a>
             <a href="/hackathons" className="hover:text-ink">
               Hackathons
             </a>
+
+            {/* The footer is where somebody looks for the thing a site did not
+                offer them anywhere else, and running an event is that thing.
+                It opens the same panel as the landing card rather than a page
+                of its own: two doors into one room, and the room is written
+                once. */}
+            <ApplyTrigger className="hover:text-ink">Run a hackathon</ApplyTrigger>
           </nav>
         </div>
       </Measure>
