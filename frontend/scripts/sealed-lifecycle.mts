@@ -43,7 +43,7 @@ import { Spec } from "@stellar/stellar-sdk/contract";
 
 const RPC = "https://soroban-testnet.stellar.org";
 const PASSPHRASE = "Test SDF Network ; September 2015";
-const CORE_WASM = "2c2b532cef6963de1b5ffbf02dff9bafe3845eaa65a6049d87b3554f66a6d0cb";
+const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
 const VAULT_WASM = "afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb";
 const XLM = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
@@ -153,7 +153,7 @@ const now = Math.floor(Date.now() / 1000);
 const minute = 60;
 
 const constitution = {
-  version: 1,
+  version: 2,
   metadata_hash: Buffer.alloc(32),
   prize_asset: XLM,
   tracks: [
@@ -178,6 +178,10 @@ const constitution = {
   },
   teams: { max_size: 5, multi_team_allowed: false },
   prize_tiers: [{ track: "payments", rank: 1, amount: BigInt(100_000_000) }],
+  /* Nothing charged, and the organizer's own key named as the collector. The
+     fee is taken on top of the prize table rather than out of it, so any rate
+     above zero would want a larger deposit than the one below. */
+  platform_fee: { collector: organizer.publicKey(), bps: 0 },
   tie_break: [
     { tag: "JudgeScore", values: undefined },
     { tag: "Criterion", values: ["impact"] },
@@ -405,6 +409,12 @@ const paid = await call(
   new Address(builder.publicKey()).toScVal(),
 );
 console.log("paid     ✓", paid);
+
+/* Zero at this rate, and still a call that has to happen: `complete` refuses an
+   event whose fee has not been settled, so owing nothing is something the
+   contract wants said rather than skipped. */
+const fee = await call(organizer, core, "settle_platform_fee");
+console.log("fee      ✓", fee);
 
 await call(organizer, core, "complete");
 console.log("closed   ✓");

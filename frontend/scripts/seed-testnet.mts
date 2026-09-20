@@ -34,7 +34,7 @@ const RPC = "https://soroban-testnet.stellar.org";
 const PASSPHRASE = "Test SDF Network ; September 2015";
 
 /** From `docs/deployments.md`. Both are already uploaded to testnet. */
-const CORE_WASM = "2c2b532cef6963de1b5ffbf02dff9bafe3845eaa65a6049d87b3554f66a6d0cb";
+const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
 const VAULT_WASM = "afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb";
 
 /** The native lumen, wrapped as a Soroban token. */
@@ -128,7 +128,7 @@ const now = Math.floor(Date.now() / 1000);
 const hour = 3_600;
 
 const constitution = {
-  version: 1,
+  version: 2,
   metadata_hash: Buffer.alloc(32),
   prize_asset: XLM,
   tracks: [
@@ -156,6 +156,10 @@ const constitution = {
   teams: { max_size: 5, multi_team_allowed: false },
   /* Ten lumens, which friendbot's ten thousand covers with room for fees. */
   prize_tiers: [{ track: "payments", rank: 1, amount: BigInt(100_000_000) }],
+  /* Nothing charged, and the seeder's own key named as the collector. A seeded
+     event exists to be walked through, not to be billed for, and a rate above
+     zero would make it deposit more than the ten lumens friendbot gave it. */
+  platform_fee: { collector: organizer.publicKey(), bps: 0 },
   tie_break: [
     { tag: "JudgeScore", values: undefined },
     { tag: "Criterion", values: ["impact"] },

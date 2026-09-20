@@ -15,15 +15,9 @@
  * It proves that the frontend's readers and encoders agree with a live contract
  * at every stage, which is the part no unit test can reach.
  *
- * This variant hands the card to the collection service instead of the
- * organizer publishing a root themselves, which is the arrangement the judge
- * console uses. It is the only way to find out whether the service, the SDK and
- * the contract agree about what a leaf is and what a signature covers.
- *
- *   node --experimental-strip-types scripts/sealed-lifecycle.mts
+ *   node --experimental-strip-types scripts/full-lifecycle.mts
  */
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import {
@@ -46,16 +40,8 @@ const PASSPHRASE = "Test SDF Network ; September 2015";
 const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
 const VAULT_WASM = "afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb";
 const XLM = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
-
-/* The address the rules name as allowed to publish a root, which has to be the
-   service's own or the seal is refused. */
-const SEALER = "GDTQSU3L2UVUEFOHEGDO5FNICW2URPWNFEQVZYK46LX6ZPNCYDUNEVGC";
-const SEALER_URL = "http://localhost:8787";
-
-/* The judge is a person with a wallet rather than a key in this script, which
-   is the whole point: the one link never proved is whether a wallet's message
-   signing produces what the service verifies. */
-const JUDGE = "GCJT4JWWRGHJDBH6WEKTWNQFOXELHKMCSZ7PDREFWE547RIX7A4KJS2G";
+/** Where this deployment sends its cut, from `frontend/.env.local`. */
+const COLLECTOR = "GB45FLZ24LKDNR2OSMHGI45PA47PY4W4VSTK7BPTATZTPN7JVEG3Y4WP";
 
 const server = new Server(RPC);
 const spec = new Spec(JSON.parse(readFileSync("lib/contract-spec.json", "utf8")));
@@ -98,13 +84,32 @@ async function call(
   prepared.sign(who);
 
   const sent = await server.sendTransaction(prepared);
-  const done = await server.pollTransaction(sent.hash, {
-    attempts: 40,
-    sleepStrategy: () => 1000,
-  });
 
-  if (done.status !== "SUCCESS") {
-    throw new Error(`${method}: ${done.status}`);
+  /* The poll is retried because a dropped connection is not an answer. Testnet's
+     RPC refuses one request now and then, and letting that throw abandons a walk
+     that is minutes long and already has a submitted transaction on chain. The
+     transaction is identified by hash, so asking again is safe: a resent poll
+     reads the same ledger entry rather than doing anything twice. */
+  let done: Awaited<ReturnType<typeof server.pollTransaction>> | null = null;
+
+  for (let attempt = 0; attempt < 3 && done === null; attempt += 1) {
+    try {
+      done = await server.pollTransaction(sent.hash, {
+        attempts: 40,
+        sleepStrategy: () => 1000,
+      });
+    } catch (whatever) {
+      if (attempt === 2) {
+        throw whatever;
+      }
+
+      console.log(`  ${method}: poll failed, asking again`);
+      await new Promise((wake) => setTimeout(wake, 3000));
+    }
+  }
+
+  if (done === null || done.status !== "SUCCESS") {
+    throw new Error(`${method}: ${done === null ? "no answer" : done.status}`);
   }
 
   return done.returnValue === undefined ? null : scValToNative(done.returnValue);
@@ -171,9 +176,9 @@ const constitution = {
       no_award_allowed: false,
     },
   ],
-  judges: [{ judge: JUDGE, tracks: ["payments"] }],
+  judges: [{ judge: organizer.publicKey(), tracks: ["payments"] }],
   judge_quorum: 1,
-  judging_mode: { tag: "Easy", values: [SEALER] },
+  judging_mode: { tag: "Easy", values: [organizer.publicKey()] },
   vote: { judge_bps: 10_000, community_bps: 0 },
   visibility: 0,
   submission_requirements: {
@@ -183,10 +188,10 @@ const constitution = {
   },
   teams: { max_size: 5, multi_team_allowed: false },
   prize_tiers: [{ track: "payments", rank: 1, amount: BigInt(100_000_000) }],
-  /* Nothing charged, and the organizer's own key named as the collector. The
-     fee is taken on top of the prize table rather than out of it, so any rate
-     above zero would want a larger deposit than the one below. */
-  platform_fee: { collector: organizer.publicKey(), bps: 0 },
+  /* Five percent, to the collector this deployment is configured with, so the
+     fee is a payment somebody can watch land rather than a zero that proves
+     only that the call succeeded. */
+  platform_fee: { collector: COLLECTOR, bps: 500 },
   tie_break: [
     { tag: "JudgeScore", values: undefined },
     { tag: "Criterion", values: ["impact"] },
@@ -210,11 +215,9 @@ const constitution = {
     submission_opens_at: BigInt(now),
     submission_closes_at: BigInt(now + minute),
     screening_closes_at: BigInt(now + 2 * minute),
-    /* Hours, not a minute. Somebody has to open a page, connect a wallet and
-       actually think about two scores. */
-    judging_closes_at: BigInt(now + 240 * minute),
-    community_vote_opens_at: BigInt(now + 240 * minute),
-    community_vote_closes_at: BigInt(now + 240 * minute),
+    judging_closes_at: BigInt(now + 3 * minute),
+    community_vote_opens_at: BigInt(now + 3 * minute),
+    community_vote_closes_at: BigInt(now + 3 * minute),
   },
   extensions: { max_extensions_per_deadline: 1, max_total_seconds_per_deadline: BigInt(minute) },
 };
@@ -235,12 +238,18 @@ await call(organizer, vault, "create", new Address(core).toScVal(), new Address(
 await call(organizer, core, "bind_vault", new Address(vault).toScVal());
 console.log("vault    ✓", vault);
 
+/* The fee rides on top of the prize table, so the deposit is no longer the
+   table's total. Asking the contract rather than adding it up here keeps the
+   two from disagreeing about rounding. */
+const owed = (await call(organizer, core, "required_funding")) as bigint;
+console.log("owed     :", owed);
+
 await call(
   organizer,
   vault,
   "deposit",
   new Address(organizer.publicKey()).toScVal(),
-  nativeToScVal(BigInt(100_000_000), { type: "i128" }),
+  nativeToScVal(owed, { type: "i128" }),
 );
 await call(organizer, core, "publish");
 console.log("publish  ✓");
@@ -269,35 +278,6 @@ await call(
 );
 console.log("entry    ✓ team", team);
 
-/*
-  The service asks our database what phase a hackathon is in before it will take
-  a card, so the indexer has to have seen this one. It starts at the oldest
-  ledger the node still holds and scans about ten thousand per pass, so a
-  contract created a minute ago is a dozen passes of empty scanning away.
-*/
-function catchUp(): void {
-  for (let pass = 0; pass < 16; pass += 1) {
-    const said = execFileSync("npm", ["start", "--silent", "--", core, "--once"], {
-      cwd: "../backend/indexer",
-      encoding: "utf8",
-    });
-
-    /* The comma matters. "110960 ledgers behind" contains "0 ledgers behind",
-       so the loose check declared victory on the first pass and left the
-       service with no hackathon to find. */
-    if (said.includes(", 0 ledgers behind")) {
-      console.log("indexed  ✓", said.trim().split("\n").pop());
-      return;
-    }
-  }
-
-  throw new Error("the indexer never caught up");
-}
-
-/* Run while the clock is running down rather than before the entries, because
-   catching up takes minutes and the registration window is one. */
-catchUp();
-
 await waitFor(now + minute, "submissions to close");
 await call(organizer, core, "advance_phase");
 console.log("screening ✓");
@@ -305,11 +285,6 @@ console.log("screening ✓");
 await waitFor(now + 2 * minute, "screening to close");
 await call(organizer, core, "advance_phase");
 console.log("judging  ✓");
-
-/* Again, because the service reads the phase from our database and the move
-   just made is not in it yet. The cursor is at the tip by now, so this is one
-   pass rather than a dozen. */
-catchUp();
 
 /*
   One scorecard, sealed as a tree of one.
@@ -319,8 +294,75 @@ catchUp();
   root is the leaf and the inclusion proof is empty, which is what makes this a
   usable end to end check without standing the sealer up.
 */
-console.log("\nready. the judge scores at:");
-console.log(`  http://localhost:3000/judge/${core}`);
+const scorecard = {
+  judge: organizer.publicKey(),
+  team,
+  scores: [
+    { criterion: "impact", score: 90 },
+    { criterion: "technical", score: 80 },
+  ],
+};
+
+/* Encoded through the call that takes it rather than by naming the type, so the
+   bytes hashed here are exactly the bytes the contract will later be handed. */
+const [encodedScorecard] = spec.funcArgsToScVals("reveal_score", { scorecard, proof: [] });
+const encoded = encodedScorecard!.toXDR();
+
+/* One hash over the leaf tag, the domain and the XDR, in that order. Hashing
+   the domain and body first and then tagging the digest is the obvious wrong
+   version and produces a root the contract rejects as not matching. */
+const domain = new TextEncoder().encode("stelhacks.v1.scorecard");
+const leaf = hash(
+  Buffer.concat([Buffer.from([0x00]), Buffer.from(domain), Buffer.from(encoded)]),
+);
+
+/* The root goes up after the scoring window shuts and before the phase moves.
+   Publishing early is refused as a deadline not reached, which is the contract
+   making sure a root cannot commit to a set that is still being added to. */
+await waitFor(now + 3 * minute, "scoring to close");
+
+await call(organizer, core, "publish_score_root", nativeToScVal(leaf, { type: "bytes" }));
+console.log("sealed   ✓", Buffer.from(leaf).toString("hex").slice(0, 16));
+
+await call(organizer, core, "advance_phase");
+console.log("reveal   ✓");
+
+const weighted = await call(
+  organizer,
+  core,
+  "reveal_score",
+  ...spec.funcArgsToScVals("reveal_score", { scorecard, proof: [] }),
+);
+console.log("scored   ✓", weighted);
+
+/* Neither of these is `advance_phase`. Reveal has no closing deadline, so the
+   generic move refuses it as a wrong phase; the ranking is what ends that stage
+   and opening settlement is what ends the next. Both are their own calls
+   because both do something besides moving a number. */
+await call(organizer, core, "finalize_results");
+console.log("ranked   ✓");
+
+await call(organizer, core, "open_settlement");
+console.log("settle   ✓");
+
+const paid = await call(
+  organizer,
+  core,
+  "settle_prize",
+  nativeToScVal("payments", { type: "symbol" }),
+  nativeToScVal(1, { type: "u32" }),
+  new Address(builder.publicKey()).toScVal(),
+);
+console.log("paid     ✓", paid);
+
+/* Parked here on purpose. The fee is unsettled and the event is therefore
+   uncloseable, which is exactly the pair of buttons the organizer console
+   offers at this phase, so the rest is done by hand in the browser. */
+console.log("\nparked in Settlement, fee unsettled.");
+console.log("  manage at: /manage/" + core);
+console.log("  organizer: " + organizer.publicKey());
+console.log("  secret   : " + organizer.secret());
+console.log("  collector: " + COLLECTOR);
 console.log("core :", core);
 console.log("vault:", vault);
 
