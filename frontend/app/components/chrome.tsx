@@ -1,6 +1,6 @@
+import { BrandMascot } from "./brand-mascot";
+import footerStyles from "./footer.module.css";
 import { AccountMenu } from "./account-menu";
-import { ApplyTrigger } from "./organizer-apply";
-import { Measure } from "./primitives";
 import { currentUser, serverClient } from "../../lib/supabase/server";
 import { isStaff, mayOrganize } from "../../lib/organizing";
 import { profileOf } from "../../lib/profile";
@@ -87,14 +87,7 @@ export async function Header() {
         </a>
 
         <nav className="hidden items-center gap-1 sm:flex" aria-label="Sections">
-          {/* One link, because there is one thing to go to. "How it works" and
-              "Create" belong to the landing page's argument rather than to the
-              header: a nav with three items and no hierarchy makes a reader
-              choose before they know what any of them are. */}
-          {/* Full ink and half a weight up. It is the only destination in the
-              bar, and set soft and regular it read as a caption between two
-              controls that both looked more pressable than it. */}
-          {[["Hackathons", "/hackathons"]].map(([label, href]) => (
+          {[["Hackathons", "/hackathons"], ["Statistics", "/statistics"]].map(([label, href]) => (
             <a
               key={href}
               href={href}
@@ -124,30 +117,39 @@ export async function Header() {
 
 export function Footer() {
   return (
-    <footer className="border-t border-rule py-12">
-      <Measure wide>
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[0.875rem] text-ink-faint">
-            Stellar testnet. Contract addresses and build hashes are published.
-          </p>
-
-          <nav className="flex flex-wrap gap-5 text-[0.875rem] text-ink-soft" aria-label="Elsewhere">
-            <a href="/how-it-works" className="hover:text-ink">
-              How it works
+    <footer className={footerStyles.footer}>
+      <div className={footerStyles.card}>
+        <div className={footerStyles.main}>
+          <div>
+            <a href="/" className={footerStyles.brand} aria-label="StelHacks home">
+              <BrandMascot className={footerStyles.logo} />
+              <span className={footerStyles.name}>StelHacks<span>.</span></span>
             </a>
-            <a href="/hackathons" className="hover:text-ink">
-              Hackathons
-            </a>
-
-            {/* The footer is where somebody looks for the thing a site did not
-                offer them anywhere else, and running an event is that thing.
-                It opens the same panel as the landing card rather than a page
-                of its own: two doors into one room, and the room is written
-                once. */}
-            <ApplyTrigger className="hover:text-ink">Run a hackathon</ApplyTrigger>
+            <p className={footerStyles.tagline}>A home for Stellar builders.</p>
+          </div>
+          <nav className={footerStyles.links} aria-label="Footer">
+            {[
+              { title: "Hackathons", href: "/hackathons" },
+              { title: "Statistics", href: "/statistics" },
+              { title: "How it works", href: "/how-it-works" },
+              { title: "Stellar", href: "https://stellar.org", external: true },
+            ].map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className={footerStyles.link}
+                {...(link.external ? { target: "_blank", rel: "noreferrer" } : {})}
+              >
+                {link.title}{link.external && <span aria-hidden="true"> ↗</span>}
+              </a>
+            ))}
           </nav>
         </div>
-      </Measure>
+        <div className={footerStyles.bottom}>
+          <span>© {new Date().getFullYear()} StelHacks</span>
+          <span className={footerStyles.builtOn}>Build on Stellar</span>
+        </div>
+      </div>
     </footer>
   );
 }

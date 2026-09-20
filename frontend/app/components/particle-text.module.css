@@ -1,0 +1,58 @@
+.host {
+  /* Room around the heading's own box, so a particle pushed off a glyph by the
+     cursor leaves the letter rather than the canvas. Read back in the script:
+     the sampled word is drawn at this offset, so the two cannot drift. */
+  --particle-bleed: 28px;
+  position: relative;
+  display: block;
+}
+
+/* The word stays in the document and in the accessibility tree; only its ink
+   goes. A canvas that replaced the text would take the h1 with it. */
+.label {
+  transition: color 260ms ease;
+}
+
+.host[data-particles="on"] .label {
+  color: transparent;
+  /* A transparent fill is not an invisible glyph: a text-shadow still paints,
+     and the heading carries one. It traced the exact outline the particles had
+     just left, so the word appeared to sit behind its own effect. Dropped only
+     while the canvas is up, because the shadow is what darkens the edge of the
+     solid word that reduced motion and a failed sample fall back to. */
+  text-shadow: none;
+}
+
+.canvas {
+  position: absolute;
+  top: calc(var(--particle-bleed) * -1);
+  left: calc(var(--particle-bleed) * -1);
+  opacity: 0;
+  filter: saturate(1.25) contrast(1.08);
+  transition: opacity 180ms ease;
+  /* Nothing here is clickable, and the cursor is tracked on the window, so the
+     canvas must not sit between the reader and the page. */
+  pointer-events: none;
+}
+
+.host[data-particles="on"] .canvas {
+  opacity: 1;
+}
+
+.host[data-entering="true"] .canvas {
+  animation: particle-arrival 1.5s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+@keyframes particle-arrival {
+  0% { opacity: 0; filter: saturate(1.4) contrast(1.12) blur(1.5px); }
+  22% { opacity: 1; }
+  100% { opacity: 1; filter: saturate(1.25) contrast(1.08) blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .label,
+  .canvas {
+    transition: none;
+    animation: none;
+  }
+}

@@ -140,12 +140,14 @@ Supabase Auth, which is what the PRD's identity layer already called for.
 droppable and rebuildable by replaying events from ledger zero, and there is a
 test for exactly that. No Supabase key may move money or change a result.
 
-**Where it does carry trust.** Signed scorecards and ballots sit in Supabase
-during the sealed window, before their Merkle root is published. That is the
-same assumption the judge easy mode already accepted, countered the same way:
-signed receipt, immediate inclusion proof, appeal window. Row level security has
-to make those tables unreadable by every client role including the organizer's,
-and that has its own adversarial test.
+**Private judging data.** Scorecards and community ballots sit in Supabase as
+Sub Rosa tlock ciphertext until the Drand round derived from the judging
+deadline frozen on chain. The browser encrypts; the sealer independently checks
+the round, so neither its service role nor the organizer can read the contents
+early. RLS still denies every client role access to those tables as
+defence-in-depth. Signed receipts, Merkle inclusion proofs and the appeal window
+make refusal or omission visible; the service remains an availability dependency,
+not a pre-deadline confidentiality dependency.
 
 ## 10. Registration is by application, with a snapshot that fixes the electorate
 
@@ -498,6 +500,55 @@ the standard is what makes a signature made in any Stellar wallet verifiable
 here, and one made here verifiable by anything else that knows SEP-53. It was
 found the only way it could be: by a person with a real extension, after the
 whole path had already passed end to end with a keypair.
+
+## 25. A ballot is ten points to place, and a voter may back their own project
+
+**The PRD said** the community vote is one ballot per eligible wallet, cast for
+one project, with the voter's own project blocked (FR-14, and M15.6 in the
+roadmap).
+
+**Decided.** A ballot is an amount rather than a mark. The rules hand each
+wallet a number of points — ten by default — and the voter spreads them across
+between one and three projects, spending all of them or none. Backing your own
+project is allowed.
+
+**Why the points.** Asking which single project is best asks a voter about
+projects they never opened. Asking what they thought of the field is a question
+they can actually answer, and the two projects somebody liked can come out five
+and five without either being named second. It also makes the community score
+say more: a crowd of single marks separates the winner from everyone else and
+says nothing about the rest of the table, while a crowd of spreads ranks the
+whole field.
+
+The bounds are in the constitution rather than in the interface, because they
+decide an outcome. An organizer who could raise the power mid week would be
+handing more influence to whoever had not voted yet, and one who could lower it
+would be shrinking ballots already cast. The contract refuses anything that does
+not match what was frozen, and `validate_ballot` is where every one of those
+conditions lives.
+
+**Why the self vote.** This is the deliberate loosening and it is not free: a
+team of five can place fifty points on itself. Two things make it defensible.
+The electorate is closed — every voter was admitted by the organizer before
+sign-ups shut, so the ballot box cannot be stuffed by arriving — and a team is
+capped by its own size, which the rules also fix. Against that, the refusal cost
+something real: a builder who spent a weekend on the event was the one person
+forbidden from saying what they thought of it, and the rule could not tell an
+honest opinion from a self-serving one.
+
+What the contract will not do is hide it. `BallotCounted` carries the whole
+ballot rather than a total, so a project's own members backing it is visible to
+anybody replaying the log, and a reader can weigh it themselves. That is the
+trade throughout this codebase: where a rule cannot separate the honest case
+from the dishonest one, allow it and record it in the open.
+
+**What it cost.** The constitution moved to version five, which moved every
+digest in `fixtures/`: the leaf now covers the whole ballot — length first, then
+each team and weight in ascending order — because a leaf per choice would let a
+voter reveal the half that suited them. `reveal_ballot` takes the list,
+`vote_count` became `vote_weight`, and the sealed column in Postgres went from
+`team_id` to `choices`. No ballot already sealed could be carried across: the
+total it was meant to place was never part of what its voter signed.
 
 ---
 

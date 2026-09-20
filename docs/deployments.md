@@ -32,8 +32,55 @@ friendbot. Test network, test lumens, no real money.
 
 | Contract | Wasm hash | Upload transaction |
 |---|---|---|
-| `hackathon-core` | `bcea11748fa535ea311ca7d0548274f4828143b70f9f85294b3b6c32749c9c78` | [`b63b9558…`](https://stellar.expert/explorer/testnet/tx/b63b9558a412b8f0a85ffe590c03eac0147e6931dd6e73f9bf9b6c07514a5f74) |
+| `hackathon-core` | `4bf32e95b0758cc6af291bf4e91f86dba1bad8c7e81926479f6404af73c7ec1c` | [`46ede969…`](https://stellar.expert/explorer/testnet/tx/46ede9696f7c5f137685e7e82b5cd1ae8fce5508a83c170710e7551a02a037be) |
 | `prize-vault` | `afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb` | [`c5d45d80…`](https://stellar.expert/explorer/testnet/tx/c5d45d80f312c0879190f8b13031f763254321043507adfd5b2cf318ae68f252) |
+
+The core moved when sponsorship arrived: the constitution gained a policy
+saying whether outside money may join the pool, so the document is at version
+six and a version five contract would refuse it. `prize-vault` is untouched and
+its hash is the one it has always had — the vault already took deposits from
+anyone, and what was missing was a destination for them, which lives in the
+core.
+
+### What an upload does not do
+
+The core moved again for the batch application calls and sponsor placement:
+`approve_applications`, `reject_applications` and `sponsor_places`. The change
+is additive — nothing was removed or renamed, and the error enum is unchanged at
+forty nine cases, which is what lets the clock keep reading refusals off a live
+contract it was not built against.
+
+Uploading is not upgrading. Neither contract has an `upgrade` entry point, on
+purpose: a hackathon's rules are frozen at the lock and a contract somebody
+could swap underneath them would make that promise worth nothing. So a new wasm
+reaches new hackathons only. Every instance already on chain keeps running the
+code it was deployed with, for as long as it exists.
+
+Which makes the hash in `frontend/app/create/wizard.tsx` the thing that decides
+what gets deployed next, and it has to be changed in the same pass as the
+upload. The three hackathons deployed from `90d71d2d…` are still on it and will
+stay there.
+
+### The size ceiling, found the hard way
+
+That upload failed first. The wasm had reached 158 KB and the network refused
+the transaction outright as `TxSorobanInvalid`, with nothing in the error to say
+which limit had been crossed.
+
+Of those 158 KB, **93 KB were `contractspecv0`** — the published interface, which
+carries every doc comment on every entry point, type, field and error variant.
+The code itself was 57 KB. The contract had been growing a binary made mostly of
+prose, and adding a feature is what pushed it past the edge.
+
+The fix was not to write less. Doc comments on public items are published;
+ordinary comments are not, and both are read by anybody opening the file. So the
+first paragraph of each doc block stayed documentation and the rationale below
+it became an ordinary comment. Nothing was deleted, 192 blocks moved, and the
+wasm came back at 112 KB with the spec at 47 KB.
+
+Worth knowing before the next feature: an interface's doc comments are shipped
+to every validator, and they are the part of this contract most likely to run
+out of room first.
 
 These hashes are the reusable part. A hackathon is one instance of
 `hackathon-core` and one instance of `prize-vault`, so every event deploys its
@@ -48,26 +95,29 @@ gets.
 
 ### The reference instance
 
-One core, deployed so the uploaded code can be shown to actually run rather than
-merely to exist.
+A hackathon standing up from this code, so the upload can be shown to run rather
+than merely to exist. It is the demonstration event the listing page shows.
 
 | Instance | Address |
 |---|---|
-| `hackathon-core` | [`CCWSACHR…`](https://stellar.expert/explorer/testnet/contract/CCWSACHRMLE2YYXRTIXTTBIJBQRRFSAXXLLN3QXKGOP22K6HODEFXJ4T) |
+| `hackathon-core` | [`CDANGHBE…`](https://stellar.expert/explorer/testnet/contract/CDANGHBE63NZCE635GWIDXXCDVM2QM64EMXSOAYSUI5SQM7CHCPTUHUM) |
+| `prize-vault` | [`CCYPGWR3…`](https://stellar.expert/explorer/testnet/contract/CCYPGWR3WEGMGWKSE3TWW2YZKCONEIJ3R6PWMVJDBT6JJVU6QSASNNFL) |
+
+Open, denominated in testnet lumens, with a thousand of them across three places
+and the sponsorship door open. The first contribution was made against it to
+prove the path rather than to describe it:
 
 ```
-core.phase() → Error(Contract, #1), which is NotInitialized
+core.payable("main", 1) → 5_000_000_000      # five hundred lumens, as frozen
+core.sponsor_tier(sponsor, "main", 1, 250 XLM)
+core.payable("main", 1) → 7_500_000_000      # seven hundred and fifty
+core.sponsored_fee()    →   125_000_000      # the cut, charged on top
 ```
 
-That is the useful line. The instance is deployed but no hackathon has been
-created on it, and it says so with its own error code, which is how we know the
-deployed binary is executing this repository's logic and not merely occupying an
-address.
+That last line is the whole argument for where the fee sits. The sponsor paid
+262.5 lumens, first place grew by the 250 they announced, and the winner will be
+paid the number the page showed rather than a number net of anything.
 
-No vault beside it any more, and that is the change: `set_up` deploys the vault
-itself, so a core carrying no hackathon has no vault to show. The pair that
-proves the two contracts still work together is the lifecycle run below, which
-ends with an emptied vault and a closed event.
 
 The published interface carries `set_up`, which is why this pair exists rather
 than the one before it:

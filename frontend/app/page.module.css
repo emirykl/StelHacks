@@ -1,0 +1,277 @@
+.landing {
+  --landing-accent: #ffd91a;
+  --landing-black: #171714;
+  --landing-gutter: clamp(1.5rem, 5vw, 6rem);
+  flex: 1;
+}
+
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(100svh - 4.5rem);
+  padding: 4rem var(--landing-gutter);
+  scroll-margin-top: 4.5rem;
+}
+
+.hero { background: #faf9f6; overflow: hidden; }
+.screen.hero { padding-bottom: 0; }
+.binaryRain {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--landing-accent);
+  font-family: var(--font-mono);
+  font-size: clamp(0.8rem, 1.15vw, 1.1rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.28;
+  text-shadow: 0 0 12px var(--landing-accent);
+  user-select: none;
+}
+.binaryRain span {
+  position: absolute;
+  top: -12%;
+  left: calc((var(--i) * 9.1%) - 2%);
+  display: block;
+  animation: binary-fall calc(8s + (var(--i) * 0.75s)) linear infinite;
+  animation-delay: calc(var(--i) * -1.15s);
+  transform: translateY(-20vh);
+  white-space: nowrap;
+}
+@keyframes binary-fall {
+  0% { transform: translate3d(0, -18vh, 0); }
+  100% { transform: translate3d(calc(var(--i) * 0.35rem), 125vh, 0); }
+}
+.heroGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  flex: 1;
+  gap: clamp(0.75rem, 1.5vh, 1.5rem);
+  width: 100%;
+  max-width: 100rem;
+  margin-inline: auto;
+}
+.heroCopy { position: relative; z-index: 1; text-align: center; }
+.heroTitle,
+.sectionTitle,
+.joinTitle {
+  font-family: var(--font-technical), Arial, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.065em;
+  word-spacing: 0.1em;
+  line-height: 0.94;
+}
+.heroTitle { font-size: clamp(4rem, 7.7vw, 9rem); }
+.heroTitle > span { display: block; }
+.stellar {
+  /* The particles read this off the element, so the canvas and everything else
+     the accent touches move together rather than from two spellings. */
+  color: var(--landing-accent);
+  text-shadow: 0 0 1px #d8aa00;
+}
+.subtitle {
+  margin-top: 2rem;
+  font-size: clamp(1rem, 1.65vw, 1.5rem);
+  font-weight: 450;
+  letter-spacing: -0.035em;
+  color: #585852;
+}
+.heroMedia {
+  position: relative;
+  align-self: end;
+  justify-self: center;
+  min-width: 0;
+  min-height: 0;
+  width: min(86vw, 80rem);
+  height: 100%;
+  margin-inline: auto;
+  border-radius: 0;
+  background: transparent;
+}
+.heroAnimation {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: scale(1.12);
+  transform-origin: center bottom;
+}
+.heroAction { display: flex; justify-content: center; margin-top: 2rem; }
+.actionButton { max-width: 100%; }
+.buttonLabel { display: inline-flex; align-items: center; gap: 1.75rem; }
+
+/* No overflow on the ancestors: the document remains the sticky scroll root. */
+.featureTrack {
+  position: relative;
+  background: var(--landing-black);
+  color: #faf9f6;
+  scroll-margin-top: 4.5rem;
+}
+.featurePin {
+  position: sticky;
+  top: 4.5rem;
+  height: calc(100svh - 4.5rem);
+  display: flex;
+  align-items: center;
+  padding: 3rem var(--landing-gutter);
+  /* Outside this frame is the hero above and the join panel below, and a panel
+     that outgrew a short viewport would print itself across both. Clipped to
+     the pinned frame instead. `clip` rather than `hidden`, which would make
+     this a scroll container and stop the pin sticking. */
+  overflow: clip;
+  /* The surface the artwork's screen blend subtracts itself against. It is the
+     colour this section already is, painted one level closer to the pictures:
+     a blend only ever sees what is inside its own stacking context, and being
+     sticky makes this element exactly that. */
+  background: var(--landing-black);
+  isolation: isolate;
+}
+.featureLayout {
+  display: grid;
+  grid-template-columns: 1fr 3.5fr;
+  gap: clamp(2rem, 5vw, 6rem);
+  align-items: center;
+  width: 100%;
+  max-width: 100rem;
+  margin-inline: auto;
+}
+.eyebrow {
+  margin-bottom: 2rem;
+  color: #aaa99f;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.featureNav { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+.featureNav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-height: 2.75rem;
+  color: #a6a69c;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  cursor: pointer;
+  transition: color 180ms ease;
+}
+.featureNav button:hover,
+.featureNav button[aria-pressed="true"] { color: var(--landing-accent); }
+.featureDot { width: 0.375rem; height: 0.375rem; border-radius: 50%; background: currentColor; opacity: 0; }
+.featureNav button[aria-pressed="true"] .featureDot { opacity: 1; }
+.featurePanels { min-width: 0; }
+.featurePanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 4rem);
+}
+/*
+  Nothing in the panel is transformed, and that is load bearing rather than
+  incidental. A transform on the panel or on anything inside it makes that box a
+  blending group of its own, and the artwork beside these words could then only
+  screen against a box that ends exactly where the picture does: the bottom row
+  of the image would land a fraction outside it, blended against nothing, and
+  draw a hairline of true black across the foot of every drawing. Left plain,
+  the blend reaches the black surface on the pin.
+*/
+.featureWords { min-width: 0; }
+.sectionTitle { font-size: clamp(3rem, 5.8vw, 7rem); }
+.sectionTitle > span { color: var(--landing-accent); }
+.featureDescription { max-width: 33rem; margin-top: 2rem; color: #b8b8ae; font-size: clamp(1rem, 1.5vw, 1.25rem); line-height: 1.6; text-wrap: pretty; }
+.featureTrack :focus-visible { outline-color: var(--landing-accent); }
+
+/*
+  The artwork, with its own background subtracted rather than cut away.
+
+  These are yellow drawings on black and the section behind them is #171714, so
+  a screen blend leaves every black pixel exactly as the page already was and
+  adds only the light. The glow around each drawing then falls on the page
+  instead of ending at a rectangle's edge, which is what any cut out version of
+  the same file would do no matter how carefully it was masked.
+
+  `justify-self: center` rather than stretch: these are square and a column that
+  stretched them would crop or distort depending on the viewport.
+*/
+.featureArt {
+  justify-self: center;
+  /* Each drawing keeps its own proportions. One of the four is a wide strip of
+     cats rather than a square, and forcing a square box on all of them left
+     that one a thumbnail in the middle of its own frame. Bounded on both axes
+     instead, so nothing is cropped and nothing outgrows the pinned viewport. */
+  width: auto;
+  max-width: min(100%, 32rem);
+  max-height: min(60svh, 32rem);
+  height: auto;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.join { background: var(--landing-accent); color: var(--landing-black); }
+.joinContent { width: 100%; max-width: 100rem; margin-inline: auto; }
+.joinTitle { font-size: clamp(3.5rem, 10.5vw, 12rem); }
+.joinTitle > span { font-style: italic; }
+.joinActions { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 3rem; }
+
+@media (max-width: 767px) {
+  .screen { padding-block: 3rem; }
+  .heroGrid { grid-template-columns: 1fr; gap: 1.5rem; flex: 1; align-content: center; }
+  .heroTitle { font-size: clamp(3rem, 12.7vw, 6rem); }
+  .subtitle { margin-top: 1.5rem; font-size: clamp(0.9375rem, 3.7vw, 1.25rem); }
+  .heroAction { margin-top: 1.75rem; }
+  .heroMedia { width: min(100%, 24rem); height: clamp(10rem, 30svh, 20rem); aspect-ratio: auto; margin-inline: auto; }
+  .heroAnimation { transform: scale(1.05); }
+  .actionButton.actionButton { font-size: 0.875rem; padding: 1.125rem 1.375rem; }
+  .buttonLabel { gap: 0.75rem; }
+  .featurePin { padding-block: 2rem; }
+  .featureLayout { grid-template-columns: 1fr; gap: 3rem; }
+  .featureSidebar { align-self: start; }
+  .eyebrow { margin-bottom: 1rem; }
+  .featureNav { flex-direction: row; justify-content: space-between; gap: 0.5rem; }
+  .featureNav button { gap: 0; font-size: 0.75rem; }
+  .featureDot { display: none; }
+  .featurePanels { min-height: 15rem; }
+  /* One column, and no artwork. A square drawing beside a headline needs width
+     this screen does not have, and under it the panel no longer fits the pinned
+     viewport it lives in. */
+  .featurePanel { grid-template-columns: 1fr; }
+  .featureArt { display: none; }
+  .sectionTitle { font-size: clamp(2rem, 8.2vw, 4rem); }
+  .featureDescription { margin-top: 1.5rem; font-size: 1rem; }
+  .joinTitle { font-size: clamp(3rem, 12vw, 6rem); }
+  .joinActions { align-items: flex-start; flex-direction: column; margin-top: 2rem; }
+}
+
+@media (max-height: 600px) {
+  .screen { padding-block: 1.5rem; }
+  .heroMedia { max-height: calc(100svh - 7.5rem); }
+  .heroTitle { font-size: clamp(3rem, 17svh, 5.5rem); }
+  .subtitle { margin-top: 1rem; font-size: 1rem; }
+  .heroAction { margin-top: 1rem; }
+  .featurePin { padding-block: 1rem; }
+  .sectionTitle { font-size: clamp(2rem, 9svh, 3.5rem); }
+  .featureDescription { margin-top: 1rem; font-size: 0.9375rem; }
+  .joinTitle { font-size: clamp(3rem, 18svh, 6rem); }
+  .joinActions { margin-top: 1.5rem; }
+}
+
+@media (max-width: 767px) and (max-height: 600px) {
+  .heroTitle { font-size: 12.7vw; }
+  .joinTitle { font-size: 12vw; }
+  .featureLayout { gap: 1.5rem; }
+  .featurePanels { min-height: 12rem; }
+  .sectionTitle { font-size: 8.2vw; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .binaryRain span { animation: none; }
+  .featureNav button { transition: none; }
+}

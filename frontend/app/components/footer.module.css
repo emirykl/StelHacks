@@ -1,0 +1,54 @@
+.footer {
+  padding: clamp(1.25rem, 3vw, 3rem) clamp(1.25rem, 5vw, 6rem);
+  background: #faf9f6;
+}
+.card {
+  max-width: 100rem;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 3.5vw, 3.5rem);
+  border: 1px solid #ffffff24;
+  border-radius: 2rem;
+  color: #faf9f6;
+  background: radial-gradient(ellipse at top left, #383528 0, #1c1b17 38%, #171714 75%);
+  box-shadow: 0 16px 40px -24px #17171465, inset 0 1px 0 #ffffff12;
+}
+.main {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5rem);
+}
+.brand { display: flex; align-items: center; gap: 1rem; width: fit-content; }
+.logo.logo { width: 6rem; height: 4.5rem; }
+.name { font-family: var(--font-display); font-size: clamp(1.75rem, 2.5vw, 2.5rem); font-weight: 650; letter-spacing: -0.05em; }
+.name span { color: #ffd91a; }
+.tagline { margin-top: 1rem; color: #a6a69a; font-size: 0.875rem; }
+.links { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 1rem 2rem; }
+.link {
+  padding-block: 0.625rem;
+  border-bottom: 1px solid transparent;
+  color: #deded4;
+  font-size: clamp(0.9375rem, 1.2vw, 1.125rem);
+  transition: color 180ms ease, border-color 180ms ease;
+}
+.link:hover { color: #ffd91a; border-color: #ffd91a; }
+.link > span { color: #ffd91a; }
+.bottom { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #ffffff12; color: #a6a69a; font-size: 0.75rem; }
+.builtOn { display: inline-flex; align-items: center; gap: 0.5rem; }
+.builtOn::before { content: ""; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: #ffd91a; }
+.card :focus-visible { outline-color: #ffd91a; }
+@media (max-width: 1023px) {
+  .main { grid-template-columns: 1fr; gap: 2rem; }
+  .links { justify-content: flex-start; }
+}
+@media (max-width: 479px) {
+  .card { padding: 1.25rem; border-radius: 1.5rem; }
+  .logo.logo { width: 4.5rem; height: 3.25rem; }
+  .brand { gap: 0.625rem; }
+  .links { gap: 0.5rem 1.25rem; }
+  .link { font-size: 0.8125rem; }
+  .bottom { margin-top: 1.5rem; padding-top: 1rem; font-size: 0.625rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .link { transition: none; }
+}
