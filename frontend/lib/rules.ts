@@ -57,7 +57,27 @@ export interface Track {
  */
 export const VISIBILITY = ["Public", "Participants", "Restricted"] as const;
 
+/**
+ * The constitution shape this build understands.
+ *
+ * It is two because the platform fee joined the document, and a hackathon
+ * created before that has no fee field at all. The number is here rather than
+ * imported from the contract because nothing on this side can import Rust; it
+ * has to match `CONSTITUTION_VERSION` in
+ * `contracts/hackathon-core/src/constitution/document.rs`, and the fixtures both
+ * languages read are what catch it when it does not.
+ */
+export const CONSTITUTION_VERSION = 2;
+
 export interface Rules {
+  /**
+   * Which shape of the document this is.
+   *
+   * Carried rather than dropped because it is the only thing that distinguishes
+   * a hackathon running on superseded code from one running on ours, and the
+   * contracts have no upgrade path, so an old event stays old forever.
+   */
+  version: number;
   prizeAsset: string | null;
   /** Every tier added up, which is what a reader means by "the prize". */
   total: bigint;
@@ -67,6 +87,12 @@ export interface Rules {
   /** An index into `VISIBILITY`. */
   visibility: number;
   judges: number;
+  /**
+   * Every judge's address, for the one surface that has to put them back into a
+   * form. Everywhere else wants only how many there are, which is why the count
+   * stays beside this rather than being derived from it at each call site.
+   */
+  judgeAddresses: string[];
   judgeQuorum: number;
   maxTeamSize: number;
   multiTeamAllowed: boolean;
@@ -74,6 +100,14 @@ export interface Rules {
   /** How the final score splits, in basis points. The two total ten thousand. */
   judgeBps: number;
   communityBps: number;
+  /**
+   * Seconds between the ranking and the first payment, or zero for none.
+   *
+   * Read back because the edit form has to put it in front of somebody again,
+   * and because it is the one rule whose effect arrives as a refusal a day
+   * later rather than as anything visible when it was chosen.
+   */
+  settlementDelay: number;
 }
 
 export async function rulesFor(contractId: string): Promise<Rules | null> {
@@ -133,8 +167,10 @@ function shape(raw: Record<string, unknown>): Rules {
   const teams = (raw["teams"] ?? {}) as Record<string, unknown>;
   const needs = (raw["submission_requirements"] ?? {}) as Record<string, unknown>;
   const vote = (raw["vote"] ?? {}) as Record<string, unknown>;
+  const discretion = (raw["discretion"] ?? {}) as Record<string, unknown>;
 
   return {
+    version: Number(raw["version"] ?? 0),
     prizeAsset: typeof raw["prize_asset"] === "string" ? raw["prize_asset"] : null,
     total: tiers.reduce((sum, tier) => sum + tier.amount, BigInt(0)),
     tiers,
@@ -161,6 +197,9 @@ function shape(raw: Record<string, unknown>): Rules {
        unpublished work, and the safe end of it is the closed end. */
     visibility: within(raw["visibility"], VISIBILITY.length) ? Number(raw["visibility"]) : 2,
     judges: list(raw["judges"]).length,
+    judgeAddresses: list(raw["judges"])
+      .map((assignment) => field(assignment, "judge"))
+      .filter((address): address is string => typeof address === "string"),
     judgeQuorum: Number(raw["judge_quorum"] ?? 0),
     maxTeamSize: Number(teams["max_size"] ?? 0),
     multiTeamAllowed: teams["multi_team_allowed"] === true,
@@ -171,7 +210,22 @@ function shape(raw: Record<string, unknown>): Rules {
     },
     judgeBps: Number(vote["judge_bps"] ?? 0),
     communityBps: Number(vote["community_bps"] ?? 0),
+    settlementDelay: delayOf(discretion["settlement"]),
   };
+}
+
+/**
+ * The wait a settlement policy names, in seconds.
+ *
+ * The enum decodes as a tag and its values, so `Immediate` is a bare tag with
+ * nothing after it and reads as no wait at all. Anything unrecognised reads the
+ * same way rather than inventing a delay, since a wait this side made up would
+ * be a countdown pointing at a moment the contract has never heard of.
+ */
+function delayOf(settlement: unknown): number {
+  return Array.isArray(settlement) && settlement[0] === "SafetyWindow"
+    ? Number(settlement[1] ?? 0)
+    : 0;
 }
 
 function list(value: unknown): unknown[] {
@@ -219,11 +273,11 @@ export function windowsOf(rules: Rules, now = Math.floor(Date.now() / 1000)): Wi
   const { schedule } = rules;
 
   const spans: [string, number, number | null][] = [
-    ["Registration", schedule.registrationOpens, schedule.registrationCloses],
-    ["Submissions", schedule.submissionOpens, schedule.submissionCloses],
-    ["Screening ends", schedule.screeningCloses, null],
+    ["Registration ends", schedule.registrationOpens, schedule.registrationCloses],
+    ["Submissions end", schedule.submissionOpens, schedule.submissionCloses],
+    ["Entry check ends", schedule.screeningCloses, null],
     ...(rules.communityBps > 0
-      ? ([["Community vote", schedule.communityVoteOpens, schedule.communityVoteCloses]] as [
+      ? ([["Community vote ends", schedule.communityVoteOpens, schedule.communityVoteCloses]] as [
           string,
           number,
           number | null,

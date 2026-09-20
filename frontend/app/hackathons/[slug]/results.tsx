@@ -7,6 +7,7 @@ import { SpecHeading, SpecLabel, SpecRow, SpecRows, SpecValue } from "../../comp
 import { useWallet } from "../../components/wallet-context";
 import { arg, send, type Sent } from "../../../lib/send";
 import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/results";
+import { rulesFor } from "../../../lib/rules";
 
 /**
  * Who won, and whether they have been paid.
@@ -28,15 +29,30 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Sent | null>(null);
 
+  /*
+    Which places the frozen rules actually pay.
+
+    The board lists every team the contract ranked, which is the point of it:
+    coming fortieth is a result and a team that entered deserves to read theirs.
+    But `settle_prize` only knows about positions in the prize table, so an
+    unpaid row was offering a button that could only fail, on the row belonging
+    to the people least in the mood for it.
+  */
+  const [payable, setPayable] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     let alive = true;
 
     void (async () => {
       const tracks = await tracksOf(contractId);
-      const found = await resultsOf(contractId, tracks);
+      const [found, rules] = await Promise.all([
+        resultsOf(contractId, tracks),
+        rulesFor(contractId),
+      ]);
 
       if (alive) {
         setResults(found);
+        setPayable(new Set((rules?.tiers ?? []).map((tier) => `${tier.track}-${tier.rank}`)));
       }
     })();
 
@@ -76,7 +92,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
   return (
     <section className="hatch border-t border-rule">
       <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
-        <SpecLabel index="04">Results</SpecLabel>
+        <SpecLabel index="4">Results</SpecLabel>
 
         <SpecHeading className="mt-3">Computed by the contract</SpecHeading>
 
@@ -108,7 +124,9 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
                         {/* A team prize is split equally and paid to each member
                             directly, so the claim is per person rather than per
                             place. Nobody holds anybody else's share. */}
-                        {!place.paid && wallet !== null && (
+                        {!place.paid &&
+                          wallet !== null &&
+                          payable.has(`${result.track}-${place.rank}`) && (
                           <div className="flex flex-wrap gap-2 pt-1">
                             {place.members.map((member) => (
                               <Button
@@ -124,7 +142,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
                               </Button>
                             ))}
                           </div>
-                        )}
+                          )}
                       </div>
                     </SpecRow>
                   ))}

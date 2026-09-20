@@ -12,9 +12,10 @@
  * it has wired up and the page offers exactly that, which is the same rule
  * `authConfigured` follows for signing in at all.
  *
- * Email is not in here. It needs no registration anywhere and it is the way in
- * this product is built around; it is always offered when Supabase is
- * configured at all.
+ * This list is now the whole of it. A one time code to an inbox used to sit
+ * beside these and needed no registration anywhere, so it was always offered;
+ * with it gone, a deployment that names nothing here has no way in at all and
+ * the sign in page says so rather than showing an empty card.
  */
 
 export const PROVIDERS = ["google", "github"] as const;

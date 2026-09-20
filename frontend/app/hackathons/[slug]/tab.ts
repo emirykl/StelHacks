@@ -8,15 +8,15 @@
  * side of the boundary.
  */
 
-export type Tab = "details" | "builds" | "hackers" | "take-part";
+export type Tab = "details" | "projects" | "hackers" | "find-team";
 
-export const TABS: Tab[] = ["details", "builds", "hackers", "take-part"];
+export const TABS: Tab[] = ["details", "projects", "hackers", "find-team"];
 
 export const TAB_NAMES: Record<Tab, string> = {
   details: "Details",
-  builds: "Builds",
+  projects: "Projects",
   hackers: "Hackers",
-  "take-part": "Take part",
+  "find-team": "Find a team",
 };
 
 /**

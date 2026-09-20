@@ -53,10 +53,33 @@ export function Filters({
 
   return (
     <section aria-label="Find a hackathon" className="border-y border-rule">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-rule py-3">
+      {/*
+        One row rather than three.
+
+        This was a search box, then a labelled row of four statuses, then a
+        labelled row of eight topics, stacked with a hairline between each. Three
+        bands of chrome above two cards read as the filtering being the page.
+        The status choices are short and there are four of them, so they sit
+        beside the search; the topics are open ended and go behind a disclosure,
+        which is where a control somebody uses occasionally belongs.
+      */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 py-3">
         <Search applied={applied} />
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-1">
+          {stages.map((stage) => (
+            <Choice
+              key={stage.value}
+              group="stage"
+              href={linkTo({ ...applied, stage: stage.value })}
+              chosen={(applied.stage ?? "") === stage.value}
+            >
+              {stage.label}
+            </Choice>
+          ))}
+        </div>
+
+        <div className="ml-auto flex items-center gap-4">
           {/* Said plainly rather than left to be counted, and said differently
               once something is filtered. "1 in all" under a search reads as a
               site with one hackathon on it rather than as one that matched. */}
@@ -83,40 +106,39 @@ export function Filters({
         </div>
       </div>
 
-      <Row label="Status">
-        {stages.map((stage) => (
-          <Choice
-            key={stage.value}
-            group="stage"
-            href={linkTo({ ...applied, stage: stage.value })}
-            chosen={(applied.stage ?? "") === stage.value}
-          >
-            {stage.label}
-          </Choice>
-        ))}
-      </Row>
-
       {tags.length > 0 && (
-        <Row label="Topic">
-          <Choice
-            group="tag"
-            href={linkTo({ ...applied, tag: "" })}
-            chosen={(applied.tag ?? "") === ""}
-          >
-            Everything
-          </Choice>
+        /* Open when a topic is chosen, so a filtered list never hides the thing
+           doing the filtering. */
+        <details open={(applied.tag ?? "") !== ""} className="group border-t border-rule">
+          <summary className="label flex cursor-pointer list-none items-center gap-2 py-2.5 text-ink-soft transition-colors duration-150 ease-settle hover:text-ink">
+            <span aria-hidden className="transition-transform duration-150 ease-settle group-open:rotate-90">
+              ›
+            </span>
+            Topic
+            {(applied.tag ?? "") !== "" && <span className="text-ink">· {applied.tag}</span>}
+          </summary>
 
-          {tags.map((tag) => (
+          <div className="flex flex-wrap items-center gap-1 pb-3">
             <Choice
-              key={tag}
               group="tag"
-              href={linkTo({ ...applied, tag })}
-              chosen={applied.tag === tag}
+              href={linkTo({ ...applied, tag: "" })}
+              chosen={(applied.tag ?? "") === ""}
             >
-              {tag}
+              Everything
             </Choice>
-          ))}
-        </Row>
+
+            {tags.map((tag) => (
+              <Choice
+                key={tag}
+                group="tag"
+                href={linkTo({ ...applied, tag })}
+                chosen={applied.tag === tag}
+              >
+                {tag}
+              </Choice>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   );
@@ -177,22 +199,6 @@ function Search({ applied }: { applied: Applied }) {
   );
 }
 
-/**
- * One question and its answers, on a line of their own.
- *
- * The label on the left is what turns a row of words into a question. Without
- * it "Payments" and "Finished" are the same kind of thing in the same type on
- * two lines, and a reader has to click one to find out that they are not.
- */
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2 border-b border-rule py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:gap-5">
-      <span className="label shrink-0 text-ink-faint sm:w-16">{label}</span>
-
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">{children}</div>
-    </div>
-  );
-}
 
 /**
  * One answer, and whether it is the one in force.

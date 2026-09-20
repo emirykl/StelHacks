@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Measure, Rule } from "../components/primitives";
+import { ButtonLink, Measure, Rule } from "../components/primitives";
 import { HackathonCard } from "../components/hackathon-card";
 import { Filters } from "./filters";
 import {
@@ -10,6 +10,8 @@ import {
   tagsInUse,
   type HackathonSummary,
 } from "../../lib/chain";
+import { currentUser, serverClient } from "../../lib/supabase/server";
+import { mayOrganize } from "../../lib/organizing";
 
 /**
  * Everything running, readable by anybody.
@@ -33,25 +35,92 @@ export default async function Hackathons({ searchParams }: PageProps<"/hackathon
     limit: Number(one(asked["show"]) ?? PAGE) || PAGE,
   };
 
-  const [hackathons, total, tags] = await Promise.all([
+  /* Asked here rather than in the card, because this is the page somebody
+     approved to run an event lands on when they want to start the next one.
+     Through the same function the schema answers with, so the button being
+     offered and the create page accepting the press are one decision. */
+  const user = await currentUser();
+  const db = user === null ? null : await serverClient();
+
+  const [hackathons, counted, tags, mayCreate] = await Promise.all([
     listHackathons(filter),
     countHackathons(filter),
     tagsInUse(),
+    db === null ? false : mayOrganize(db),
   ]);
+
+  /*
+    The count is a row count and the list is what survived being read from the
+    chain, so the two disagree whenever a hackathon on superseded code is
+    dropped. A page that says "five in all" above four cards is describing a
+    fifth nobody can reach.
+
+    Trusting the list is the right way to resolve it: a page that came back
+    under its own limit has nothing left to fetch, so its length is the whole
+    answer. Only a full page still needs the count, and a full page is one where
+    the number is a lower bound anyway.
+  */
+  const total = hackathons.length < filter.limit ? hackathons.length : counted;
 
   return (
     <main className="flex-1">
       <section className="border-b border-rule">
         <Measure wide className="py-16 sm:py-20">
-          {/* The eyebrow above this said "Every event", which is what a listing
-              already is. A line of small capitals earns its place by telling a
-              reader something the heading under it does not. */}
-          <h1 className="text-[clamp(2rem,4.5vw,3.25rem)]">Hackathons</h1>
+          <div className="flex items-center justify-between gap-12">
+            <div className="min-w-0">
+              {/* The eyebrow above this said "Every event", which is what a
+                  listing already is. A line of small capitals earns its place by
+                  telling a reader something the heading under it does not. */}
+              <h1 className="text-[clamp(2.5rem,5.5vw,4rem)]">Hackathons</h1>
 
-          <p className="mt-5 max-w-[38rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-            Every hackathon listed here has its rules and its prize written on
-            chain before anybody registers.
-          </p>
+              <p className="mt-6 max-w-[40rem] text-[1.1875rem] leading-relaxed text-ink-soft">
+                Every hackathon listed here has its rules and its prize written
+                on chain before anybody registers.
+              </p>
+
+              {/* Only for somebody already holding a grant. Everybody else is
+                  offered the application, from the landing page and the footer,
+                  and a create button that leads to a refusal would be the site
+                  inviting a press it has already decided to reject. */}
+              {mayCreate && (
+                <ButtonLink href="/create" className="mt-10">
+                  Create a hackathon
+                </ButtonLink>
+              )}
+            </div>
+
+            {/*
+              The right of this band was empty at every width past a laptop, and
+              the heading and its one sentence sat in a third of a very wide
+              room. It is the only page in the product with a whole column of
+              nothing on it.
+
+              Hidden below `lg` rather than scaled down. On a narrow screen the
+              space it fills does not exist, and a decoration that pushes the
+              first card further from the heading has stopped being decoration.
+              Sized in rem so it holds its proportions rather than growing with
+              the column.
+
+              Cropped rather than shrunk, and the crop is what the box is for.
+              The source frames the cat small in the middle of a wide shot with
+              a third of the height empty above and below, so at the size the
+              layout allows the cat itself came out tiny while a band of nothing
+              set the height of the page's first section.
+
+              The frame keeps its footprint and the picture is scaled up inside
+              it. Nothing around this moves; only the cat gets larger, and the
+              empty margins go past the edge and are clipped.
+            */}
+            <div className="hidden aspect-[4/3] w-[20rem] shrink-0 overflow-hidden lg:block xl:w-[23rem]">
+              <img
+                src="/gif/cat.gif"
+                alt=""
+                width={440}
+                height={330}
+                className="size-full scale-[0.95] object-cover"
+              />
+            </div>
+          </div>
         </Measure>
       </section>
 

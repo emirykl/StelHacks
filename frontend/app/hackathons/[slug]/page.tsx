@@ -1,29 +1,30 @@
 import { notFound } from "next/navigation";
 
-import { CheckableProofStrip } from "../../components/checkable";
 import { Details } from "./details";
 import { Entries } from "./entries";
+import { cardsOf } from "../../../lib/project";
 import { Hackers } from "./hackers";
-import { Join } from "./join";
 import { Masthead } from "./masthead";
-import { Measure } from "../../components/primitives";
+import { Teams } from "./teams";
+import { Progress } from "./progress";
 import { ResultsBoard } from "./results";
 import { Tabs } from "./tabs";
 import { tabFrom } from "./tab";
-import { VISIBILITY } from "../../../lib/rules";
 import { countHackers } from "../../../lib/hackers";
 import { findHackathon, type HackathonDetail } from "../../../lib/chain";
-import { phaseName } from "../../../lib/phase";
-import { type Proof } from "../../components/proof-strip";
 
 /**
  * One hackathon, as somebody with no account sees it.
  *
- * The page is built in three bands and the order is the argument the product
- * makes. The proof strip is first: what the chain holds is the page, and
- * everything else is written around it. Then the masthead, which is the three
- * facts somebody actually decides on. Then the tabs, which are four different
- * questions about the same event rather than four different pages.
+ * The order is the argument the product makes. Where it stands and how long is
+ * left, then the masthead, which is the three facts somebody actually decides
+ * on, then the tabs, which are four different questions about the same event
+ * rather than four different pages.
+ *
+ * The offer to check the page against the contract used to be a black band over
+ * all of it. It now sits inside "On chain" on the Details tab, beside the
+ * addresses it checks, which is where a reader who wants to compare something
+ * character by character was already going.
  *
  * Only the tab changes when a tab is chosen. The banner, the prize and the
  * deadline stay where they are, because those are what the whole page is about
@@ -49,15 +50,7 @@ export default async function Hackathon({
 
   return (
     <main className="flex-1">
-      <CheckableProofStrip
-        contractId={hackathon.contract_id}
-        claims={{
-          digest: hackathon.constitution_hash,
-          phase: hackathon.phase,
-          vault: hackathon.vault_id,
-        }}
-        proofs={proofsFor(hackathon)}
-      />
+      <Progress phase={hackathon.phase} rules={hackathon.rules} />
 
       <Masthead hackathon={hackathon} />
 
@@ -65,126 +58,46 @@ export default async function Hackathon({
 
       {at === "details" && <Details hackathon={hackathon} />}
 
-      {at === "builds" && <Builds hackathon={hackathon} />}
+      {at === "projects" && <Projects hackathon={hackathon} />}
 
       {at === "hackers" && <Hackers contractId={hackathon.contract_id} />}
 
-      {at === "take-part" && <TakePart hackathon={hackathon} />}
+      {/* Its own tab rather than a band under the three steps. Looking for a
+          team is a different errand from entering: somebody browsing for people
+          to build with is not halfway through applying, and the two stacked on
+          one page read as one long form. */}
+      {at === "find-team" && <Teams contractId={hackathon.contract_id} />}
     </main>
   );
 }
 
 /**
- * What was entered, and who is allowed to be reading it.
+ * What was entered, when anything was.
  *
- * The notice above the list is not a disclaimer. Whether a build is readable
- * was decided before the lock and the database enforces the same three levels,
- * so an empty list under "the organizer only" is the rule working rather than a
- * hackathon nobody entered. Saying which of the two this is costs one line and
- * is the difference between a page that is quiet and a page that looks broken.
+ * The notice about who may read these is drawn by `Entries`, which is the only
+ * thing that knows whether there is anything to read. It used to be here, above
+ * a list that turned out to be empty, so an event nobody had entered opened on
+ * a paragraph about the reading rules of a gallery that did not exist.
  */
-function Builds({ hackathon }: { hackathon: HackathonDetail }) {
-  const visibility = hackathon.rules?.visibility ?? null;
+async function Projects({ hackathon }: { hackathon: HackathonDetail }) {
+  /* Read here rather than inside the gallery, because the gallery is a client
+     component: the entries come from the chain over RPC and the browser is
+     where that has to happen. What the teams wrote is ours, and reading ours on
+     the server keeps the cards from arriving a beat after their frames. */
+  const cards = await cardsOf(hackathon.contract_id);
 
   return (
     <>
-      <Measure wide className="pt-14">
-        <div className="border border-rule bg-paper-sunk p-5">
-          <p className="label text-ink-faint">Who can read these</p>
-
-          <p className="mt-2 max-w-[46rem] text-[0.9375rem] leading-relaxed text-ink">
-            {visibility === null
-              ? "The contract could not be reached, so this page cannot say who may read the builds."
-              : (explained[visibility] ?? explained[2])}
-          </p>
-
-          {visibility !== null && (
-            <p className="label mt-3 text-ink-faint">
-              frozen as {VISIBILITY[visibility] ?? "unknown"} before registration opened
-            </p>
-          )}
-        </div>
-      </Measure>
-
-      <Entries contractId={hackathon.contract_id} />
+      <Entries
+        contractId={hackathon.contract_id}
+        slug={hackathon.slug}
+        visibility={hackathon.rules?.visibility ?? null}
+        cards={cards}
+      />
 
       <ResultsBoard contractId={hackathon.contract_id} />
     </>
   );
 }
 
-/* The three levels the contract holds, said the way somebody entering would ask
-   the question. Their order is the contract's, so the index is the answer. */
-const explained = [
-  "Anybody can read every build in this event, signed in or not. The organizer chose that before the rules were locked and cannot narrow it now.",
-  "Only people the organizer approved into this event can read the builds. If you are not on that list you will see nothing here, which is the rule working rather than an empty hackathon.",
-  "Nobody but the organizer reads a build before the result is published. What is below is what the chain records about a submission, which is a digest and a link rather than the work itself.",
-];
 
-/**
- * Entering, which needs a wallet and therefore cannot be a link.
- *
- * The three steps live in `Join` and are read from the contract rather than
- * from our database, so what is offered here is what the contract would
- * actually accept from this address right now.
- */
-function TakePart({ hackathon }: { hackathon: HackathonDetail }) {
-  return (
-    <>
-      <Join contractId={hackathon.contract_id} />
-
-      {/* `Join` renders nothing outside the one phase in which any of it is
-          allowed, so this says where things stand rather than leaving the tab
-          blank. A tab that is empty and a tab that is closed look the same and
-          are not. */}
-      {hackathon.phase !== 2 && (
-        <Measure wide className="py-14">
-          <p className="max-w-[36rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-            {hackathon.phase === null
-              ? "This event has not been published to the chain yet, so there is nothing to join."
-              : `Registration is not open. This hackathon is at ${phaseName(hackathon.phase)}, and the contract accepts an application only while it is open.`}
-          </p>
-        </Measure>
-      )}
-    </>
-  );
-}
-
-/**
- * The four promises the strip makes, in as few words as carry them.
- *
- * Every one of them leaves here reading `unchecked`, and that is not a
- * placeholder. The page is server rendered and nothing on this side has
- * compared a digest against the contract; saying so is the honest state. The
- * reader changes it by pressing the button, which asks the contract from their
- * own browser. Nobody has to: the whole page works unchecked, and the point of
- * the control is that a sceptic has somewhere to go.
- */
-function proofsFor(hackathon: HackathonDetail): Proof[] {
-  return [
-    {
-      key: "digest",
-      claim: "Rules locked",
-      value: hackathon.constitution_hash ?? "not locked yet",
-      standing: "unchecked",
-    },
-    {
-      key: "phase",
-      claim: `Stage: ${phaseName(hackathon.phase)}`,
-      value: phaseName(hackathon.phase),
-      standing: "unchecked",
-    },
-    {
-      key: "contract",
-      claim: "Run by a contract",
-      value: hackathon.contract_id,
-      standing: "unchecked",
-    },
-    {
-      key: "vault",
-      claim: "Prize deposited",
-      value: hackathon.vault_id ?? "not bound yet",
-      standing: "unchecked",
-    },
-  ];
-}

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { rulesFor, type Rules } from "./rules";
+import { CONSTITUTION_VERSION, rulesFor, type Rules } from "./rules";
 
 /**
  * Reading a hackathon, the way an observer reads one.
@@ -42,6 +42,14 @@ export interface HackathonSummary {
   prize: bigint | null;
   /** When submissions shut, seconds since the epoch. From the frozen rules. */
   closesAt: number | null;
+  /**
+   * When signing up shuts, which happens before submissions do.
+   *
+   * Carried separately because they answer different questions. A card asks
+   * whether somebody arriving can still get in, and that is this one; the
+   * countdown a team already in is watching is the other.
+   */
+  registrationClosesAt: number | null;
   /** The token the prize is paid in, from the frozen rules. */
   asset: string | null;
   logo_url: string | null;
@@ -166,12 +174,38 @@ export async function listHackathons(filter: Filter = {}): Promise<HackathonSumm
     summaries.map((summary) => rulesOf(summary.contract_id).catch(() => null)),
   );
 
-  return summaries.map((summary, index) => ({
-    ...summary,
-    prize: rules[index]?.prize ?? null,
-    closesAt: rules[index]?.closesAt ?? null,
-    asset: rules[index]?.asset ?? null,
-  }));
+  /*
+    Hackathons running on superseded code are dropped rather than drawn.
+
+    The contracts have no upgrade path, so an event created before the platform
+    fee joined the constitution stays on the old shape forever. Its card would
+    render, because the decoder defends every field, and that is exactly the
+    problem: it would look like every other card while being an event this build
+    cannot fully read, quote a fee for, or settle one.
+
+    Dropped after the chain read rather than before it, which means a page can
+    come back shorter than `PAGE`. That is the honest cost of the version living
+    in the contract instead of in `hackathon_state`, and it is the same trade the
+    prize already makes two comments above. It also fixes itself: once nothing
+    old is left, nothing is dropped.
+  */
+  return summaries.flatMap((summary, index) => {
+    const document = rules[index];
+
+    if (document !== null && document.version < CONSTITUTION_VERSION) {
+      return [];
+    }
+
+    return [
+      {
+        ...summary,
+        prize: document?.prize ?? null,
+        closesAt: document?.closesAt ?? null,
+        registrationClosesAt: document?.registrationClosesAt ?? null,
+        asset: document?.asset ?? null,
+      },
+    ];
+  });
 }
 
 /** Whether one hackathon survives what the reader asked for. */
@@ -202,6 +236,36 @@ function matches(hackathon: HackathonSummary, filter: Filter): boolean {
   }
 
   return true;
+}
+
+/**
+ * What a hackathon is called, from its contract address.
+ *
+ * The organizer's console is keyed on the address, because a hackathon exists
+ * on chain before the indexer has caught up and before anybody has typed a
+ * slug. It still has a name from the moment it was created, though, and a page
+ * headed by fifty six characters when it could be headed by the name the
+ * organizer chose is a page making somebody decode an address to find out which
+ * of their events they are looking at.
+ *
+ * Null is an ordinary answer, not a failure: the row is written a moment after
+ * the contract is, and a page that waited for it would be blank for that
+ * moment.
+ */
+export async function nameOf(contractId: string): Promise<{ name: string; slug: string } | null> {
+  if (db === null) {
+    return null;
+  }
+
+  const { data } = await db
+    .from("hackathons")
+    .select("name, slug")
+    .eq("contract_id", contractId)
+    .maybeSingle();
+
+  return data === null
+    ? null
+    : { name: String(data.name), slug: String(data.slug) };
 }
 
 /** Every tag in use, for building the filter from what actually exists. */
@@ -255,6 +319,7 @@ export async function countHackathons(filter: Filter = {}): Promise<number> {
         visibility: null,
         prize: null,
         closesAt: null,
+        registrationClosesAt: null,
         asset: null,
         logo_url: null,
         banner_url: null,
@@ -295,14 +360,22 @@ function standing(hackathon: HackathonSummary): number {
  */
 async function rulesOf(
   contractId: string,
-): Promise<{ prize: bigint; closesAt: number; asset: string | null } | null> {
+): Promise<{
+  version: number;
+  prize: bigint;
+  closesAt: number;
+  registrationClosesAt: number;
+  asset: string | null;
+} | null> {
   const rules = await rulesFor(contractId);
 
   return rules === null
     ? null
     : {
+        version: rules.version,
         prize: rules.total,
         closesAt: rules.schedule.submissionCloses,
+        registrationClosesAt: rules.schedule.registrationCloses,
         asset: rules.prizeAsset,
       };
 }
@@ -347,6 +420,14 @@ export async function findHackathon(slug: string): Promise<HackathonDetail | nul
     rulesFor(contractId),
   ]);
 
+  /* Not found rather than shown, so a hackathon dropped from the listing is not
+     still reachable by typing its address. Absent rules are a node that could
+     not be reached, which is a different thing from an old document and keeps
+     its page. */
+  if (rules !== null && rules.version < CONSTITUTION_VERSION) {
+    return null;
+  }
+
   const merged = merge(written as Record<string, unknown>, chain ?? {});
 
   return {
@@ -356,6 +437,7 @@ export async function findHackathon(slug: string): Promise<HackathonDetail | nul
        the card in the listing quote the same figure from the same source. */
     prize: rules?.total ?? null,
     closesAt: rules?.schedule.submissionCloses ?? null,
+    registrationClosesAt: rules?.schedule.registrationCloses ?? null,
     asset: rules?.prizeAsset ?? null,
   };
 }
@@ -381,6 +463,7 @@ function merge(
     visibility: chain["visibility"] === undefined ? null : Number(chain["visibility"]),
     prize: null,
     closesAt: null,
+    registrationClosesAt: null,
     asset: null,
     logo_url: (written["logo_url"] as string | null) ?? null,
     banner_url: (written["banner_url"] as string | null) ?? null,
