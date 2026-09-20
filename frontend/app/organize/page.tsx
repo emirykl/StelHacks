@@ -27,7 +27,7 @@ export default async function Organize() {
 
           <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">Run a hackathon here</h1>
 
-          <p className="mt-5 max-w-[40rem] text-[1.0625rem] leading-relaxed text-ink-soft">
+          <p className="mt-5 max-w-[40rem] text-[1.125rem] leading-relaxed text-ink-soft">
             Not everybody can open one. Tell us what you want to run and we
             answer by hand.
           </p>

@@ -92,7 +92,7 @@ export function ImagePicker({
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <span className="label text-ink">{label}</span>
 
-        <span className="text-[0.75rem] text-ink-faint">
+        <span className="text-[0.8125rem] text-ink-faint">
           {spec.width} × {spec.height}
         </span>
       </div>
@@ -122,7 +122,7 @@ export function ImagePicker({
           className={`relative grid w-full place-items-center rounded-[0.75rem] border border-dashed border-rule bg-paper transition-colors duration-150 ease-settle hover:border-ink hover:bg-paper-sunk ${ratio} ${width}`}
         >
           <span className="flex flex-col items-center gap-1.5 px-4 text-center">
-            <span aria-hidden className="text-[1.25rem] leading-none text-ink-faint">
+            <span aria-hidden className="text-[1.3125rem] leading-none text-ink-faint">
               +
             </span>
 
@@ -180,10 +180,10 @@ export function ImagePicker({
         </div>
       )}
 
-      <span className="text-[0.75rem] leading-relaxed text-ink-faint">{spec.note}</span>
+      <span className="text-[0.8125rem] leading-relaxed text-ink-faint">{spec.note}</span>
 
       {refused !== null && (
-        <span className="text-[0.75rem] leading-relaxed text-broken">{refused}</span>
+        <span className="text-[0.8125rem] leading-relaxed text-broken">{refused}</span>
       )}
     </div>
   );

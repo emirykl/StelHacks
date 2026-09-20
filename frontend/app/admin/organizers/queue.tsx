@@ -39,7 +39,7 @@ export function Queue({ applications }: { applications: Application[] }) {
       </div>
 
       {applications.length === 0 && (
-        <p className="mt-8 text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="mt-8 text-[1rem] leading-relaxed text-ink-soft">
           Nobody has applied yet.
         </p>
       )}
@@ -79,7 +79,7 @@ function Row({ application }: { application: Application }) {
   return (
     <div className="border-b border-rule py-8">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h2 className="text-[1.25rem] text-ink">{application.organization}</h2>
+        <h2 className="text-[1.3125rem] text-ink">{application.organization}</h2>
 
         <span
           className={`label ${
@@ -103,7 +103,7 @@ function Row({ application }: { application: Application }) {
         <Fact name="Hackers">{application.participantsEstimate.toLocaleString("en-US")}</Fact>
       </dl>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.875rem] text-ink-soft">
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.9375rem] text-ink-soft">
         <a href={`mailto:${application.contactEmail}`} className="hover:text-ink">
           {application.contactEmail}
         </a>
@@ -121,7 +121,7 @@ function Row({ application }: { application: Application }) {
       </div>
 
       {!pending && application.decisionNote !== null && (
-        <p className="mt-4 max-w-[42rem] text-[0.875rem] leading-relaxed text-ink-soft">
+        <p className="mt-4 max-w-[42rem] text-[0.9375rem] leading-relaxed text-ink-soft">
           {application.decisionNote}
         </p>
       )}
@@ -172,7 +172,7 @@ function Row({ application }: { application: Application }) {
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="Why, in writing"
                 maxLength={500}
-                className="h-11 w-full bg-paper px-3.5 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+                className="h-11 w-full bg-paper px-3.5 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
               />
 
               <div className="flex items-center gap-3">
@@ -187,7 +187,7 @@ function Row({ application }: { application: Application }) {
 
                 {/* Said plainly, because it is the part a reviewer would
                     otherwise learn from the applicant's reply. */}
-                <p className="text-[0.75rem] leading-relaxed text-ink-faint">
+                <p className="text-[0.8125rem] leading-relaxed text-ink-faint">
                   They are shown this.
                 </p>
               </div>
@@ -197,7 +197,7 @@ function Row({ application }: { application: Application }) {
       )}
 
       {problem !== null && (
-        <p className="mt-4 text-[0.875rem] leading-relaxed text-broken" role="status">
+        <p className="mt-4 text-[0.9375rem] leading-relaxed text-broken" role="status">
           {problem}
         </p>
       )}
@@ -209,7 +209,7 @@ function Fact({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <div>
       <dt className="label text-ink-faint">{name}</dt>
-      <dd className="mt-1 text-[0.9375rem] text-ink">{children}</dd>
+      <dd className="mt-1 text-[1rem] text-ink">{children}</dd>
     </div>
   );
 }

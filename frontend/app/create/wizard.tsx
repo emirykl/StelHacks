@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { Button } from "../components/primitives";
+import { Button, ButtonLink } from "../components/primitives";
+import { TagField } from "../components/tag-field";
 import { ImagePicker } from "./image-picker";
 import { useWallet } from "../components/wallet-context";
 import { deploy, send, type Sent } from "../../lib/send";
@@ -18,6 +19,8 @@ import {
   toSmallestUnit,
   totalPrize,
   type Draft,
+  type FieldRule,
+  type SubmissionFields,
   type Track,
 } from "../../lib/constitution";
 
@@ -43,7 +46,7 @@ import {
  * anyway, so the form deploys one: the address is a consequence of pressing the
  * button, not a prerequisite for it.
  */
-const CORE_WASM = "b3ded1878cd895eef0a7be2ebce8a0641338d6fe129b2fd852fa5d008f3deb63";
+const CORE_WASM = "bcea11748fa535ea311ca7d0548274f4828143b70f9f85294b3b6c32749c9c78";
 
 export function Wizard({
   feeBps,
@@ -63,24 +66,43 @@ export function Wizard({
    */
   editing?: string | null;
 }) {
-  const { wallet, known } = useWallet();
+  const { wallet, known, wrongNetwork } = useWallet();
   const router = useRouter();
 
   const [asset, setAsset] = useState("");
   const [tracks, setTracks] = useState<Track[]>([blankTrack()]);
   const [judges, setJudges] = useState<string[]>([""]);
+
+  /* How the final score is split. The standard answer is the judges alone; the
+     other two exist because a hackathon whose crowd was let in one approval at
+     a time can be decided by that crowd without it being a popularity contest
+     between strangers. */
+  const [communityBps, setCommunityBps] = useState(0);
   const [dates, setDates] = useState(defaultDates);
   const [settlementDelay, setSettlementDelay] = useState(86_400);
+  /*
+    Reviewed by default, and that is the cautious end rather than the common
+    one. An organizer who meant an open event and left this alone signs once per
+    applicant; one who meant to screen and left it open finds strangers already
+    admitted to rules they never agreed to, and cannot take it back.
+  */
+  const [openRegistration, setOpenRegistration] = useState(false);
 
   /* What a submission has to carry. The default is the one most events mean:
-     show the code, everything else is up to the team. */
-  const [requires, setRequires] = useState({
-    repository: true,
-    demoVideo: false,
-    liveUrl: false,
+     show the code, everything else offered and nothing else demanded. */
+  const [requires, setRequires] = useState<SubmissionFields>({
+    repository: "required",
+    demoVideo: "optional",
+    liveUrl: "optional",
+    pitchDeck: "optional",
+    deployedContract: "optional",
   });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Sent | null>(null);
+
+  /* The address of a hackathon that reached the chain but whose description did
+     not save. Its presence is what turns the form into a way out. */
+  const [made, setMade] = useState<string | null>(null);
 
   /* What the hackathon looks like. None of it decides anything, so none of it
      is in the constitution and none of it is frozen; it is written beside the
@@ -185,20 +207,22 @@ export function Wizard({
   const deposit = total + fee;
 
   /*
-    The same three figures in dollars, or nothing when no rate is available.
+    One figure per line of the card below, in the token.
 
-    Computed from the token amounts rather than from what was typed, so the two
-    halves of the card cannot disagree, and so the edit mode gets them for free
-    without the round trip it exists to avoid.
+    Each line used to carry the same money twice, once in each unit, which is
+    six numbers for three amounts and leaves the reader working out which two
+    of them are the same. The token is the one worth showing: it is what the
+    vault is asked for and what the frozen rules encode, and in dollar mode it
+    is what the typed dollars came to at today's rate.
+
+    A dash rather than zero when a dollar figure has no rate to convert at. The
+    amounts are genuinely unknown then, and zero is a number somebody could
+    read as a free event.
   */
-  const dollars =
-    quote === null
-      ? null
-      : {
-          total: dollarsOf(total, quote),
-          fee: dollarsOf(fee, quote),
-          deposit: dollarsOf(deposit, quote),
-        };
+  const figure = (units: bigint): string =>
+    !inTokens && quote === null
+      ? "—"
+      : `${format(units)}${assetCode.length > 0 ? ` ${assetCode}` : ""}`;
 
   /* Null when this deployment was told to charge and has nowhere to send it,
      which is a misconfiguration rather than a free event. Creation is blocked
@@ -250,6 +274,8 @@ export function Wizard({
         });
         setSettlementDelay(rules.settlementDelay);
         setRequires(rules.requires);
+        setOpenRegistration(rules.openRegistration);
+        setCommunityBps(rules.communityBps);
 
         setTracks(
           rules.tracks.map((track) => ({
@@ -287,10 +313,141 @@ export function Wizard({
     };
   }, [editing]);
 
+  /*
+    What was typed, kept on this machine until it is signed.
+
+    The form is long, it sits in front of a wallet prompt, and everything on it
+    ends up inside one hashed document, so it is not a thing anybody wants to
+    fill in twice. A reload used to empty it.
+
+    The browser's own storage rather than a row in our tables: a draft nobody
+    has signed is not ours to hold, and holding it would mean a half written
+    prize table living on a server before its author decided it was real.
+
+    New hackathons only. An edit reads the frozen rules off the chain, and
+    restoring a local copy over them would show somebody rules the contract does
+    not hold.
+  */
+  const kept = `stelhacks.create.draft.${userId}`;
+  const [restored, setRestored] = useState(editing !== null);
+
+  useEffect(() => {
+    if (editing !== null) {
+      return;
+    }
+
+    try {
+      const held = window.localStorage.getItem(kept);
+
+      if (held !== null) {
+        const was = JSON.parse(held) as Partial<Kept>;
+
+        /* Every field checked on the way in. This came from disk, which means
+           it could be a draft written by an older build of this form, and a
+           shape that no longer matches must read as no draft rather than as a
+           form that throws while somebody is looking at it. */
+        text(was.asset, setAsset);
+        text(was.name, setName);
+        text(was.tagline, setTagline);
+        text(was.location, setLocation);
+        text(was.tags, setTags);
+        text(was.logo, setLogo);
+        text(was.banner, setBanner);
+
+        if (Array.isArray(was.tracks) && was.tracks.length > 0) {
+          setTracks(was.tracks);
+        }
+
+        if (Array.isArray(was.judges) && was.judges.length > 0) {
+          setJudges(was.judges);
+        }
+
+        /* Order only. A draft left on this machine overnight has an opening
+           moment in the past through no fault of its own, and throwing it away
+           for that would lose everything else somebody typed. */
+        if (was.dates !== undefined && disordered(was.dates, false) === null) {
+          setDates(was.dates);
+        }
+
+        if (typeof was.settlementDelay === "number") {
+          setSettlementDelay(was.settlementDelay);
+        }
+
+        if (was.requires !== undefined) {
+          setRequires(was.requires);
+        }
+
+        if (typeof was.openRegistration === "boolean") {
+          setOpenRegistration(was.openRegistration);
+        }
+
+        if (typeof was.communityBps === "number") {
+          setCommunityBps(was.communityBps);
+        }
+      }
+    } catch {
+      /* A draft that cannot be read is a draft that is gone. Nothing in here is
+         worth failing a page load over. */
+    }
+
+    setRestored(true);
+  }, [editing, kept]);
+
+  useEffect(() => {
+    /* Not before the restore has run, or the first render would write the empty
+       defaults over the draft it is about to load. */
+    if (!restored || editing !== null) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        kept,
+        JSON.stringify({
+          asset,
+          tracks,
+          judges,
+          dates,
+          settlementDelay,
+          requires,
+          openRegistration,
+          communityBps,
+          name,
+          tagline,
+          location,
+          tags,
+          logo,
+          banner,
+        } satisfies Kept),
+      );
+    } catch {
+      /* Storage full, or refused by the browser. The form still works; it just
+         stops surviving a reload. */
+    }
+  }, [
+    restored,
+    editing,
+    kept,
+    asset,
+    tracks,
+    judges,
+    dates,
+    settlementDelay,
+    requires,
+    openRegistration,
+    communityBps,
+    name,
+    tagline,
+    location,
+    tags,
+    logo,
+    banner,
+  ]);
+
   /* Said as a sentence rather than only greying the button out, because a form
      this long has an off screen reason for being unsubmittable more often than
      not. */
-  const outOfOrder = disordered(dates);
+  const outOfOrder = disordered(dates, editing === null);
 
   const ready =
     platformFee !== null &&
@@ -300,9 +457,15 @@ export function Wizard({
        number nobody agreed to, into a document that cannot be corrected. */
     priceOfOne !== null &&
     wallet !== null &&
+    /* Not while the extension is pointed somewhere else. Both signatures would
+       be refused by the wallet itself, and the refusal arrives looking like a
+       fault in this form rather than a setting in theirs. */
+    wrongNetwork === null &&
     outOfOrder === null &&
     priced.every(complete) &&
-    judges.some((judge) => judge.length === 56);
+    /* A crowd decided event asks for no judges, so there is nothing here to
+       wait for: the organizer's own address stands in below. */
+    (communityBps === WEIGHT_TOTAL_BPS || judges.some((judge) => judge.length === 56));
 
   async function create() {
     /* The fee is checked here as well as in `ready`, because this is the guard
@@ -326,8 +489,19 @@ export function Wizard({
       /* The converted table, never the typed one. The contract has no notion of
          a dollar and would read 3000 as three thousand lumens. */
       tracks: priced,
-      judges: judges.filter((judge) => judge.length === 56).map((address) => ({ address, tracks: [] })),
+      /* The organizer stands in when the crowd decides, because the contract
+         will not take a hackathon with nobody able to sign a disqualification
+         and the form stopped asking for one. Anything typed before the switch
+         is still honoured, so changing your mind twice loses nothing. */
+      judges: (() => {
+        const named = judges
+          .filter((judge) => judge.length === 56)
+          .map((address) => ({ address, tracks: [] }));
+
+        return named.length > 0 ? named : [{ address: wallet.address, tracks: [] }];
+      })(),
       judgeQuorum: 1,
+      communityBps,
       schedule: {
         registrationOpensAt: opensAt,
         registrationClosesAt: secondsAt(dates.registrationCloses),
@@ -340,6 +514,7 @@ export function Wizard({
          constitution either way, but the default is the rule most events mean
          and the one somebody would be surprised to find switched off. */
       requires,
+      openRegistration,
       multiTeamAllowed: false,
       maxTeamSize: 5,
       settlementDelay,
@@ -416,65 +591,99 @@ export function Wizard({
     /* The look is written after the contract exists, because the handler that
        takes it asks the chain who the organizer is and there is nobody to ask
        about until then. A failure here does not undo the hackathon: the rules
-       are on chain and the description can be written again. */
-    await describe(contractId);
+       are on chain and the description can be written again.
 
-    /* Straight on to the next thing rather than a page that says "done" and
-       leaves somebody wondering what happens now. Creating is the first of
-       four steps and the console is where the other three live. */
-    router.push(`/manage/${contractId}`);
+       It is reported, though. This used to be swallowed whole, and a hackathon
+       whose name never saved is invisible: no row means no listing, no title on
+       the panel, and nothing for the judging page to find. Silence turned a
+       recoverable miss into an event that looked broken everywhere at once. */
+    const described = await describe(contractId);
+
+    if (!described) {
+      /* Stopped here rather than carried on. The hackathon exists and pressing
+         the button again would make a second one, so the button is replaced by
+         the way into the panel and the draft on this machine is left alone: the
+         name that failed to save is still in it. */
+      setMade(contractId);
+
+      return;
+    }
+
+    /* The rules are on chain now, so the copy on this machine is a stale answer
+       to a question already settled. Left behind, it would reappear in the form
+       the next time somebody came to create their second hackathon. */
+    try {
+      window.localStorage.removeItem(kept);
+    } catch {
+      /* Nothing to do, and nothing lost: the hackathon exists either way. */
+    }
+
+    /* Straight on to the one thing left, rather than a page that says "done"
+       and leaves somebody wondering what happens now. The hackathon exists and
+       is a draft; opening it is its own page and its own signature. */
+    router.push(`/manage/${contractId}/open`);
   }
 
   /**
-   * Sign for the presentation columns and hand them over.
+   * Hand the presentation columns over, signing only if we have to.
    *
-   * The signature proves the organizer's key, which is the only thing that
-   * decides whether this may be written. The account and the time are in the
-   * challenge as well, so one captured from somebody else, or captured at all,
-   * stops working.
+   * The handler takes either a signature over its challenge or a wallet already
+   * linked to this account, because a link is a signature it checked and kept.
+   * Almost every organizer has linked theirs — it is how the account page shows
+   * their events — so the usual path is no prompt at all.
+   *
+   * This was a third wallet prompt on top of the two that create the hackathon,
+   * and it arrived after the work was done, asking to sign a line of text
+   * nobody could read. Asking first and signing only on a refusal keeps the
+   * proof exactly as strong and costs nothing when it is already held.
    */
-  async function describe(contractId: string) {
+  async function describe(contractId: string): Promise<boolean> {
     if (wallet === null) {
-      return;
+      return false;
     }
 
-    const issuedAt = Math.floor(Date.now() / 1000);
     const account = await accountId();
 
     if (account === null) {
-      return;
+      return false;
     }
 
+    if (await send(null)) {
+      return true;
+    }
+
+    const issuedAt = Math.floor(Date.now() / 1000);
     const message = `stelhacks.v1.metadata:${contractId}:${account}:${issuedAt}`;
     const signature = await proveAddressHex(wallet.address, message).catch(() => null);
 
-    if (signature === null) {
-      return;
-    }
+    return signature === null ? false : await send({ issuedAt, signature });
 
-    await fetch("/api/hackathon", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contract: contractId,
-        issuedAt,
-        signature,
-        name: name.trim(),
-        tagline: tagline.trim(),
-        location: location.trim(),
-        logo_url: logo.trim(),
-        banner_url: banner.trim(),
-        tags: tags
-          .split(",")
-          /* The placeholder writes them with a hash because that is how
-             everyone writes a tag, so the hash has to come off here. Stored
-             with it, the same tag typed both ways would be two tags and the
-             filter list on the listing would show both. */
-          .map((tag) => tag.trim().replace(/^#+/, "").trim().toLowerCase())
-          .filter((tag) => tag.length > 0)
-          .slice(0, 8),
-      }),
-    }).catch(() => null);
+    async function send(proof: { issuedAt: number; signature: string } | null): Promise<boolean> {
+      const written = await fetch("/api/hackathon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contract: contractId,
+          ...(proof ?? {}),
+          name: name.trim(),
+          tagline: tagline.trim(),
+          location: location.trim(),
+          logo_url: logo.trim(),
+          banner_url: banner.trim(),
+          /* The field writes them with a hash because that is how everyone
+             writes a tag, so the hash has to come off here. Stored with it, the
+             same tag typed both ways would be two tags and the filter list on
+             the listing would show both. */
+          tags: tags
+            .split(",")
+            .map((tag) => tag.trim().replace(/^#+/, "").trim().toLowerCase())
+            .filter((tag) => tag.length > 0)
+            .slice(0, 8),
+        }),
+      }).catch(() => null);
+
+      return written !== null && written.ok;
+    }
   }
 
   if (!known) {
@@ -487,7 +696,7 @@ export function Wizard({
 
   if (wallet === null) {
     return (
-      <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
         Connect a wallet first. The address you connect is the one the contract
         will record as the organizer, and it is the only address that can lock
         these rules or move the event on afterwards.
@@ -519,13 +728,7 @@ export function Wizard({
             note="Shown under the name on the listing. The full description is written later."
           />
 
-          <Field
-            label="Tags"
-            value={tags}
-            onChange={setTags}
-            placeholder="#payments, #stellar, #soroban"
-            note="Comma separated, eight at most"
-          />
+          <TagField value={tags} onChange={setTags} />
 
           {/* Files rather than links. Both used to ask for a URL, which is a
               question an organizer with a picture on their laptop cannot
@@ -573,10 +776,10 @@ export function Wizard({
                 <AssetMark code={choice.code} onDark={picked} />
 
                 <span className="grid gap-0.5">
-                  <span className="text-[1.125rem] leading-none">{choice.code}</span>
+                  <span className="text-[1.1875rem] leading-none">{choice.code}</span>
 
                   <span
-                    className={`text-[0.8125rem] ${picked ? "text-paper/70" : "text-ink-faint"}`}
+                    className={`text-[0.875rem] ${picked ? "text-paper/70" : "text-ink-faint"}`}
                   >
                     {choice.name}
                   </span>
@@ -598,7 +801,7 @@ export function Wizard({
         {assetCode === "XLM" && !inTokens && (
           <div className="mt-5 rounded-[0.75rem] bg-paper-sunk px-5 py-4">
             {rateFailed ? (
-              <p className="text-[0.875rem] leading-relaxed text-broken">
+              <p className="text-[0.9375rem] leading-relaxed text-broken">
                 The lumen price could not be read, so a dollar amount cannot be
                 turned into lumens. Nothing can be created until it can. Reload,
                 or pay in USDC instead.
@@ -607,11 +810,11 @@ export function Wizard({
               <p className="label text-ink-faint">Reading the lumen price</p>
             ) : (
               <>
-                <p className="text-[0.875rem] leading-relaxed text-ink">
+                <p className="text-[0.9375rem] leading-relaxed text-ink">
                   1 XLM is ${rate.toFixed(4)} right now.
                 </p>
 
-                <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-ink-soft">
+                <p className="mt-1.5 text-[0.875rem] leading-relaxed text-ink-soft">
                   Prizes are converted at this rate and the lumen amount is what
                   gets frozen into the rules. If the price moves afterwards the
                   number of lumens paid does not change, so the dollar value a
@@ -651,17 +854,103 @@ export function Wizard({
           onClick={() => setTracks([...tracks, blankTrack()])}
           className="label mt-8 flex h-10 items-center gap-2 rounded-full px-4 text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk"
         >
-          <span aria-hidden className="text-[1rem] leading-none">+</span>
+          <span aria-hidden className="text-[1.0625rem] leading-none">+</span>
           Add a track
         </button>
       </Section>
 
-      <Section
-        index={4}
-        title="Judges"
-        note="One Stellar wallet address for each judge. Not a name and not an email: the contract only knows addresses, and only the ones listed here may score."
-      >
-        <div className="space-y-4">
+      <Section index={4} title="Judges">
+        {/*
+          Who decides, before who the judges are.
+
+          Every hackathon here admits its participants by application, so the
+          crowd casting ballots is a list somebody vetted rather than whoever
+          found the page. That is why the crowd's share has no ceiling: it can
+          be none of the result, all of it, or anything between.
+
+          Judges are named either way. Even in a crowd decided event they score
+          for the written feedback and they hold the say over a
+          disqualification; what changes is whether their scorecards move the
+          ranking.
+        */}
+        <div className="border-b border-rule pb-7">
+          <p className="label text-[0.875rem] font-semibold text-ink">Who decides the ranking</p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {VOTING.map((choice) => (
+              <button
+                key={choice.label}
+                type="button"
+                onClick={() => setCommunityBps(choice.bps)}
+                aria-pressed={choice.holds(communityBps)}
+                className={`rounded-full px-4 py-2.5 text-[0.9375rem] transition-colors duration-150 ease-settle ${
+                  choice.holds(communityBps)
+                    ? "bg-ink text-paper"
+                    : "text-ink-soft ring-1 ring-inset ring-rule hover:text-ink hover:ring-ink"
+                }`}
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
+
+          {communityBps > 0 && communityBps < WEIGHT_TOTAL_BPS && (
+            <label className="mt-5 flex flex-wrap items-center gap-4">
+              <span className="text-[0.9375rem] text-ink-soft">The crowd decides</span>
+
+              <span className="flex items-center gap-2">
+                <input
+                  value={String(communityBps / 100)}
+                  onChange={(event) =>
+                    setCommunityBps(
+                      Math.min(
+                        9_900,
+                        Math.max(
+                          100,
+                          Math.round(
+                            Number(event.target.value.replace(/[^0-9]/g, "") || 0) * 100,
+                          ),
+                        ),
+                      ),
+                    )
+                  }
+                  inputMode="numeric"
+                  className="tabular h-11 w-20 rounded-[0.625rem] bg-paper px-3 text-center text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
+                />
+
+                <span className="text-[0.9375rem] text-ink-soft">
+                  %, the judges the other {100 - communityBps / 100}%
+                </span>
+              </span>
+            </label>
+          )}
+
+          <p className="mt-4 max-w-[42rem] text-[0.875rem] leading-relaxed text-ink-faint">
+            {communityBps === 0
+              ? "The judges' scorecards are the whole result."
+              : "The vote runs alongside judging: it opens when the entry check ends and closes when judging does, so the crowd votes on the same entries the judges score. Only approved participants can vote, and the ballots stay sealed until the reveal."}
+          </p>
+        </div>
+
+        {/*
+          Nobody is asked for a judge when the judges decide nothing.
+
+          The contract still wants one name, and that is not a formality: judges
+          hold the say over a disqualification whatever the ranking is built
+          from. So the organizer's own address stands in, the way it stands in
+          for the fee collector on a free event, and the form says so rather
+          than asking for an address whose purpose it has just finished
+          explaining away.
+        */}
+        {communityBps === WEIGHT_TOTAL_BPS ? (
+          <p className="mt-7 max-w-[42rem] text-[1rem] leading-relaxed text-ink-soft">
+            The crowd decides the ranking, so no scorecard moves it. The
+            contract still needs one judge for disqualifications, and your own
+            wallet is used for that. Switch to a split above to name judges.
+          </p>
+        ) : (
+          <>
+        <div className="mt-7 space-y-4">
           {judges.map((judge, index) => (
             <div key={index} className="flex items-end gap-3">
               <div className="flex-1">
@@ -687,9 +976,11 @@ export function Wizard({
           onClick={() => setJudges([...judges, ""])}
           className="label mt-6 flex h-10 items-center gap-2 rounded-full px-4 text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk"
         >
-          <span aria-hidden className="text-[1rem] leading-none">+</span>
+          <span aria-hidden className="text-[1.0625rem] leading-none">+</span>
           Add a judge
         </button>
+        </>
+        )}
       </Section>
 
       {/*
@@ -762,32 +1053,83 @@ export function Wizard({
             organizer striking out an entry should be pointing at a rule that
             was on the page from the start.
           */}
+          {/* Before what a submission carries, because it comes first in the
+              event: who is in the room, then what they hand in. */}
           <div className="border-b border-rule py-4">
-            <p className="label text-[0.8125rem] text-ink">A submission must have</p>
+            <p className="label text-[0.875rem] text-ink">Who gets in</p>
 
-            <div className="mt-3 grid gap-2.5">
+            <div className="mt-4 grid gap-1">
+              <Admission
+                label="Anybody who applies"
+                chosen={openRegistration}
+                onChoose={() => setOpenRegistration(true)}
+              />
+
+              <Admission
+                label="Only the people you approve"
+                chosen={!openRegistration}
+                onChoose={() => setOpenRegistration(false)}
+              />
+            </div>
+
+            {/* The cost of the second one, said in signatures rather than in
+                principle. It is the difference between a hackathon that runs
+                itself and an afternoon of approving people one at a time, and
+                an organizer choosing it should know which they picked. */}
+            <p className="mt-4 text-[0.875rem] leading-relaxed text-ink-faint">
+              Approving each person is one signature each. Either way this is
+              frozen with the rules, so you cannot close the door after seeing
+              who applied, or open it once the voting starts.
+            </p>
+          </div>
+
+          <div className="border-b border-rule py-4">
+            <p className="label text-[0.875rem] text-ink">What a submission carries</p>
+
+            <div className="mt-4 grid gap-1">
+              {/* Named the way the submission form names each field. A rule
+                  under a word the team never sees leaves an organizer setting
+                  something they cannot picture. */}
               <Requirement
                 label="A repository"
-                checked={requires.repository}
+                rule={requires.repository}
                 onChange={(next) => setRequires({ ...requires, repository: next })}
               />
 
               <Requirement
                 label="A demo video"
-                checked={requires.demoVideo}
+                rule={requires.demoVideo}
                 onChange={(next) => setRequires({ ...requires, demoVideo: next })}
               />
 
               <Requirement
-                label="Something running"
-                checked={requires.liveUrl}
+                label="A live site"
+                rule={requires.liveUrl}
                 onChange={(next) => setRequires({ ...requires, liveUrl: next })}
+              />
+
+              <Requirement
+                label="A pitch deck"
+                rule={requires.pitchDeck}
+                onChange={(next) => setRequires({ ...requires, pitchDeck: next })}
+              />
+
+              <Requirement
+                label="A deployed contract"
+                rule={requires.deployedContract}
+                onChange={(next) => setRequires({ ...requires, deployedContract: next })}
               />
             </div>
 
-            <p className="mt-3 text-[0.8125rem] leading-relaxed text-ink-faint">
-              Whatever is left unticked is offered to teams as optional. A pitch
-              deck is always optional: the frozen rules have no field for one.
+            {/* What the middle answer costs is worth saying, because it is the
+                one that looks free. Not asked takes the field off their form
+                entirely, which is the point: a judge opening a design entry
+                should not read an empty repository row as a team that never
+                pushed anything. */}
+            <p className="mt-4 text-[0.875rem] leading-relaxed text-ink-faint">
+              Required means an entry without it is incomplete. Optional means
+              a team may send one. Not asked leaves the field off their form
+              altogether.
             </p>
           </div>
 
@@ -799,7 +1141,7 @@ export function Wizard({
             <select
               value={String(settlementDelay)}
               onChange={(event) => setSettlementDelay(Number(event.target.value))}
-              className="w-full rounded-[0.75rem] border border-rule bg-paper px-4 py-3 text-[0.9375rem] text-ink outline-none transition-colors duration-150 ease-settle focus:border-ink"
+              className="w-full rounded-[0.75rem] border border-rule bg-paper px-4 py-3 text-[1rem] text-ink outline-none transition-colors duration-150 ease-settle focus:border-ink"
             >
               {SETTLEMENT_DELAYS.map((choice) => (
                 <option key={choice.seconds} value={choice.seconds}>
@@ -808,7 +1150,7 @@ export function Wizard({
               ))}
             </select>
 
-            <span className="text-[0.8125rem] text-ink-faint">
+            <span className="text-[0.875rem] text-ink-faint">
               How long after the ranking before the vault may pay. A gap gives
               you time to catch a mistake while the money is still in the vault.
             </span>
@@ -816,7 +1158,7 @@ export function Wizard({
         </div>
 
         {outOfOrder !== null && (
-          <p className="mt-5 text-[0.875rem] leading-relaxed text-broken">{outOfOrder}</p>
+          <p className="mt-5 text-[0.9375rem] leading-relaxed text-broken">{outOfOrder}</p>
         )}
       </Section>
 
@@ -835,101 +1177,87 @@ export function Wizard({
       <section className="rounded-[1.25rem] bg-night p-7 text-night-ink sm:p-9">
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <div>
-            <p className="label text-night-ink-soft">Total prize</p>
+            {/* Bigger and white, all three of them. They were the same grey as
+                the sentence under each one, so the card read as six lines of
+                explanation with figures beside them rather than three things
+                being told to you. */}
+            <p className="label text-[1.0625rem] text-night-ink">Total prize</p>
 
             {/* Said, because the figure is a sum of things typed far apart. A
                 number this size with a bare label reads as one prize rather
                 than as every place in every track added together. */}
-            <p className="mt-1 text-[0.8125rem] text-night-ink-soft">
+            <p className="mt-1 text-[0.875rem] text-night-ink-soft">
               Every place in every track, added up
             </p>
           </div>
 
-          {/* Whichever unit was typed leads and the other follows, in that
-              order on every line of this card. Reversing them on one line and
-              not another is how somebody reads the wrong number. */}
-          <div className="text-right">
-            <p className="tabular text-[clamp(1.75rem,4vw,2.5rem)]">
-              {inTokens
-                ? `${format(total)}${assetCode.length > 0 ? ` ${assetCode}` : ""}`
-                : `$${dollars?.total ?? "—"}`}
-            </p>
-
-            <p className="tabular mt-1 text-[0.9375rem] text-night-ink-soft">
-              {inTokens
-                ? dollars === null
-                  ? ""
-                  : `$${dollars.total}`
-                : assetCode.length > 0
-                  ? `${format(total)} ${assetCode}`
-                  : ""}
-            </p>
-          </div>
+          <p className="tabular text-right text-[clamp(2rem,5vw,3rem)]">{figure(total)}</p>
         </div>
 
         {/* Shown even at zero, because "no fee" is worth reading once and is
             otherwise indistinguishable from a line somebody forgot to look
             for. */}
         <div className="mt-5 flex flex-wrap items-baseline justify-between gap-4 border-t border-night-rule pt-5">
-          <p className="label text-night-ink-soft">
+          <p className="label text-[1.0625rem] text-night-ink">
             Platform fee {(feeBps / 100).toFixed(feeBps % 100 === 0 ? 0 : 2)}%
           </p>
 
-          <p className="tabular text-[1.0625rem] text-night-ink-soft">
-            {format(fee)}
-            {assetCode.length > 0 && ` ${assetCode}`}
-            {dollars !== null && ` · $${dollars.fee}`}
-          </p>
+          <p className="tabular text-[1.375rem] text-night-ink-soft">{figure(fee)}</p>
         </div>
 
         <div className="mt-4 flex flex-wrap items-baseline justify-between gap-4 border-t border-night-rule pt-4">
           <div>
-            <p className="label">You deposit</p>
+            <p className="label text-[1.0625rem] text-night-ink">You deposit</p>
 
-            {/* The one line on this card that is a token amount first. It is
-                what the vault is asked for, to the stroop, and the dollar
-                figure beside it is only what that came to today. */}
-            <p className="mt-1 text-[0.8125rem] text-night-ink-soft">
+            <p className="mt-1 text-[0.875rem] text-night-ink-soft">
               What the vault has to hold before the event can open
             </p>
           </div>
 
-          <div className="text-right">
-            <p className="tabular text-[1.25rem]">
-              {assetCode.length > 0 ? `${format(deposit)} ${assetCode}` : format(deposit)}
-            </p>
-
-            {dollars !== null && (
-              <p className="tabular mt-1 text-[0.875rem] text-night-ink-soft">
-                ${dollars.deposit} today
-              </p>
-            )}
-          </div>
+          {/* The figure the vault is asked for, to the stroop. */}
+          <p className="tabular text-right text-[1.75rem]">{figure(deposit)}</p>
         </div>
       </section>
 
       {/* Centred under the column rather than pinned to its left edge, so the
           last thing on a long centred form is where the eye already is. */}
       <div className="flex flex-col items-center gap-4 pb-4 text-center">
+        {made !== null ? (
+          <>
+            <ButtonLink href={`/manage/${made}/open`}>Carry on</ButtonLink>
+
+            <p className="max-w-[34rem] text-[0.9375rem] leading-relaxed text-broken">
+              The rules are on chain, but the name and artwork did not save.
+              Everything you typed is still in this form; write them again from
+              the panel.
+            </p>
+          </>
+        ) : (
         <Button disabled={!ready || busy} onClick={() => void create()}>
-          {busy ? "Signing" : inTokens ? "Save the changes" : "Create in draft"}
+          {busy ? "Signing" : inTokens ? "Save the changes" : "Create the hackathon"}
         </Button>
+        )}
 
-        <p className="max-w-[32rem] text-[0.875rem] leading-relaxed text-ink-soft">
-          {platformFee === null && wallet !== null
-            ? "This deployment is set to charge a fee but has no collector address configured, so nothing can be created until it does."
-            : inTokens
-              ? "One signature. It replaces the draft rules at the same address, and stays possible only until you lock them."
-              : "Two signatures: one puts this hackathon's own contract on chain, one writes these rules into it. Nothing is frozen yet."}
-        </p>
+        {/* Only what stops the button working. The line that used to be here
+            counted the wallet prompts and promised nothing was frozen, which is
+            the form explaining itself at the moment somebody has finished
+            reading it; the count went out of date the first time the contract
+            changed, and the reassurance was answering a question nobody at this
+            point is still asking. */}
+        {(wrongNetwork !== null || (platformFee === null && wallet !== null)) && (
+          <p className="max-w-[32rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+            {wrongNetwork !== null
+              ? "Your wallet is on another network, so nothing here can be signed until you switch it."
+              : "This deployment is set to charge a fee but has no collector address configured, so nothing can be created until it does."}
+          </p>
+        )}
 
-        {result !== null && (
-          <p
-            className={`max-w-[36rem] text-[0.875rem] leading-relaxed ${
-              result.ok ? "text-verified" : "text-broken"
-            }`}
-          >
-            {result.ok ? `Created. ${result.hash}` : result.why}
+        {/* Only the refusals. "Created." was a line that appeared for the
+            instant before the page moved on, telling somebody something the
+            next screen was about to show them anyway. */}
+        {result !== null && !result.ok && (
+          <p className="max-w-[36rem] text-[0.9375rem] leading-relaxed text-broken">
+            {result.why}
           </p>
         )}
       </div>
@@ -984,11 +1312,11 @@ function TrackForm({
 
       <div className="mt-6 grid gap-8 lg:grid-cols-2">
         <div>
-          <p className="label text-[0.8125rem] text-ink">Prizes</p>
+          <p className="label text-[0.875rem] text-ink">Prizes</p>
 
           {/* Where the money is typed, which was the one thing the currency
               card three sections up could not say for itself. */}
-          <p className="mt-1 text-[0.8125rem] leading-relaxed text-ink-faint">
+          <p className="mt-1 text-[0.875rem] leading-relaxed text-ink-faint">
             What each place wins, in {inTokens ? (code.length > 0 ? code : "the prize token") : "dollars"}
           </p>
 
@@ -1031,7 +1359,7 @@ function TrackForm({
                         }
                         inputMode="decimal"
                         placeholder="0"
-                        className="tabular h-full min-w-0 flex-1 bg-transparent px-2.5 text-[0.9375rem] text-ink outline-none"
+                        className="tabular h-full min-w-0 flex-1 bg-transparent px-2.5 text-[1rem] text-ink outline-none"
                       />
 
                       {inTokens && code.length > 0 && (
@@ -1054,7 +1382,7 @@ function TrackForm({
                   </div>
 
                   {other.length > 0 && (
-                    <p className="tabular mt-1 pl-[3.75rem] text-[0.75rem] text-ink-faint">
+                    <p className="tabular mt-1 pl-[3.75rem] text-[0.8125rem] text-ink-faint">
                       {other}
                     </p>
                   )}
@@ -1079,17 +1407,21 @@ function TrackForm({
 
         <div>
           <div className="flex items-baseline justify-between">
-            <p className="label text-[0.8125rem] text-ink">Scoring</p>
+            <p className="label text-[0.875rem] text-ink">Scoring</p>
 
             {/* The weights have to add up exactly or the contract refuses the
                 whole constitution. Saying so as it happens is the difference
                 between fixing one number and rereading a rejected form. */}
+            {/* What is left rather than only what is spent. Since the boxes
+                cannot be pushed over a hundred, the only state worth naming is
+                the shortfall, and naming it saves counting the column. */}
             <p className={`label ${balanced ? "text-verified" : "text-ink-faint"}`}>
               {(weight / 100).toFixed(0)}%
+              {!balanced && ` · ${((WEIGHT_TOTAL_BPS - weight) / 100).toFixed(0)} left`}
             </p>
           </div>
 
-          <p className="mt-1 text-[0.8125rem] leading-relaxed text-ink-faint">
+          <p className="mt-1 text-[0.875rem] leading-relaxed text-ink-faint">
             What judges mark each project on, and how much each one counts. They
             have to add up to 100.
           </p>
@@ -1110,24 +1442,27 @@ function TrackForm({
                     })
                   }
                   placeholder="impact"
-                  className="h-10 flex-1 bg-paper px-3 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+                  className="h-10 flex-1 bg-paper px-3 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
                 />
 
+                {/* Held to what is left rather than accepted and complained
+                    about afterwards. The weights are the one field the contract
+                    refuses the whole constitution over, and a box that took
+                    4060 and printed it back as a percentage was inviting
+                    somebody to fill the form in around an impossible number. */}
                 <input
                   value={criterion.weightBps === 0 ? "" : String(criterion.weightBps / 100)}
                   onChange={(event) =>
                     onChange({
                       ...track,
                       criteria: track.criteria.map((c, i) =>
-                        i === at
-                          ? { ...c, weightBps: Math.round(Number(event.target.value || 0) * 100) }
-                          : c,
+                        i === at ? { ...c, weightBps: within(event.target.value, track, at) } : c,
                       ),
                     })
                   }
                   inputMode="numeric"
                   placeholder="0"
-                  className="tabular h-10 w-16 bg-paper px-3 text-center text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+                  className="tabular h-10 w-16 bg-paper px-3 text-center text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
                 />
 
                 {track.criteria.length > 1 && (
@@ -1199,7 +1534,7 @@ function Section({
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10">
       <div className="flex items-center gap-3.5">
-        <span className="tabular grid size-9 shrink-0 place-items-center rounded-full bg-paper-sunk text-[1rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
+        <span className="tabular grid size-9 shrink-0 place-items-center rounded-full bg-paper-sunk text-[1.0625rem] font-semibold text-ink-soft ring-1 ring-inset ring-rule">
           {index}
         </span>
 
@@ -1207,7 +1542,7 @@ function Section({
       </div>
 
       {note !== undefined && (
-        <p className="mt-3 max-w-[42rem] text-[0.9375rem] leading-relaxed text-ink-soft">{note}</p>
+        <p className="mt-3 max-w-[42rem] text-[1rem] leading-relaxed text-ink-soft">{note}</p>
       )}
 
       <div className="mt-8">{children}</div>
@@ -1243,7 +1578,7 @@ function Field({
           question and the grey text inside the box is an example answer; when
           both were the same weight the form read as a column of grey with no
           indication which parts somebody was meant to supply. */}
-      <span className="label text-[0.8125rem] text-ink">{label}</span>
+      <span className="label text-[0.875rem] text-ink">{label}</span>
 
       {/* Not trimmed here. Trimming on every keystroke eats the space the moment
           it is typed, so "Stellar Türkiye" can only ever be entered as
@@ -1254,13 +1589,13 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={`h-12 rounded-[0.625rem] bg-paper px-4 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink ${
-          mono ? "tabular text-[0.875rem]" : ""
+        className={`h-12 rounded-[0.625rem] bg-paper px-4 text-[1.0625rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink ${
+          mono ? "tabular text-[0.9375rem]" : ""
         }`}
       />
 
       {note !== undefined && (
-        <span className="text-[0.8125rem] leading-relaxed text-ink-faint">{note}</span>
+        <span className="text-[0.875rem] leading-relaxed text-ink-faint">{note}</span>
       )}
     </label>
   );
@@ -1288,16 +1623,16 @@ function Moment({
   return (
     <label className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-rule py-4">
       <span className="grid gap-0.5">
-        <span className="label text-[0.8125rem] text-ink">{label}</span>
+        <span className="label text-[0.875rem] text-ink">{label}</span>
 
-        <span className="text-[0.8125rem] text-ink-faint">{hint}</span>
+        <span className="text-[0.875rem] text-ink-faint">{hint}</span>
       </span>
 
       <input
         type="datetime-local"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="tabular h-11 w-[15rem] rounded-[0.625rem] bg-paper px-3.5 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
+        className="tabular h-11 w-[15rem] rounded-[0.625rem] bg-paper px-3.5 text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
       />
     </label>
   );
@@ -1368,7 +1703,7 @@ function Remove({ onClick }: { onClick: () => void }) {
       aria-label="Remove"
       className="grid size-10 shrink-0 place-items-center text-ink-faint transition-colors duration-150 ease-settle hover:text-broken"
     >
-      <span aria-hidden className="text-[1.125rem] leading-none">×</span>
+      <span aria-hidden className="text-[1.1875rem] leading-none">×</span>
     </button>
   );
 }
@@ -1435,12 +1770,17 @@ function defaultDates(): Dates {
   const day = 86_400_000;
   const from = Date.now();
 
+  /* Under a fortnight from here to the result, because that is the shape of
+     almost every hackathon somebody comes here to run. The first draft of this
+     opened in a week and finished in six, which is a conference season rather
+     than a hackathon and meant the suggested dates were the first thing
+     everybody had to throw away. */
   return {
-    opens: momentOf(from + 7 * day, 9, 0),
-    registrationCloses: momentOf(from + 21 * day, 23, 59),
-    submissionCloses: momentOf(from + 28 * day, 18, 0),
-    screeningCloses: momentOf(from + 31 * day, 18, 0),
-    judgingCloses: momentOf(from + 38 * day, 18, 0),
+    opens: momentOf(from + 2 * day, 9, 0),
+    registrationCloses: momentOf(from + 7 * day, 23, 59),
+    submissionCloses: momentOf(from + 9 * day, 18, 0),
+    screeningCloses: momentOf(from + 10 * day, 18, 0),
+    judgingCloses: momentOf(from + 12 * day, 18, 0),
   };
 }
 
@@ -1482,9 +1822,75 @@ function secondsAt(value: string): number {
  * with no separate sign up window and a normal shape. Screening and judging
  * each need their own, because the contract compares those strictly.
  */
-function disordered(dates: Dates): string | null {
+/**
+ * A typed weight, in basis points, held inside what the track has left.
+ *
+ * Clamped rather than validated. A rubric has to total exactly ten thousand
+ * basis points or the contract refuses the constitution, so the room a
+ * criterion has is a hundred per cent minus whatever its neighbours already
+ * take, and typing past that can only ever produce a form that will be
+ * rejected.
+ */
+function within(typed: string, track: Track, at: number): number {
+  const asked = Math.round(Number(typed.replace(/[^0-9.]/g, "") || 0) * 100);
+
+  if (!Number.isFinite(asked)) {
+    return 0;
+  }
+
+  const others = track.criteria.reduce(
+    (sum, criterion, i) => (i === at ? sum : sum + criterion.weightBps),
+    0,
+  );
+
+  return Math.max(0, Math.min(WEIGHT_TOTAL_BPS - others, asked));
+}
+
+/** What the form keeps on this machine between one visit and the next. */
+interface Kept {
+  asset: string;
+  tracks: Track[];
+  judges: string[];
+  dates: Dates;
+  settlementDelay: number;
+  requires: SubmissionFields;
+  openRegistration: boolean;
+  communityBps: number;
+  name: string;
+  tagline: string;
+  location: string;
+  tags: string;
+  logo: string;
+  banner: string;
+}
+
+/** Restores one string field, and only if what was on disk is one. */
+function text(value: unknown, set: (next: string) => void) {
+  if (typeof value === "string") {
+    set(value);
+  }
+}
+
+function disordered(dates: Dates, fresh = true): string | null {
   if (Object.values(dates).some((moment) => moment.length === 0)) {
     return "Every one of these needs a date and a time.";
+  }
+
+  /*
+    Not in the past, and the contract does not say so.
+
+    Its schedule check is about order, not about the clock, so an event whose
+    every deadline has already gone is a perfectly valid document: it locks, it
+    funds, it opens, and then nobody can apply or enter because those calls
+    check the clock themselves. The result is an empty hackathon that runs to
+    the end in seconds.
+
+    Only for a new one. An existing draft may well have been written before its
+    own opening moment passed, and refusing to save it would trap the organizer
+    outside the form that could fix it.
+  */
+  if (fresh && secondsAt(dates.opens) <= Math.floor(Date.now() / 1000)) {
+    return "The opening moment is in the past, so nobody would be able to sign up.";
   }
 
   if (dates.registrationCloses <= dates.opens) {
@@ -1598,33 +2004,121 @@ function format(amount: bigint): string {
 }
 
 /**
- * One thing a submission may be required to carry.
+ * The three answers, in the order they get stricter, each with the colour it
+ * takes once it is the one chosen.
  *
- * A checkbox rather than a switch. Three of these sit in a list and the
- * question is the same for each, which is what a checkbox is for; a row of
- * switches reads as three separate settings that happen to be adjacent.
+ * Colour because the five rows are read as a set: an organizer wants to see at
+ * a glance how much they are asking of a team, and five identical black pills
+ * make that a reading exercise. Red for a field nobody will see, amber for one
+ * that is offered, green for one that is demanded.
+ *
+ * The middle one says "Optional" because that is the word the submission form
+ * puts beside the field. "Offered" was written from the organizer's side and
+ * described the same state in a word no team ever reads.
  */
+/**
+ * The three ways a result can be decided, as somebody would name them.
+ *
+ * A mixed split is one choice rather than ninety nine, and the percentage
+ * beside it is the detail. A slider from nought to a hundred would make the two
+ * ends look like settings rather than like the two ordinary answers they are.
+ */
+const VOTING: { label: string; bps: number; holds: (at: number) => boolean }[] = [
+  { label: "Judges only", bps: 0, holds: (at) => at === 0 },
+  {
+    label: "Judges and the crowd",
+    bps: 3_000,
+    holds: (at) => at > 0 && at < WEIGHT_TOTAL_BPS,
+  },
+  {
+    label: "The crowd only",
+    bps: WEIGHT_TOTAL_BPS,
+    holds: (at) => at === WEIGHT_TOTAL_BPS,
+  },
+];
+
+const RULES: { rule: FieldRule; label: string; chosen: string }[] = [
+  { rule: "unasked", label: "Not asked", chosen: "bg-broken text-paper" },
+  { rule: "optional", label: "Optional", chosen: "bg-signal text-signal-ink" },
+  { rule: "required", label: "Required", chosen: "bg-verified text-paper" },
+];
+
+/**
+ * One field a submission can carry, and what it is worth here.
+ *
+ * Three buttons rather than a checkbox, because the answer stopped being yes
+ * or no. A tick could say a field was compulsory and could not say whether an
+ * unticked one was wanted at all, so every event showed every field and the
+ * two intentions were indistinguishable on the form a team filled in.
+ */
+/**
+ * One of the two ways into a hackathon.
+ *
+ * A pair of rows rather than a switch, because a switch has a side that reads
+ * as off and neither of these is: an event anybody may enter and an event you
+ * pick the room for are two ordinary choices, and the label on a switch would
+ * have to name one of them as the absence of the other.
+ */
+function Admission({
+  label,
+  chosen,
+  onChoose,
+}: {
+  label: string;
+  chosen: boolean;
+  onChoose: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onChoose}
+      aria-pressed={chosen}
+      className={`flex items-center gap-3 rounded-[0.625rem] px-3 py-2.5 text-left transition-colors duration-150 ease-settle ${
+        chosen ? "bg-paper-sunk text-ink" : "text-ink-faint hover:text-ink-soft"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`size-[0.875rem] shrink-0 rounded-full border transition-colors duration-150 ease-settle ${
+          chosen ? "border-[0.3125rem] border-ink" : "border-rule"
+        }`}
+      />
+
+      <span className="text-[1rem]">{label}</span>
+    </button>
+  );
+}
+
 function Requirement({
   label,
-  checked,
+  rule,
   onChange,
 }: {
   label: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
+  rule: FieldRule;
+  onChange: (next: FieldRule) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3 text-[0.9375rem] text-ink">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="size-4 accent-ink"
-      />
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-1.5">
+      <span className="text-[1rem] text-ink">{label}</span>
 
-      <span>{label}</span>
-
-      {!checked && <span className="text-[0.8125rem] text-ink-faint">optional</span>}
-    </label>
+      <div className="flex gap-0.5 rounded-[0.625rem] bg-paper-sunk p-0.5">
+        {RULES.map((choice) => (
+          <button
+            key={choice.rule}
+            type="button"
+            onClick={() => onChange(choice.rule)}
+            aria-pressed={rule === choice.rule}
+            className={`rounded-[0.4375rem] px-3 py-1.5 text-[0.875rem] transition-colors duration-150 ease-settle ${
+              rule === choice.rule
+                ? `${choice.chosen} shadow-sm`
+                : "text-ink-faint hover:text-ink-soft"
+            }`}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

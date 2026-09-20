@@ -56,10 +56,10 @@ export default async function Create({ searchParams }: PageProps<"/create">) {
             bottom, next to the button it actually applies to. Two places saying
             it made the top of the page an essay in front of a form. */}
         <Measure className="py-16 text-center sm:py-20">
-          <p className="label text-[0.875rem] tracking-[0.16em] text-ink-soft">Organizer</p>
+          <p className="label text-[0.9375rem] tracking-[0.16em] text-ink-soft">Organizer</p>
 
           <h1 className="mt-4 text-[clamp(2.5rem,6vw,4rem)]">
-            {editing === null ? "Create a hackathon" : "Edit the rules"}
+            {editing === null ? "Create Hackathon" : "Edit the rules"}
           </h1>
         </Measure>
       </section>
@@ -78,7 +78,7 @@ export default async function Create({ searchParams }: PageProps<"/create">) {
           <div className="mx-auto max-w-[34rem] text-center">
             <ButtonLink href="/login?next=%2Fcreate">Sign in to start</ButtonLink>
 
-            <p className="mt-5 text-[0.875rem] leading-relaxed text-ink-soft">
+            <p className="mt-5 text-[0.9375rem] leading-relaxed text-ink-soft">
               A draft belongs to an account, and the wallet you connect after
               this is the one the contract will treat as the organizer.
             </p>

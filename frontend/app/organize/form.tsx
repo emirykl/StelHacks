@@ -42,7 +42,7 @@ export function ApplicationForm({
   if (state.ok) {
     return (
       <div className="grid gap-5">
-        <p className="text-[1.0625rem] leading-relaxed text-ink">
+        <p className="text-[1.125rem] leading-relaxed text-ink">
           Sent. We read these by hand and write back to the address you gave.
         </p>
 
@@ -104,7 +104,7 @@ export function ApplicationForm({
         </Button>
 
         {state.message !== null && (
-          <p className="text-[0.875rem] leading-relaxed text-broken" role="status">
+          <p className="text-[0.9375rem] leading-relaxed text-broken" role="status">
             {state.message}
           </p>
         )}
@@ -130,7 +130,7 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[0.8125rem] font-semibold text-ink">{label}</span>
+      <span className="text-[0.875rem] font-semibold text-ink">{label}</span>
 
       <div className="flex h-11 items-center gap-2.5 bg-paper px-3.5 ring-1 ring-inset ring-rule transition-shadow duration-150 ease-settle focus-within:ring-ink">
         {icon !== undefined && <span className="grid w-4 place-items-center">{icon}</span>}
@@ -141,7 +141,7 @@ function Field({
           placeholder={placeholder}
           inputMode={inputMode}
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-[0.9375rem] text-ink outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[1rem] text-ink outline-none"
         />
       </div>
     </label>
