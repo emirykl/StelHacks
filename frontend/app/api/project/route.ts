@@ -1,0 +1,193 @@
+import { looksLikeContract } from "../../../lib/explorer";
+import { NextResponse } from "next/server";
+
+import { currentUser } from "../../../lib/supabase/server";
+import { signedByOrganizer } from "../../../lib/organizer";
+
+/**
+ * Everything about a project that the chain does not hold.
+ *
+ * The contract stores a digest and a link. The title, the write up, the
+ * artwork and the other links live here, and none of them decide anything: the
+ * ranking is computed from scorecards against a rubric that was frozen before
+ * any of this was typed.
+ *
+ * Written through a route rather than straight from the browser for the same
+ * reason team names are. Row level security asks `team_members`, which the
+ * indexer fills from chain events, so a team that submitted a minute ago is not
+ * yet a team as far as the database is concerned and the write is refused. The
+ * contract knew the moment the transaction landed, so the contract is asked.
+ */
+
+const url = process.env["NEXT_PUBLIC_SUPABASE_URL"];
+const serviceRole = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+const rpcUrl = process.env["NEXT_PUBLIC_STELLAR_RPC_URL"];
+const passphrase = process.env["NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE"];
+
+interface Body {
+  contract: string;
+  teamId: number;
+  title: string;
+  summary?: string;
+  description?: string;
+  logo_url?: string;
+  banner_url?: string;
+  pitch_deck_url?: string;
+  repository_url?: string;
+  live_url?: string;
+  demo_video_url?: string;
+  contract_address?: string;
+  /** Signed by a member of the team, over the challenge in `lib/organizer.ts`. */
+  signature: string;
+  issuedAt: number;
+}
+
+export async function POST(request: Request) {
+  if (
+    url === undefined ||
+    serviceRole === undefined ||
+    rpcUrl === undefined ||
+    passphrase === undefined
+  ) {
+    return NextResponse.json({ error: "not configured" }, { status: 500 });
+  }
+
+  const user = await currentUser();
+
+  if (user === null) {
+    return NextResponse.json({ error: "sign in first" }, { status: 401 });
+  }
+
+  let body: Body;
+
+  try {
+    body = (await request.json()) as Body;
+  } catch {
+    return NextResponse.json({ error: "unreadable" }, { status: 400 });
+  }
+
+  const title = String(body.title ?? "").trim();
+
+  if (title.length === 0 || title.length > 120) {
+    return NextResponse.json({ error: "a title, up to a hundred and twenty characters" }, { status: 400 });
+  }
+
+  const members = await membersOf(body.contract, Number(body.teamId));
+
+  if (members === null) {
+    return NextResponse.json({ error: "no such team" }, { status: 404 });
+  }
+
+  /* Any member, not only the captain. A submission belongs to the team, and
+     making one person the only one who can correct a typo in it is a rule the
+     contract does not have and this should not invent. */
+  const proved = await Promise.all(
+    members.map((member) =>
+      signedByOrganizer({
+        organizer: member,
+        contract: body.contract,
+        account: user.id,
+        issuedAt: Number(body.issuedAt),
+        signature: String(body.signature ?? ""),
+        purpose: "team",
+      }),
+    ),
+  );
+
+  if (!proved.some(Boolean)) {
+    return NextResponse.json({ error: "not on this team" }, { status: 403 });
+  }
+
+  const row = {
+    contract_id: body.contract,
+    team_id: Number(body.teamId),
+    title,
+    summary: text(body.summary),
+    description: text(body.description),
+    logo_url: text(body.logo_url),
+    banner_url: text(body.banner_url),
+    pitch_deck_url: text(body.pitch_deck_url),
+    repository_url: text(body.repository_url),
+    live_url: text(body.live_url),
+    demo_video_url: text(body.demo_video_url),
+    /* Refused rather than stored malformed. The column has the same check, and
+       a row rejected by the database fails the whole write, taking a good
+       description down with a typo in an optional field. */
+    contract_address: looksLikeContract(String(body.contract_address ?? ""))
+      ? String(body.contract_address)
+      : null,
+  };
+
+  async function save(what: Record<string, unknown>) {
+    return fetch(`${url}/rest/v1/projects?on_conflict=contract_id,team_id`, {
+      method: "POST",
+      headers: {
+        apikey: serviceRole!,
+        Authorization: `Bearer ${serviceRole}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(what),
+    });
+  }
+
+  let written = await save(row);
+
+  /* Written again without the newest column when the database has not been
+     migrated yet. PostgREST refuses the whole row over one column it does not
+     know, and a team's description, artwork and deck should not be lost to a
+     field they left empty on a schema that is one deploy behind. */
+  if (!written.ok && row.contract_address === null) {
+    const { contract_address: _dropped, ...older } = row;
+    written = await save(older);
+  }
+
+  if (!written.ok) {
+    return NextResponse.json({ error: (await written.text()).slice(0, 200) }, { status: 502 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+/** Who the chain says is on a team, or nothing when it says no such team. */
+async function membersOf(contract: string, teamId: number): Promise<string[] | null> {
+  if (!Number.isInteger(teamId) || teamId <= 0) {
+    return null;
+  }
+
+  const [{ Account, Contract, TransactionBuilder, BASE_FEE, nativeToScVal, scValToNative }, rpc] =
+    await Promise.all([
+      import("@stellar/stellar-sdk/base"),
+      import("@stellar/stellar-sdk/rpc"),
+    ]);
+
+  try {
+    const server = new rpc.Server(rpcUrl!);
+
+    const tx = new TransactionBuilder(
+      new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
+      { fee: BASE_FEE, networkPassphrase: passphrase! },
+    )
+      .addOperation(
+        new Contract(contract).call("team_by_id", nativeToScVal(teamId, { type: "u32" })),
+      )
+      .setTimeout(30)
+      .build();
+
+    const simulated = await server.simulateTransaction(tx);
+
+    if (rpc.Api.isSimulationError(simulated) || simulated.result === undefined) {
+      return null;
+    }
+
+    const team = scValToNative(simulated.result.retval) as { members?: unknown };
+
+    return Array.isArray(team.members) ? team.members.map(String) : null;
+  } catch {
+    return null;
+  }
+}
