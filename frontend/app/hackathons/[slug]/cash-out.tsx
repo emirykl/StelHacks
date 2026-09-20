@@ -300,8 +300,31 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
 
     setStage({ at: "sending", transfer: stage.transfer });
 
+    /*
+      The balance is read again here, not reused from when the card loaded.
+
+      What gets sent is whatever the wallet holds, and a wallet is not still
+      between one and the other: somebody can move the prize somewhere else in a
+      second tab, or be paid a second one. Sending the old figure would either
+      fail on chain for being more than is there — with a message about
+      underfunding rather than about what happened — or quietly leave the rest
+      behind.
+    */
+    const now = await balanceOf(assetContract, address);
+
+    if (now === null || Number(now) <= 0) {
+      setStage({
+        at: "failed",
+        why: `There is no ${codeOf(asset)} in this wallet to send. If it moved somewhere else, cash out from there.`,
+      });
+
+      return;
+    }
+
+    setHeld(now);
+
     const done = await completeWithdraw(
-      stage.transfer,
+      { ...stage.transfer, amountIn: now },
       asset.kind === "issued" ? { code: asset.code, issuer: asset.issuer } : "native",
       address,
     );

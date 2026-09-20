@@ -30,13 +30,18 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
   return (
     <section className="border-b border-rule">
       <Measure wide className="py-10 sm:py-12">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        {/* The rail on the left and the picture on the right, and the columns
+            swapped in the layout rather than in the markup. The name and the
+            banner stay first in the document because they are what the page is
+            about, and a reader who arrives with a screen reader should meet
+            them before a table of deadlines. Only the eye's order changes. */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)]">
           {/* The name sits under the banner rather than under the whole grid.
               The rail is the taller of the two columns by some distance, and a
               title row spanning both left a slab of empty paper beside the
               picture; stacked here it is what fills that height, and the name
               ends up beside the prize it is asking somebody to compete for. */}
-          <div className="flex flex-col gap-7">
+          <div className="flex flex-col gap-7 lg:order-2">
             <Picture hackathon={hackathon} />
 
             <div className="flex flex-1 flex-wrap items-end justify-between gap-x-8 gap-y-5">
@@ -68,7 +73,7 @@ export async function Masthead({ hackathon }: { hackathon: HackathonDetail }) {
           {/* Held to its own height. As a grid child it stretched to match the
               banner column beside it, which left a tall empty box under the
               last panel on any event without tags. */}
-          <div className="self-start border border-rule">
+          <div className="self-start border border-rule lg:order-1">
             <Panel label="Prize pool">
               {hackathon.prize === null ? (
                 <p className="text-[0.875rem] text-ink-faint">Not readable from the contract.</p>
