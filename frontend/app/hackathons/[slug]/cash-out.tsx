@@ -246,8 +246,11 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
         (one) => !settled(one.status),
       );
 
-      const transfer =
-        open ?? (await open_(anchor, token.current, code, address, assetContract));
+      const transfer = await amounted(
+        open ?? (await startFresh(anchor, token.current, code, address)),
+        address,
+        assetContract,
+      );
 
       if (opened !== null) {
         if (transfer.url === undefined) {
@@ -376,6 +379,7 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
       <div className="mt-6">
         <Body
           stage={stage}
+          code={code}
           onBegin={() => void begin()}
           onSend={() => void send()}
           onRetry={() => setStage({ at: "closed" })}
@@ -394,12 +398,11 @@ export function CashOut({ asset, token: assetContract }: { asset: PrizeAsset; to
  * rather than assumed, so an anchor that wants more than a sandbox does is
  * refused honestly instead of half attempted.
  */
-async function open_(
+async function startFresh(
   anchor: Anchor,
   token: string,
   code: string,
   address: string,
-  assetContract: string,
 ): Promise<Transfer> {
   if (anchor.hosted !== undefined) {
     return startWithdraw(anchor, token, code, address);
@@ -413,23 +416,39 @@ async function open_(
     throw new Error(`${anchor.domain} needs more than this page can ask for: ${wanted.join(", ")}`);
   }
 
-  const opened = await startDirectWithdraw(anchor, token, code, address);
+  return startDirectWithdraw(anchor, token, code, address);
+}
 
-  /*
-    The whole balance, because a prize is a number nobody chose.
+/**
+ * Fill in how much to send, when the anchor did not say.
+ *
+ * The whole balance, because a prize is a number nobody chose: the anchor takes
+ * whatever arrives and names no figure of its own, and an input box would be
+ * asking somebody to decide something they have no reason to have an opinion
+ * about. What they have is what they won.
+ *
+ * Applied to a transfer picked up as well as one just opened, which is the
+ * whole reason this is its own step. It filled in only the fresh one, and
+ * anybody who had started a withdrawal before — closed the tab, hit an error,
+ * came back — resumed one carrying no amount and was refused by the guard that
+ * exists to stop a payment going out for nothing.
+ */
+async function amounted(
+  transfer: Transfer,
+  address: string,
+  assetContract: string,
+): Promise<Transfer> {
+  if (transfer.amountIn !== undefined) {
+    return transfer;
+  }
 
-    The anchor takes whatever arrives and names no figure of its own, so the
-    amount has to come from somewhere and an input box would be asking a person
-    to decide something they have no reason to have an opinion about. What they
-    have is what they won.
-  */
   const balance = await balanceOf(assetContract, address);
 
   if (balance === null || Number(balance) <= 0) {
     throw new Error("there is nothing in this wallet to cash out");
   }
 
-  return { ...opened, amountIn: balance };
+  return { ...transfer, amountIn: balance };
 }
 
 /**
@@ -441,11 +460,14 @@ async function open_(
  */
 function Body({
   stage,
+  code,
   onBegin,
   onSend,
   onRetry,
 }: {
   stage: Stage;
+  /** What the asset is called, so the button can name what it moves. */
+  code: string;
   onBegin: () => void;
   onSend: () => void;
   onRetry: () => void;
@@ -503,13 +525,16 @@ function Body({
   if (awaitingTransfer(transfer.status)) {
     return (
       <div className="grid gap-4">
-        <p className="text-[0.9375rem] leading-relaxed text-ink">
-          {anchorReady(transfer)}
-        </p>
+        <p className="text-[0.9375rem] leading-relaxed text-ink">{anchorReady(transfer)}</p>
 
         <div>
+          {/* The button names the amount and the asset, because that is what
+              pressing it moves and it cannot be taken back. "Send it" made
+              somebody read three sentences up to find out what "it" was. */}
           <Button disabled={stage.at === "sending"} onClick={onSend}>
-            {stage.at === "sending" ? "Signing" : "Send it"}
+            {stage.at === "sending"
+              ? "Signing"
+              : `Send ${transfer.amountIn ?? ""} ${code}`.replace(/\s+/g, " ").trim()}
           </Button>
         </div>
       </div>
@@ -540,14 +565,19 @@ function Body({
   );
 }
 
-/** The amount and where it is going, said before somebody signs it away. */
+/**
+ * What is about to happen, said before somebody signs it away.
+ *
+ * The anchor's own figure for what will be paid out when it has one, and
+ * nothing invented when it does not: a rate shown here that the anchor did not
+ * promise would be this page making up a number on a screen about money.
+ */
 function anchorReady(transfer: Transfer): string {
-  const amount = transfer.amountIn ?? "";
   const out = transfer.amountOut;
 
   return out === undefined
-    ? `They are ready. Sending ${amount} finishes it.`
-    : `They are ready. Sending ${amount} pays out ${out}.`;
+    ? "They are ready. Sending it finishes the withdrawal."
+    : `They are ready. Sending it pays out ${out}.`;
 }
 
 /* The standard's own statuses, in the words somebody waiting would use. Only
