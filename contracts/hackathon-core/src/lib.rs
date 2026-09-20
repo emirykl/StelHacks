@@ -28,10 +28,11 @@ mod vault;
 
 pub use constitution::{
     total_prize_amount, validate_prize_tiers, validate_tie_break, Constitution, Criterion,
-    Deadline, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode, PrizeTier,
-    ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy, TieBreakRule, Track,
-    VotePolicy, CONSTITUTION_VERSION, MAX_CRITERION_SCORE, MAX_SETTLEMENT_SAFETY_WINDOW,
-    MAX_TEAM_SIZE, MIN_TEAM_SIZE, VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
+    Deadline, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode, PlatformFee,
+    PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy, TieBreakRule,
+    Track, VotePolicy, CONSTITUTION_VERSION, FEE_TOTAL_BPS, MAX_CRITERION_SCORE,
+    MAX_PLATFORM_FEE_BPS, MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE, MIN_TEAM_SIZE,
+    VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
 };
 pub use contract::{HackathonCore, HackathonCoreClient};
 pub use errors::Error;

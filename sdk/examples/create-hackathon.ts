@@ -66,7 +66,7 @@ const judges = [Keypair.random(), Keypair.random(), Keypair.random()].map((judge
 }));
 
 const constitution: Constitution = {
-  version: 1,
+  version: 2,
   metadata_hash: Buffer.alloc(32, 7),
   // The native lumen wrapped as a contract token, so the vault holds something
   // real without an issuer to set up first.
@@ -91,6 +91,11 @@ const constitution: Constitution = {
     { track: "payments", rank: 2, amount: 3_000n },
     { track: "defi", rank: 1, amount: 2_000n },
   ],
+  // A community event, so nothing is charged. The collector is still named,
+  // because the field is unconditional: a rate of zero is a rate, and a reader
+  // should not have to check one field to know whether another one means
+  // anything.
+  platform_fee: { collector: organizer, bps: 0 },
   tie_break: [
     { tag: "JudgeScore", values: undefined },
     { tag: "SubmissionOrder", values: undefined },

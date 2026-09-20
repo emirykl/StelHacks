@@ -105,6 +105,10 @@ pub enum DataKey {
     /// How many of a position's shares are settled, so a position can be closed
     /// without walking the team on every payment.
     ShareCount(Symbol, u32),
+    /// The platform's cut, once it has left the vault. Its own key rather than
+    /// a field on the state, because it is settled by the same kind of call as a
+    /// prize and answers the same question: has this money already moved.
+    PlatformFeeSettled,
     /// A track's move to award nothing.
     NoAward(Symbol),
     /// One judge's signature on that move.
@@ -565,6 +569,16 @@ pub fn is_paid(env: &Env, track: &Symbol, rank: u32) -> bool {
 
 pub fn mark_paid(env: &Env, track: &Symbol, rank: u32) {
     let key = DataKey::Paid(track.clone(), rank);
+    env.storage().persistent().set(&key, &true);
+    touch_entry(env, &key);
+}
+
+pub fn is_platform_fee_settled(env: &Env) -> bool {
+    env.storage().persistent().has(&DataKey::PlatformFeeSettled)
+}
+
+pub fn mark_platform_fee_settled(env: &Env) {
+    let key = DataKey::PlatformFeeSettled;
     env.storage().persistent().set(&key, &true);
     touch_entry(env, &key);
 }

@@ -1175,6 +1175,58 @@ impl HackathonCore {
         Ok(share)
     }
 
+    /// Sends the platform its cut, once.
+    ///
+    /// A call of its own rather than a slice taken off each prize, because the
+    /// fee is charged on top of the table and never out of it: a winner is paid
+    /// the number their position announced. Taking it here also means the fee
+    /// cannot fail a prize payment. If the collector's account is unprepared for
+    /// the asset, this call fails and every winner is still paid.
+    ///
+    /// Anyone may call it, like the prize payments beside it, and for the same
+    /// reason. The amount, the recipient and the rate were all frozen at the
+    /// lock, so there is nothing left for anybody to decide and making it the
+    /// organizer's call would only give them the power to sit on it. The
+    /// platform sitting on it is no better: an unsettled fee holds a balance in
+    /// a vault that is supposed to empty.
+    ///
+    /// A zero fee is settled rather than refused. The vault will not move zero,
+    /// so nothing is transferred, but the event is published and the marker is
+    /// written, which is what makes a free event distinguishable from one whose
+    /// fee is still outstanding.
+    pub fn settle_platform_fee(env: Env) -> Result<i128, Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+        if state.settlement_paused {
+            return Err(Error::SettlementPaused);
+        }
+
+        // Reusing the prize error rather than adding a case. The spec caps an
+        // error enum at fifty and this contract is at forty eight; a distinct
+        // name for "this exact payment has already happened" is not worth one of
+        // the two remaining slots when the existing one says precisely that.
+        if storage::is_platform_fee_settled(&env) {
+            return Err(Error::PrizeAlreadyPaid);
+        }
+
+        let constitution = storage::load_constitution(&env)?;
+        let amount = constitution.platform_fee_amount()?;
+        let collector = constitution.platform_fee.collector.clone();
+
+        storage::mark_platform_fee_settled(&env);
+
+        if amount > 0 {
+            let vault = storage::load_vault(&env)?;
+            VaultClient::new(&env, &vault).pay(&collector, &amount);
+        }
+
+        events::platform_fee_settled(&env, &collector, amount, constitution.platform_fee.bps);
+
+        Ok(amount)
+    }
+
     /// What one member is owed from a position, refusing anything already
     /// settled.
     ///
@@ -1392,6 +1444,12 @@ impl HackathonCore {
     /// paid to a winner, returned after a no award, or swept once the claim
     /// period ran out. A hackathon that closed with money still owed would be
     /// exactly the outcome the proof page exists to make impossible.
+    ///
+    /// The platform's cut is one of the things owed. Letting an event close
+    /// without it would leave the fee in a vault nothing can reach afterwards,
+    /// and would make the platform the one party in this system whose money can
+    /// be stranded by finishing the event correctly. It is checked last, so the
+    /// failure a caller sees names the missing prize when both are outstanding.
     pub fn complete(env: Env) -> Result<(), Error> {
         let state = storage::load_state(&env)?;
         if state.phase != Phase::Settlement {
@@ -1403,6 +1461,10 @@ impl HackathonCore {
             if !storage::is_paid(&env, &tier.track, tier.rank) {
                 return Err(Error::SettlementIncomplete);
             }
+        }
+
+        if !storage::is_platform_fee_settled(&env) {
+            return Err(Error::SettlementIncomplete);
         }
 
         storage::save_state(&env, &state.advance(env.ledger().timestamp())?);
@@ -1780,9 +1842,30 @@ impl HackathonCore {
         storage::save_membership(env, who, &teams);
     }
 
-    /// What the prize table adds up to.
+    /// What has to be in the vault before the hackathon may open: the prize
+    /// table plus the platform's cut.
     pub fn required_funding(env: Env) -> Result<i128, Error> {
         storage::load_constitution(&env)?.required_funding()
+    }
+
+    /// What the prize table on its own adds up to.
+    ///
+    /// Separate from the line above now that a fee sits between them, so a page
+    /// showing "the prize" and a page showing "what the organizer deposits" read
+    /// two numbers rather than one number and a subtraction somebody has to know
+    /// to perform.
+    pub fn prize_total(env: Env) -> Result<i128, Error> {
+        storage::load_constitution(&env)?.prize_total()
+    }
+
+    /// What the platform is owed for this event, at the rate frozen at the lock.
+    pub fn platform_fee(env: Env) -> Result<i128, Error> {
+        storage::load_constitution(&env)?.platform_fee_amount()
+    }
+
+    /// Whether that cut has left the vault.
+    pub fn is_platform_fee_settled(env: Env) -> bool {
+        storage::is_platform_fee_settled(&env)
     }
 
     /// What the vault actually holds.

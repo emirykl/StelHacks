@@ -22,6 +22,7 @@ export const JUDGES = [
   "GCZYAVTGEEWBFJNBFNPWOYNFPBA4C5O7YFYVZXUHWLKXZCV4LCAJH2QC",
 ];
 export const VOTER = "GDWL4D6IKDN4OQIA5PISXXN7TCT3Q7S45SXAKHHEONCUCHDHV2CXUVJ4";
+export const FEE_COLLECTOR = "GAMX62ZD4FWIKMWGVPEDR6WNL2TYTPQMO2ZJEAZUAON7VCZ5G2GWDF7W";
 
 const criteria = () => [
   { id: "technical", weight_bps: 6_000 },
@@ -30,7 +31,7 @@ const criteria = () => [
 
 export function canonicalConstitution(): Constitution {
   return {
-    version: 1,
+    version: 2,
     metadata_hash: Buffer.alloc(32, 7),
     prize_asset: PRIZE_ASSET,
     tracks: [
@@ -53,6 +54,7 @@ export function canonicalConstitution(): Constitution {
       { track: "payments", rank: 2, amount: 3_000n },
       { track: "defi", rank: 1, amount: 2_000n },
     ],
+    platform_fee: { collector: FEE_COLLECTOR, bps: 500 },
     tie_break: [
       { tag: "JudgeScore", values: undefined },
       { tag: "SubmissionOrder", values: undefined },

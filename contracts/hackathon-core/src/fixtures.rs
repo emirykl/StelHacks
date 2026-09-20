@@ -10,8 +10,8 @@ use soroban_sdk::{symbol_short, vec, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::constitution::{
     Constitution, Criterion, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode,
-    PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy, TieBreakRule,
-    Track, VotePolicy, CONSTITUTION_VERSION,
+    PlatformFee, PrizeTier, ProjectVisibility, RefundRoute, Schedule, SettlementMode, TeamPolicy,
+    TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION,
 };
 use crate::scorecard::{CriterionScore, Scorecard};
 use crate::submission::{SubmissionMetadata, SubmissionRequirements};
@@ -32,6 +32,8 @@ pub const CANONICAL_JUDGES: [&str; 3] = [
     "GD5UICFSMKGZAEP67EPBIXVENKEUXSUWT7RUT27YH4HHYVGRQURDMVXL",
     "GCZYAVTGEEWBFJNBFNPWOYNFPBA4C5O7YFYVZXUHWLKXZCV4LCAJH2QC",
 ];
+pub const CANONICAL_FEE_COLLECTOR: &str =
+    "GAMX62ZD4FWIKMWGVPEDR6WNL2TYTPQMO2ZJEAZUAON7VCZ5G2GWDF7W";
 pub const CANONICAL_VOTER: &str = "GDWL4D6IKDN4OQIA5PISXXN7TCT3Q7S45SXAKHHEONCUCHDHV2CXUVJ4";
 
 /// A schedule with room between its deadlines, so a test that moves one by a
@@ -128,6 +130,10 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
                 amount: 2_000,
             },
         ],
+        platform_fee: PlatformFee {
+            collector: Address::generate(env),
+            bps: 500,
+        },
         tie_break: vec![env, TieBreakRule::JudgeScore, TieBreakRule::SubmissionOrder],
         discretion: DiscretionPolicy {
             disqualification_threshold: 2,
@@ -212,6 +218,10 @@ pub fn canonical_constitution(env: &Env) -> Constitution {
                 amount: 2_000,
             },
         ],
+        platform_fee: PlatformFee {
+            collector: Address::from_str(env, CANONICAL_FEE_COLLECTOR),
+            bps: 500,
+        },
         tie_break: vec![env, TieBreakRule::JudgeScore, TieBreakRule::SubmissionOrder],
         discretion: DiscretionPolicy {
             disqualification_threshold: 2,

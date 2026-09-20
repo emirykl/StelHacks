@@ -294,6 +294,24 @@ pub struct PrizePaid {
     pub amount: i128,
 }
 
+/// The platform took its cut.
+///
+/// Published even when the cut is zero, and that is the useful part. A community
+/// event that pays nothing and an event whose fee has not been settled yet are
+/// different states, and without an event for the first one an outside reader
+/// could only tell them apart by asking the contract. The whole product is built
+/// so that reading the log is enough.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlatformFeeSettled {
+    #[topic]
+    pub collector: Address,
+    /// What left the vault, at the prize asset's scale.
+    pub amount: i128,
+    /// The rate it was taken at, which was frozen with the rest of the rules.
+    pub bps: u32,
+}
+
 /// Settlement was held, or released again.
 ///
 /// The reason travels with the hold, because money stopping is the one thing a
@@ -524,6 +542,15 @@ pub fn prize_paid(env: &Env, to: &Address, track: &Symbol, rank: u32, team: u32,
         rank,
         team,
         amount,
+    }
+    .publish(env);
+}
+
+pub fn platform_fee_settled(env: &Env, collector: &Address, amount: i128, bps: u32) {
+    PlatformFeeSettled {
+        collector: collector.clone(),
+        amount,
+        bps,
     }
     .publish(env);
 }

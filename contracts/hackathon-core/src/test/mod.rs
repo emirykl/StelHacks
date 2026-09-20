@@ -80,9 +80,15 @@ impl Fixture {
         vault.create(&fixture.client.address, &asset);
         fixture.client.bind_vault(&vault.address);
 
+        // Asked for rather than written out. The prize table adds up to ten
+        // thousand and the pool has to cover the platform's cut on top of it,
+        // so a literal here would be a second copy of arithmetic the
+        // constitution already performs, and it would go stale the next time
+        // either number moves.
         let sponsor = Address::generate(&fixture.env);
-        StellarAssetClient::new(&fixture.env, &asset).mint(&sponsor, &10_000);
-        vault.deposit(&sponsor, &10_000);
+        let required = fixture.client.required_funding();
+        StellarAssetClient::new(&fixture.env, &asset).mint(&sponsor, &required);
+        vault.deposit(&sponsor, &required);
 
         fixture.client.publish();
 

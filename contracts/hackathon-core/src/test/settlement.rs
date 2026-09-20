@@ -375,7 +375,9 @@ fn the_winner_is_paid_from_the_vault() {
 
     assert_eq!(paid, 5_000);
     assert_eq!(settled.token.balance(&captain), 5_000);
-    assert_eq!(settled.vault.balance(), 5_000);
+    // Ten thousand of prizes and five hundred of fee went in; one prize came
+    // out. The fee is still sitting there, because it leaves by its own call.
+    assert_eq!(settled.vault.balance(), 5_500);
     assert!(settled.fixture.client.is_paid(&payments(), &1));
 }
 
@@ -918,6 +920,11 @@ mod closing {
         settled.fixture.env.ledger().set_timestamp(opened + claim);
 
         settled.fixture.client.sweep_unclaimed(&defi(), &1);
+
+        // The platform's cut is one of the things owed, so "everything" has to
+        // include it or these tests would be proving the vault empties while
+        // leaving the one payment they never made behind.
+        settled.fixture.client.settle_platform_fee();
     }
 
     /// A hackathon that closed with money still owed would be the outcome the
@@ -960,6 +967,7 @@ mod closing {
         settled.fixture.env.ledger().set_timestamp(opened + claim);
 
         settled.fixture.client.sweep_unclaimed(&defi(), &1);
+        settled.fixture.client.settle_platform_fee();
         settled.fixture.client.complete();
 
         assert_eq!(settled.fixture.client.phase(), Phase::Completed);
@@ -1033,7 +1041,7 @@ mod closing {
     #[test]
     fn the_vault_empties_exactly_once_the_hackathon_closes() {
         let settled = Settled::open();
-        assert_eq!(settled.vault.balance(), 10_000);
+        assert_eq!(settled.vault.balance(), 10_500);
 
         settled
             .fixture
@@ -1053,6 +1061,7 @@ mod closing {
         let opened = settled.fixture.client.state().settlement_opened_at;
         settled.fixture.env.ledger().set_timestamp(opened + claim);
         settled.fixture.client.sweep_unclaimed(&defi(), &1);
+        settled.fixture.client.settle_platform_fee();
 
         settled.fixture.client.complete();
 
@@ -1117,6 +1126,11 @@ mod conservation {
         settled.fixture.env.ledger().set_timestamp(opened + claim);
 
         settled.fixture.client.sweep_unclaimed(&defi(), &1);
+
+        // The platform's cut is one of the things owed, so "everything" has to
+        // include it or these tests would be proving the vault empties while
+        // leaving the one payment they never made behind.
+        settled.fixture.client.settle_platform_fee();
     }
 
     /// The invariant in full. Every unit deposited is either sitting in the
@@ -1129,14 +1143,21 @@ mod conservation {
         let first = settled.captain(settled.teams.get(0).unwrap());
         let second = settled.captain(settled.teams.get(1).unwrap());
 
-        let deposited = 10_000i128;
+        // Prizes plus the platform's cut, which is what the pool has to hold
+        // before the event may open and therefore what has to come back out.
+        let deposited = 10_500i128;
         assert_eq!(settled.vault.balance(), deposited);
 
         settle_everything(&settled);
 
+        // The collector counts on this side of the invariant like anybody else
+        // the rules send money to. Leaving it out would let the fee vanish and
+        // still let the sum balance.
+        let collector = settled.fixture.client.constitution().platform_fee.collector;
         let paid_out = settled.token.balance(&first)
             + settled.token.balance(&second)
-            + settled.token.balance(&organizer);
+            + settled.token.balance(&organizer)
+            + settled.token.balance(&collector);
 
         assert_eq!(paid_out, deposited);
         assert_eq!(settled.vault.balance(), deposited - paid_out);
@@ -1221,7 +1242,7 @@ mod conservation {
         let first = settled.captain(settled.teams.get(0).unwrap());
 
         top_up(&settled, 2_500);
-        assert_eq!(settled.vault.balance(), 12_500);
+        assert_eq!(settled.vault.balance(), 13_000);
 
         assert_eq!(
             settled
@@ -1231,7 +1252,7 @@ mod conservation {
             5_000
         );
         assert_eq!(settled.token.balance(&first), 5_000);
-        assert_eq!(settled.vault.balance(), 7_500);
+        assert_eq!(settled.vault.balance(), 8_000);
     }
 
     /// A pool larger than the prize table has nowhere to go, and the hackathon
@@ -1469,5 +1490,149 @@ mod shared_prizes {
             "the member who came keeps what they took"
         );
         assert!(settled.fixture.client.is_paid(&payments(), &1));
+    }
+}
+
+/// The platform's cut, which is the one payment in this system that goes to us.
+///
+/// It gets its own module because it is the piece most likely to be quietly
+/// wrong in our own favour, and because the promise it has to keep is stated on
+/// the landing page: the rules are frozen and nobody can change them afterwards,
+/// us included. A fee that could be applied from outside the constitution, taken
+/// out of a prize, or collected on an event that never ran would each break that
+/// sentence, so each has a test here.
+mod platform_fee {
+    use super::*;
+
+    fn defi() -> Symbol {
+        symbol_short!("defi")
+    }
+
+    /// Five percent of a ten thousand table, out of the vault and into the
+    /// collector, with every prize still worth exactly what it announced.
+    #[test]
+    fn the_cut_reaches_the_collector_and_no_prize_is_smaller_for_it() {
+        let settled = Settled::open();
+        let collector = settled.fixture.client.constitution().platform_fee.collector;
+        let captain = settled.captain(settled.teams.get(0).unwrap());
+
+        assert_eq!(settled.fixture.client.settle_platform_fee(), 500);
+        assert_eq!(settled.token.balance(&collector), 500);
+        assert!(settled.fixture.client.is_platform_fee_settled());
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .settle_prize(&payments(), &1, &settled.winner(&payments(), 1)),
+            5_000,
+            "the winner is paid the number their position announced"
+        );
+        assert_eq!(settled.token.balance(&captain), 5_000);
+    }
+
+    /// Charged on top of the table rather than out of it, which is the whole
+    /// argument for funding the fee before registration opens. Taking the cut
+    /// first has to leave every prize payable.
+    #[test]
+    fn taking_the_cut_first_still_leaves_every_prize_payable() {
+        let settled = Settled::open();
+
+        settled.fixture.client.settle_platform_fee();
+
+        assert_eq!(settled.vault.balance(), 10_000);
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
+
+        assert_eq!(
+            settled.vault.balance(),
+            2_000,
+            "the defi position, untouched"
+        );
+    }
+
+    #[test]
+    fn the_cut_cannot_be_taken_twice() {
+        let settled = Settled::open();
+        settled.fixture.client.settle_platform_fee();
+
+        assert_eq!(
+            settled.fixture.client.try_settle_platform_fee().err(),
+            Some(Ok(Error::PrizeAlreadyPaid))
+        );
+    }
+
+    /// Left unsettled it would sit in a vault nothing can reach once the event
+    /// closes, which would make the platform the one party whose money is
+    /// stranded by finishing correctly.
+    #[test]
+    fn a_hackathon_cannot_close_while_the_cut_is_still_owed() {
+        let settled = Settled::open();
+
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &2, &settled.winner(&payments(), 2));
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+        settled.fixture.client.sweep_unclaimed(&defi(), &1);
+
+        assert_eq!(
+            settled.fixture.client.try_complete().err(),
+            Some(Ok(Error::SettlementIncomplete))
+        );
+
+        settled.fixture.client.settle_platform_fee();
+        settled.fixture.client.complete();
+
+        assert_eq!(settled.fixture.client.phase(), Phase::Completed);
+    }
+
+    /// A hold stops every payment, and ours is not the exception. The window
+    /// exists to freeze the money after a bug is found, and a fee that walked
+    /// through it would be the platform taking its share of a result nobody is
+    /// sure about yet.
+    #[test]
+    fn a_hold_stops_the_cut_like_it_stops_a_prize() {
+        let settled = Settled::open();
+        let reason = BytesN::from_array(&settled.fixture.env, &[4u8; 32]);
+
+        settled.fixture.client.pause_settlement(&reason);
+        assert_eq!(
+            settled.fixture.client.try_settle_platform_fee().err(),
+            Some(Ok(Error::SettlementPaused))
+        );
+
+        settled.fixture.client.resume_settlement(&reason);
+        assert_eq!(settled.fixture.client.settle_platform_fee(), 500);
+    }
+
+    /// Settlement is the only phase it can be taken in, so a fee cannot be
+    /// collected from an event that has not finished producing a result.
+    #[test]
+    fn nothing_is_taken_before_settlement_opens() {
+        let settled = Settled::through_finalization();
+
+        assert_eq!(
+            settled.fixture.client.try_settle_platform_fee().err(),
+            Some(Ok(Error::WrongPhase))
+        );
     }
 }

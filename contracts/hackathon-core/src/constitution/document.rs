@@ -1,6 +1,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, Symbol, Vec};
 
 use crate::constitution::discretion::{DiscretionPolicy, RefundRoute};
+use crate::constitution::fee::PlatformFee;
 use crate::constitution::judging::JudgingMode;
 use crate::constitution::ranking::{validate_tie_break, TieBreakRule};
 use crate::constitution::schedule::{ExtensionPolicy, Schedule};
@@ -13,7 +14,11 @@ use crate::submission::SubmissionRequirements;
 
 /// The format version of the constitution, so a reader can tell which shape it
 /// is looking at once this structure has changed a few times.
-pub const CONSTITUTION_VERSION: u32 = 1;
+///
+/// Two since the platform fee joined the document. The bump is not decoration:
+/// every digest in `fixtures/` moved with it, and a client holding a version one
+/// constitution is holding one that never named a fee at all.
+pub const CONSTITUTION_VERSION: u32 = 2;
 
 /// A judge and the tracks they are responsible for.
 #[contracttype]
@@ -63,6 +68,8 @@ pub struct Constitution {
     pub teams: TeamPolicy,
     /// Payable positions per track.
     pub prize_tiers: Vec<PrizeTier>,
+    /// What the platform takes, charged on top of the table above.
+    pub platform_fee: PlatformFee,
     /// The chain that separates two projects on the same score.
     pub tie_break: Vec<TieBreakRule>,
     /// Every power the organizer keeps after the lock.
@@ -84,9 +91,32 @@ impl Constitution {
         self.vote.community_vote_enabled()
     }
 
-    /// The total the vault must hold before the hackathon can be published.
-    pub fn required_funding(&self) -> Result<i128, Error> {
+    /// What the prize table adds up to, which is what winners are owed.
+    ///
+    /// Kept apart from [`Self::required_funding`] now that the two differ. A
+    /// caller asking what the prizes come to and a caller asking what has to be
+    /// in the vault are asking different questions, and answering both from one
+    /// function is how a fee ends up quietly deducted from somebody's prize.
+    pub fn prize_total(&self) -> Result<i128, Error> {
         total_prize_amount(&self.prize_tiers)
+    }
+
+    /// What the platform is owed for this event.
+    pub fn platform_fee_amount(&self) -> Result<i128, Error> {
+        self.platform_fee.amount_on(self.prize_total()?)
+    }
+
+    /// The total the vault must hold before the hackathon can be published.
+    ///
+    /// Prizes plus the fee. The fee is funded before registration opens for the
+    /// same reason the prizes are: a pool that covers the prizes but not the fee
+    /// would reach settlement owing money it does not hold, and the only ways
+    /// out of that are taking it from a winner or never paying it. Both are
+    /// decided here instead, before anybody has signed up.
+    pub fn required_funding(&self) -> Result<i128, Error> {
+        self.prize_total()?
+            .checked_add(self.platform_fee_amount()?)
+            .ok_or(Error::ConstitutionInvalid)
     }
 
     /// Looks up a track by identifier.
@@ -137,6 +167,7 @@ impl Constitution {
         self.schedule.validate(self.community_vote_enabled())?;
 
         validate_prize_tiers(&self.prize_tiers)?;
+        self.platform_fee.validate()?;
         self.required_funding()?;
 
         for tier in self.prize_tiers.iter() {
@@ -237,8 +268,13 @@ mod test {
 
         assert_eq!(constitution.validate(), Ok(()));
         assert_eq!(constitution.judge_count(), 3);
-        assert_eq!(constitution.required_funding(), Ok(10_000));
         assert!(constitution.community_vote_enabled());
+
+        // The three numbers said apart, because the whole point of the fee
+        // being charged on top is that the first two of these are not equal.
+        assert_eq!(constitution.prize_total(), Ok(10_000));
+        assert_eq!(constitution.platform_fee_amount(), Ok(500));
+        assert_eq!(constitution.required_funding(), Ok(10_500));
     }
 
     #[test]

@@ -842,9 +842,12 @@ mod cancellation {
         let second = judge(&fixture, 1);
         fixture.client.approve_cancellation(&second);
 
-        assert_eq!(fixture.client.resolve_cancellation(), 10_000);
+        // The whole pool, the platform's cut included. A cancelled event was
+        // not carried, so there is nothing to charge for, and the fee goes back
+        // with the prizes rather than being kept for the trouble.
+        assert_eq!(fixture.client.resolve_cancellation(), 10_500);
         assert_eq!(fixture.client.phase(), Phase::Cancelled);
-        assert_eq!(token(&fixture).balance(&organizer), 10_000);
+        assert_eq!(token(&fixture).balance(&organizer), 10_500);
         assert_eq!(fixture.client.cancellation().approvals, SIGNATURES_NEEDED);
     }
 

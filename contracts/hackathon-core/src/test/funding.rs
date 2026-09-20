@@ -71,7 +71,9 @@ fn binding_a_vault_records_it_and_reports_an_empty_pool() {
 
     assert_eq!(fixture.core.client.vault(), fixture.vault.address);
     assert_eq!(fixture.core.client.funding(), 0);
-    assert_eq!(fixture.core.client.required_funding(), 10_000);
+    assert_eq!(fixture.core.client.prize_total(), 10_000);
+    assert_eq!(fixture.core.client.platform_fee(), 500);
+    assert_eq!(fixture.core.client.required_funding(), 10_500);
     assert!(!fixture.core.client.is_fully_funded());
 }
 
@@ -136,7 +138,7 @@ fn a_vault_cannot_be_swapped_once_bound() {
 #[test]
 fn an_underfunded_hackathon_cannot_open() {
     let fixture = Funded::bound();
-    fixture.deposit(9_999);
+    fixture.deposit(fixture.core.client.required_funding() - 1);
 
     assert_eq!(
         fixture.core.client.try_publish().err(),
@@ -145,10 +147,29 @@ fn an_underfunded_hackathon_cannot_open() {
     assert_eq!(fixture.core.client.phase(), Phase::Funding);
 }
 
+/// The prize table on its own is not the bar.
+///
+/// A pool covering every announced prize and nothing else would reach
+/// settlement owing the platform its cut and holding nothing to pay it with,
+/// and the only ways out of that are taking it from a winner or never paying
+/// it. The gate is moved here instead, before anybody has signed up, which is
+/// the same argument that put the prizes behind it in the first place.
+#[test]
+fn a_pool_covering_the_prizes_but_not_the_fee_cannot_open() {
+    let fixture = Funded::bound();
+    fixture.deposit(fixture.core.client.prize_total());
+
+    assert!(!fixture.core.client.is_fully_funded());
+    assert_eq!(
+        fixture.core.client.try_publish().err(),
+        Some(Ok(Error::VaultUnderfunded))
+    );
+}
+
 #[test]
 fn a_fully_funded_hackathon_opens() {
     let fixture = Funded::bound();
-    fixture.deposit(10_000);
+    fixture.deposit(fixture.core.client.required_funding());
 
     assert!(fixture.core.client.is_fully_funded());
     fixture.core.client.publish();
@@ -165,7 +186,7 @@ fn a_fully_funded_hackathon_opens() {
 #[test]
 fn opening_a_funded_hackathon_needs_no_signature_from_anyone() {
     let fixture = Funded::bound();
-    fixture.deposit(10_000);
+    fixture.deposit(fixture.core.client.required_funding());
 
     fixture.core.env.set_auths(&[]);
     fixture.core.client.publish();
@@ -176,7 +197,7 @@ fn opening_a_funded_hackathon_needs_no_signature_from_anyone() {
 #[test]
 fn a_hackathon_cannot_open_twice() {
     let fixture = Funded::bound();
-    fixture.deposit(10_000);
+    fixture.deposit(fixture.core.client.required_funding());
     fixture.core.client.publish();
 
     assert_eq!(
@@ -190,14 +211,14 @@ fn a_hackathon_cannot_open_twice() {
 #[test]
 fn the_pool_keeps_growing_after_the_hackathon_opens() {
     let fixture = Funded::bound();
-    fixture.deposit(10_000);
+    fixture.deposit(fixture.core.client.required_funding());
     fixture.core.client.publish();
 
     let sponsor = Address::generate(&fixture.core.env);
     fixture.mint.mint(&sponsor, &5_000);
     fixture.vault.deposit(&sponsor, &5_000);
 
-    assert_eq!(fixture.core.client.funding(), 15_000);
+    assert_eq!(fixture.core.client.funding(), 15_500);
 }
 
 /// A vault can only be bound while the hackathon is waiting for its prize.

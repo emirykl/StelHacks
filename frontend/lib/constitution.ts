@@ -62,9 +62,67 @@ export interface Draft {
     screeningClosesAt: number;
     judgingClosesAt: number;
   };
+  /**
+   * Which links a submission has to carry.
+   *
+   * Announced rather than enforced, and worth being precise about: the contract
+   * takes one link and a digest, and never reads these flags. They are a rule
+   * the organizer publishes before anybody enters, the submission form holds
+   * teams to, and screening is the place a breach is acted on.
+   */
+  requires: { repository: boolean; demoVideo: boolean; liveUrl: boolean };
   /** Whether one person may be on more than one team. */
   multiTeamAllowed: boolean;
   maxTeamSize: number;
+  /**
+   * Seconds to wait between the ranking and the first payment, zero for none.
+   *
+   * Asked rather than assumed. This was fixed at a day, which is a sensible
+   * default and was invisible: nothing in the form mentioned it, and the first
+   * an organizer heard of it was the contract refusing to open settlement a
+   * minute after they had finished judging.
+   */
+  settlementDelay: number;
+  /**
+   * What the platform takes, decided from the organizer's tier before the form
+   * opened and frozen into the document at the lock like everything else.
+   *
+   * Carried on the draft rather than read here, because this file has no
+   * session and the rate belongs to a person rather than to an event. A default
+   * would be the wrong shape twice over: it would quote somebody a price the
+   * server never agreed, and it would be the one number in this object that
+   * could be different from what was shown.
+   */
+  platformFee: PlatformFee;
+}
+
+/** Where the cut goes and how much of it there is. */
+export interface PlatformFee {
+  collector: string;
+  bps: number;
+}
+
+/**
+ * The fee this deployment can actually charge, or nothing when it cannot.
+ *
+ * Null is returned rather than a zero rate when a rate was asked for and no
+ * collector is configured, and the difference matters. Quietly falling back to
+ * charging nothing would be a deployment silently giving its revenue away and
+ * looking identical to one that meant to. The wizard refuses to create instead,
+ * which is loud, recoverable, and happens before anything is on chain.
+ *
+ * A rate of zero needs no collector, but the field is not optional in the
+ * document, so the organizer's own address stands in. Nothing is ever sent to
+ * it: the contract only pays when the rate is above zero.
+ */
+export function feeFor(bps: number, organizer: string): PlatformFee | null {
+  const collector = process.env["NEXT_PUBLIC_PLATFORM_FEE_COLLECTOR"];
+
+  if (bps === 0) {
+    return { collector: collector ?? organizer, bps: 0 };
+  }
+
+  return collector === undefined || collector.length !== 56 ? null : { collector, bps };
 }
 
 /**
@@ -116,7 +174,9 @@ export async function createArgs(organizer: string, draft: Draft) {
   const encoder = await spec();
 
   const constitution = {
-    version: 1,
+    /* Two since the platform fee joined the document. A contract built against
+       version one does not have the field and will refuse this. */
+    version: 2,
     metadata_hash: Buffer.from(draft.metadataHash),
     prize_asset: draft.prizeAsset,
 
@@ -155,9 +215,9 @@ export async function createArgs(organizer: string, draft: Draft) {
     visibility: 0,
 
     submission_requirements: {
-      repository_required: true,
-      demo_video_required: false,
-      live_url_required: false,
+      repository_required: draft.requires.repository,
+      demo_video_required: draft.requires.demoVideo,
+      live_url_required: draft.requires.liveUrl,
     },
 
     teams: {
@@ -172,6 +232,17 @@ export async function createArgs(organizer: string, draft: Draft) {
         amount: toSmallestUnit(prize.amount),
       })),
     ),
+
+    /* Charged on top of the table above, never out of it: the vault has to hold
+       the prizes plus this before registration opens, and a winner is paid the
+       number their position announced. It goes into the same hashed document as
+       the rubric so that a participant reading the rules before they register
+       reads our cut too, and so that we cannot change it afterwards any more
+       than the organizer can change the prizes. */
+    platform_fee: {
+      collector: draft.platformFee.collector,
+      bps: draft.platformFee.bps,
+    },
 
     /* The chain the contract walks when two projects tie. Highest single
        criterion first, then who submitted earlier, which is the only tie break
@@ -188,9 +259,15 @@ export async function createArgs(organizer: string, draft: Draft) {
       disqualification_threshold: 1,
       appeal_window: BigInt(86_400),
 
-      /* A day between the ranking and the first payment, so a mistake can be
-         caught while the money is still in the vault. */
-      settlement: { tag: "SafetyWindow", values: [BigInt(86_400)] },
+      /* A gap between the ranking and the first payment, so a mistake can be
+         caught while the money is still in the vault. Zero is a real answer and
+         the one a test event wants, so it becomes `Immediate` rather than a
+         safety window of no seconds: the contract has a tag for owing no wait
+         and a window that elapses instantly is a worse way to say it. */
+      settlement:
+        draft.settlementDelay > 0
+          ? { tag: "SafetyWindow", values: [BigInt(draft.settlementDelay)] }
+          : { tag: "Immediate", values: undefined },
 
       /* Thirty days to claim, then whatever is unclaimed goes back rather than
          sitting in a contract nobody can empty. */
@@ -229,4 +306,23 @@ export async function createArgs(organizer: string, draft: Draft) {
   };
 
   return encoder.funcArgsToScVals("create", { organizer, constitution });
+}
+
+/**
+ * The same document, for replacing the rules of a hackathon that already exists.
+ *
+ * `configure` takes the constitution and nothing else: the contract already
+ * knows who the organizer is and checks the signature against that rather than
+ * against anything the caller passes. It also refuses once the rules are
+ * locked, which is what keeps this from being a way around the freeze.
+ *
+ * Built by calling `createArgs` and dropping the organizer rather than by
+ * assembling the document a second time. Two copies of a sixteen field
+ * constitution is two places for a field to be forgotten, and the one that is
+ * only reachable from the edit path is the one nobody would notice.
+ */
+export async function configureArgs(organizer: string, draft: Draft) {
+  const [, constitution] = await createArgs(organizer, draft);
+
+  return [constitution];
 }

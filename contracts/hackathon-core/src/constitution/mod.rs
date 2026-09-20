@@ -6,6 +6,7 @@
 
 mod discretion;
 mod document;
+mod fee;
 mod judging;
 mod ranking;
 mod schedule;
@@ -16,6 +17,7 @@ mod voting;
 
 pub use discretion::{DiscretionPolicy, RefundRoute, SettlementMode, MAX_SETTLEMENT_SAFETY_WINDOW};
 pub use document::{Constitution, JudgeAssignment, CONSTITUTION_VERSION};
+pub use fee::{PlatformFee, FEE_TOTAL_BPS, MAX_PLATFORM_FEE_BPS};
 pub use judging::JudgingMode;
 pub use ranking::{validate_tie_break, TieBreakRule};
 pub use schedule::{Deadline, ExtensionPolicy, Schedule};
