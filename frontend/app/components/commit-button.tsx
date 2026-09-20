@@ -6,12 +6,17 @@ import type { ReactNode } from "react";
 /**
  * The button for a press somebody has to mean.
  *
- * There are two of those in this product and only two: signing in, and
- * entering a hackathon. Everything else is a link, a filter or a step in a
- * flow, and all of those use the flat capsule in `primitives.tsx`.
+ * There are three of those in this product and only three: signing in,
+ * entering a hackathon, and locking a hackathon's rules. Everything else is a
+ * link, a filter or a step in a flow, and all of those use the flat capsule in
+ * `primitives.tsx`.
  *
- * That restraint is the whole point of using it at all. A rim light that
- * follows the cursor is decoration, and decoration spent everywhere stops
+ * The third was added last and is the one that most deserved it: locking hashes
+ * the rules and freezes them, and afterwards the only thing anybody can do is
+ * cancel the event.
+ *
+ * That restraint is the whole point of using it at all. A turning rim light is
+ * decoration, and decoration spent everywhere stops
  * being noticed and starts being cost: this one carries a WebGL context, a
  * shader and an animation frame apiece. Spent on the two presses that matter,
  * it says which two those are without a word.
@@ -74,25 +79,48 @@ export function CommitButton({
       textColor={SIGNAL}
       lineColor="#ffffff"
       baseColor={BEVEL}
-      /* All three pushed well past the defaults, which are tuned for a white
-         line on a dark page. Against paper the same line has almost nothing to
-         be brighter than, so it has to be wider, stronger and drawn over more
-         of the rim before it reads as light rather than as an artefact. */
-      intensity={2.2}
-      thickness={2.4}
+      /* Pushed past the defaults, which are tuned for a white line on a dark
+         page. Against paper the same line has almost nothing to be brighter
+         than, so it has to be stronger and drawn over more of the rim before it
+         reads as light rather than as an artefact.
+
+         Thickness is the one that had to come back down. At 2.4 the line was
+         wider than the curve it was following, so at the two ends of the
+         capsule — where the rim turns through half a circle in a few pixels —
+         the glow piled up outside the edge and read as a blister growing off
+         the side of the button whenever the light swept past. */
+      intensity={1.2}
+      thickness={1.4}
       shineSize={26}
       shineFade={34}
       blur={0}
+      /*
+        It turns on its own, and answers the cursor when one arrives.
+
+        Two behaviours rather than one, and the second is what makes the first
+        worth having. Turning, it is the only moving thing on a still page and
+        the eye finds it without being asked. Reaching it, the light leaves the
+        sweep and comes to the edge the pointer is on, which is the button
+        replying to a particular person rather than performing at the room.
+
+        Both halves have been wrong here at some point. Steering alone meant the
+        effect was only ever seen by somebody already reaching for the button,
+        which is the one person who does not need to be told where it is. And
+        turning alone, with the sweep merely stopping under the cursor, left
+        hovering it feeling like the button had died rather than answered.
+      */
+      autoAnimate
       followMouse
       /* Further than the default. On paper the shine is the only thing that
-         says this button is different from a black rectangle, so it should be
-         lit by the time somebody is deciding whether to press it rather than
-         once they have already arrived. */
+         says this button is different from a black rectangle, so the light
+         should be leaning toward somebody by the time they are deciding
+         whether to press it rather than once they have already arrived. */
       proximity={340}
-      /* Never on its own. A button that glows while nobody is pointing at it is
-         motion the reader did not ask for, and this product turns that off
-         everywhere else. The bevel is what carries it at rest. */
-      autoAnimate={false}
+      /* A full turn in about eight seconds. The streak is symmetric, so the rim
+         looks the same twice per turn and the felt rhythm is half of that: slow
+         enough to read as a light moving over a surface rather than as
+         something spinning for attention. */
+      speed={0.8}
       disabled={disabled}
       {...(href === undefined ? { type } : { href })}
       {...(onClick === undefined ? {} : { onClick })}

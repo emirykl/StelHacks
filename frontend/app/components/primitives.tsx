@@ -29,7 +29,7 @@ export function Button({
   children,
   ...rest
 }: ComponentProps<"button"> & {
-  intent?: "primary" | "quiet" | "ghost";
+  intent?: "primary" | "quiet" | "ghost" | "danger";
   size?: "sm" | "md";
 }) {
   return (
@@ -54,7 +54,7 @@ export function ButtonLink({
   children,
   ...rest
 }: ComponentProps<typeof Link> & {
-  intent?: "primary" | "quiet" | "ghost";
+  intent?: "primary" | "quiet" | "ghost" | "danger";
   size?: "sm" | "md";
 }) {
   return (
@@ -64,7 +64,10 @@ export function ButtonLink({
   );
 }
 
-function base(intent: "primary" | "quiet" | "ghost", size: "sm" | "md"): string {
+function base(
+  intent: "primary" | "quiet" | "ghost" | "danger",
+  size: "sm" | "md",
+): string {
   const shape =
     size === "sm"
       ? "h-9 px-4 text-[0.8125rem] gap-1.5"
@@ -74,6 +77,19 @@ function base(intent: "primary" | "quiet" | "ghost", size: "sm" | "md"): string 
     primary: "bg-ink text-paper hover:bg-ink/90",
     quiet: "bg-paper-sunk text-ink hover:bg-rule/60 ring-1 ring-inset ring-rule",
     ghost: "text-ink-soft hover:text-ink hover:bg-paper-sunk",
+    /* Undoing something, and the only intent allowed to spend the broken
+       colour. Signing out and disconnecting a wallet are both a person taking
+       something away from themselves, and they read as the same gesture
+       wherever they appear because they are drawn from here.
+
+       Outlined rather than bare. Set as loose red text it read as a warning
+       somebody had written on the page rather than as a control, and its
+       padding pushed the words out of line with everything above it, so the one
+       destructive thing on the page was also the only thing not on the grid.
+
+       Drawn from `danger` rather than `broken`, which is the red that reports a
+       failure. See the note on the token. */
+    danger: "text-danger ring-1 ring-inset ring-danger/35 hover:bg-danger/10 hover:ring-danger/70",
   }[intent];
 
   return join(

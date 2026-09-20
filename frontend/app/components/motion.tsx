@@ -85,38 +85,3 @@ export function Pop({
     </AnimatePresence>
   );
 }
-
-/**
- * One step of a short flow replacing the one before it.
- *
- * The outgoing step leaves to the left and the incoming one arrives from the
- * right, so a person who has moved forward can see that they did. `mode="wait"`
- * matters: run together, the two steps would overlap and the taller one would
- * push the page around while somebody was reading it.
- */
-export function Swap({
-  step,
-  className,
-  children,
-}: {
-  step: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  const still = useReducedMotion();
-
-  return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={step}
-        className={className}
-        initial={still ? { opacity: 0 } : { opacity: 0, x: 12 }}
-        animate={still ? { opacity: 1 } : { opacity: 1, x: 0 }}
-        exit={still ? { opacity: 0 } : { opacity: 0, x: -12 }}
-        transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
-  );
-}

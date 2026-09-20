@@ -15,7 +15,7 @@ import "./specular-button.css";
  * allowed to be decoration, and it is spent on the two buttons that ask
  * somebody to commit to something: signing in, and entering a hackathon.
  *
- * Three changes from the published source, and no others.
+ * Five changes from the published source, and no others.
  *
  * It can render as a link. Signing in and registering are navigations, and a
  * `<button>` that calls `router.push` is a link that middle click, open in new
@@ -23,14 +23,29 @@ import "./specular-button.css";
  *
  * It is typed, because this project is.
  *
- * And the loop stops when the tab is hidden. The original runs a
+ * The loop stops when the tab is hidden. The original runs a
  * `requestAnimationFrame` for the life of the page, which on a header that
  * appears on every screen is a shader running behind whatever else somebody is
  * doing. `document.hidden` is enough to stop that without touching the effect
  * anybody actually sees.
+ *
+ * The sweep holds still for anybody who has asked their system to stop
+ * animating things. The original turns regardless, which on a button that
+ * turns for the life of the page is exactly the motion that setting exists to
+ * refuse.
+ *
+ * And one line of the shader, marked where it happens: the highlight is kept
+ * inside the edge instead of being allowed to spill past it.
  */
 
 const PAD = 20;
+
+const TURN = Math.PI * 2;
+
+/** An angle in [0, 2π), whatever sign it arrived with. */
+function wrap(angle: number): number {
+  return ((angle % TURN) + TURN) % TURN;
+}
 
 const VERT = `#version 300 es
 in vec2 position;
@@ -75,8 +90,18 @@ void main() {
   float d = shapeSDF(p);
   vec2 L = vec2(cos(uAngle), sin(uAngle));
 
+  // Changed. Everything the shader draws is kept on the inside of the edge.
+  //
+  // Published, the base stroke and the highlight both spilled outward by about
+  // a pixel, which is invisible along a straight edge and not at the two ends
+  // of a capsule: there the rim turns through half a circle in a few pixels,
+  // the spill from every part of that turn lands in the same place outside it,
+  // and the button grew a pale ear on each end. Against the dark page this was
+  // drawn for, the spill was the colour of the ground and nobody saw it.
+  float inside = 1.0 - smoothstep(0.0, 1.2 * uPx, max(d, 0.0));
+
   // Dark base stroke hugging the edge for a sense of thickness
-  float base = (1.0 - smoothstep(0.0, uBaseWidth, abs(d))) * 0.45;
+  float base = (1.0 - smoothstep(0.0, uBaseWidth, abs(d))) * 0.45 * inside;
 
   // Symmetric specular: the edges facing toward/away from the light both
   // catch a streak. The angular window (size + fade) is measured with an
@@ -86,7 +111,7 @@ void main() {
   float rim = 1.0 - smoothstep(uShineSize - uShineFade, uShineSize + uShineFade + 1e-4, phi);
   float line = gaussianLine(d, uThickness);
   float edgeClamp = 1.0 - smoothstep(0.5 * uPx, 3.0 * uPx, abs(d));
-  float hi = line * rim * edgeClamp * uIntensity;
+  float hi = line * rim * edgeClamp * inside * uIntensity;
 
   vec3 col = uBaseColor * base + uLineColor * hi;
   float a = clamp(base + hi, 0.0, 1.0);
@@ -271,6 +296,12 @@ export function SpecularButton({
 
     window.addEventListener("pointermove", onPointerMove);
 
+    /* Read every frame rather than once, so the setting changing mid session
+       is honoured without a listener. A light that turns forever is motion
+       nobody asked for, and somebody who has said so should get the lit rim
+       and none of the turning. */
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)");
+
     let angle = 2.4;
     let idleAngle = 2.4;
     let bright = 0;
@@ -294,11 +325,26 @@ export function SpecularButton({
       last = now;
       const p = propsRef.current;
 
-      idleAngle += p.speed * dt;
+      if (!still.matches) {
+        idleAngle = wrap(idleAngle + p.speed * dt);
+      }
       const steer = p.followMouse && pointerAngle !== null && (!p.autoAnimate || proximityT > 0);
       const target = steer ? (pointerAngle as number) : idleAngle;
-      const diff = ((target - angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-      angle += diff * (1 - Math.exp(-dt * 7));
+
+      /*
+        Shortest way round, and it has to be computed on wrapped angles.
+
+        The published source kept neither: `idleAngle` grew for as long as the
+        page was open and `angle` followed it up. The wrap below relies on
+        JavaScript's `%`, which keeps the sign of the dividend, so once the two
+        were more than a turn apart it returned a difference outside the half
+        turn it is supposed to and the rim raced round instead of settling. On a
+        button sitting on the page it took a few minutes to show up, which is
+        why it looked like it happened for no reason.
+      */
+      angle = wrap(angle);
+      const diff = wrap(target - angle + Math.PI) - Math.PI;
+      angle = wrap(angle + diff * (1 - Math.exp(-dt * 7)));
 
       /* Shine fades in with pointer proximity unless autoAnimate keeps it on */
       const brightTarget = p.autoAnimate ? 1 : proximityT;

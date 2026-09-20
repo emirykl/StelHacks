@@ -82,13 +82,13 @@ export function CheckableProofStrip({
               <Settled onAgain={() => void run()} />
             ) : (
               <>
-                <p className="text-[0.8125rem] text-night-ink-soft">{said(stage)}</p>
+                <p className="text-[0.8125rem] text-ink-soft">{said(stage)}</p>
 
                 <button
                   type="button"
                   onClick={() => void run()}
                   disabled={stage.at === "asking"}
-                  className="h-8 shrink-0 rounded-full bg-night-ink px-4 text-[0.8125rem] font-semibold text-night transition-colors duration-150 ease-settle hover:bg-night-ink/85 active:translate-y-px disabled:opacity-50"
+                  className="h-8 shrink-0 rounded-full px-4 text-[0.8125rem] text-ink ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:bg-paper-sunk active:translate-y-px disabled:opacity-50"
                 >
                   {stage.at === "asking"
                     ? "Reading the contract"
@@ -167,7 +167,7 @@ function Tick() {
 function said(stage: Stage): string {
   switch (stage.at) {
     case "idle":
-      return "Our word for it so far. Read them from the contract instead:";
+      return "So far these are ours to claim. Ask the contract yourself:";
     case "asking":
       return "Reading the contract.";
     case "unreachable":

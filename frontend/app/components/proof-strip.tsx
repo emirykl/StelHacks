@@ -1,10 +1,18 @@
 import type { ReactNode } from "react";
 
 /**
- * The strip pinned to the top of every hackathon page.
+ * The offer to check this page, at the foot of it.
  *
- * This is the product in one line. Four things the chain holds that anybody can
- * check without an account, and the one control that checks them.
+ * Four things the chain holds that anybody can verify without an account, and
+ * the one control that verifies them.
+ *
+ * It used to be a black band across the top, above the name of the hackathon.
+ * That put the product's argument before the thing the argument is about: a
+ * reader arriving to see a hackathon met four claims in a vocabulary they had
+ * no reason to have yet, in the heaviest treatment on the page. Nobody has to
+ * check anything, and a control nobody has to use should not be the first thing
+ * they meet or the loudest. It reads better as the last word: here is what the
+ * page said, and here is how to confirm none of it came from us.
  *
  * It has been rewritten three times and the arc is worth keeping, because each
  * version was a reasonable answer to the last one's problem.
@@ -61,11 +69,8 @@ export function ProofStrip({ proofs, action }: { proofs: Proof[]; action?: React
   const broken = proofs.filter((proof) => proof.standing === "broken");
 
   return (
-    <section
-      aria-label="What the chain says"
-      className="grain relative overflow-hidden bg-night text-night-ink"
-    >
-      <div className="mx-auto flex w-full max-w-[96rem] flex-wrap items-center justify-between gap-x-8 gap-y-3 px-6 py-3.5">
+    <section aria-label="What the chain says">
+      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
         <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {proofs.map((proof) => (
             <li
@@ -73,7 +78,7 @@ export function ProofStrip({ proofs, action }: { proofs: Proof[]; action?: React
               /* The value the claim rests on, reachable without taking a line
                  of its own. The full version is on the Details tab. */
               title={proof.value}
-              className="flex items-center gap-2 text-[0.875rem] text-night-ink-soft"
+              className="flex items-center gap-2 text-[0.875rem] text-ink-soft"
             >
               <Dot standing={proof.standing} />
               {proof.claim}
@@ -89,18 +94,17 @@ export function ProofStrip({ proofs, action }: { proofs: Proof[]; action?: React
           the page is lying needs to be told what the truth is, or the check has
           raised an alarm and left them nothing to act on. */}
       {broken.length > 0 && (
-        <div className="border-t border-broken/40 bg-broken/10 px-6 py-4">
-          <div className="mx-auto w-full max-w-[96rem]">
-            <p className="text-[0.875rem] font-semibold text-night-ink">
+        <div className="mt-5 border-t border-broken/40 bg-broken/5 px-4 py-4">
+          <div>
+            <p className="text-[0.875rem] font-semibold text-broken">
               The contract does not agree with this page.
             </p>
 
             <ul className="mt-3 grid gap-2">
               {broken.map((proof) => (
-                <li key={proof.key} className="text-[0.8125rem] text-night-ink-soft">
-                  <span className="font-semibold text-night-ink">{proof.claim}</span> — the
-                  contract says{" "}
-                  <span className="tabular break-all text-night-ink">{proof.found}</span>
+                <li key={proof.key} className="text-[0.8125rem] text-ink-soft">
+                  <span className="font-semibold text-ink">{proof.claim}</span> — the contract
+                  says <span className="tabular break-all text-ink">{proof.found}</span>
                 </li>
               ))}
             </ul>
@@ -120,7 +124,7 @@ export function ProofStrip({ proofs, action }: { proofs: Proof[]; action?: React
  */
 function Dot({ standing }: { standing: Standing }) {
   if (standing === "unchecked") {
-    return <span aria-hidden className="size-2 shrink-0 rounded-full ring-1 ring-night-ink-soft" />;
+    return <span aria-hidden className="size-2 shrink-0 rounded-full ring-1 ring-ink-faint" />;
   }
 
   return (
