@@ -33,9 +33,9 @@ pub struct Configured {
 }
 
 /// Someone gained or lost the right to review applications.
-///
-/// One event covers both directions, with the direction in the payload, so a
-/// client following an address sees its whole history under a single name.
+//
+// One event covers both directions, with the direction in the payload, so a
+// client following an address sees its whole history under a single name.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CollaboratorChanged {
@@ -45,10 +45,10 @@ pub struct CollaboratorChanged {
 }
 
 /// The rules stopped being editable.
-///
-/// The digest travels along because this is the value every later reader
-/// compares against, and an indexer holding this event never has to call the
-/// contract to learn what was locked.
+//
+// The digest travels along because this is the value every later reader
+// compares against, and an indexer holding this event never has to call the
+// contract to learn what was locked.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RulesLocked {
@@ -64,10 +64,10 @@ pub struct VaultBound {
 }
 
 /// The prize is fully funded and the event is open.
-///
-/// This is the moment the status strip a participant reads turns green, so the
-/// funded amount travels along and nobody has to cross reference two contracts
-/// to know the prize was real before anyone started building.
+//
+// This is the moment the status strip a participant reads turns green, so the
+// funded amount travels along and nobody has to cross reference two contracts
+// to know the prize was real before anyone started building.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Published {
@@ -84,9 +84,9 @@ pub struct Applied {
 }
 
 /// A request was decided.
-///
-/// The reason digest travels with a refusal, so a decision that keeps somebody
-/// out of a hackathon can never be a silent one.
+//
+// The reason digest travels with a refusal, so a decision that keeps somebody
+// out of a hackathon can never be a silent one.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApplicationDecided {
@@ -147,10 +147,10 @@ pub fn member_joined(env: &Env, member: &Address, team: u32) {
 }
 
 /// A project entered the hackathon, or an existing entry was revised.
-///
-/// The digest travels along because this is the value that gets pinned at the
-/// deadline, and an indexer holding this event can show a participant exactly
-/// what was frozen.
+//
+// The digest travels along because this is the value that gets pinned at the
+// deadline, and an indexer holding this event can show a participant exactly
+// what was frozen.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectSubmitted {
@@ -162,9 +162,9 @@ pub struct ProjectSubmitted {
 }
 
 /// An entry was ruled out during screening.
-///
-/// The project keeps its page. What changes is its standing, and the reason has
-/// to travel with the decision.
+//
+// The project keeps its page. What changes is its standing, and the reason has
+// to travel with the decision.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionInvalidated {
@@ -181,13 +181,13 @@ pub struct PhaseAdvanced {
 }
 
 /// One deadline moved, inside the allowance the rules announced.
-///
-/// This event is the entire difference between the schedule that was hashed and
-/// the schedule in force, so an indexer holding the constitution and this
-/// stream can show both and say which is which. The reason travels with it
-/// because time is the resource participants plan around, and a window that
-/// moved without a stated cause is indistinguishable from one that moved to
-/// suit somebody.
+//
+// This event is the entire difference between the schedule that was hashed and
+// the schedule in force, so an indexer holding the constitution and this
+// stream can show both and say which is which. The reason travels with it
+// because time is the resource participants plan around, and a window that
+// moved without a stated cause is indistinguishable from one that moved to
+// suit somebody.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeadlineExtended {
@@ -216,9 +216,9 @@ pub fn deadline_extended(
 }
 
 /// A judge stepped away from one project.
-///
-/// Recorded rather than silent, because a judge quietly not scoring a project
-/// and a judge declaring a conflict look identical from outside otherwise.
+//
+// Recorded rather than silent, because a judge quietly not scoring a project
+// and a judge declaring a conflict look identical from outside otherwise.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct JudgeRecused {
@@ -253,16 +253,16 @@ pub struct BallotRootPublished {
 }
 
 /// One ballot was opened and counted.
-///
-/// The whole ballot in one event, because that is the unit the rules count: a
-/// wallet spends its power once, across up to three projects, and an event per
-/// project would let a reader who missed one conclude the voter spent less than
-/// they did.
-///
-/// Counted is not the same as credited. A choice naming a project that was
-/// ruled out in screening is carried here and adds nothing to that project,
-/// which is what lets a reader see the ballot as it was cast rather than as it
-/// landed.
+//
+// The whole ballot in one event, because that is the unit the rules count: a
+// wallet spends its power once, across up to three projects, and an event per
+// project would let a reader who missed one conclude the voter spent less than
+// they did.
+//
+// Counted is not the same as credited. A choice naming a project that was
+// ruled out in screening is carried here and adds nothing to that project,
+// which is what lets a reader see the ballot as it was cast rather than as it
+// landed.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BallotCounted {
@@ -303,12 +303,12 @@ pub struct PrizePaid {
 }
 
 /// The platform took its cut.
-///
-/// Published even when the cut is zero, and that is the useful part. A community
-/// event that pays nothing and an event whose fee has not been settled yet are
-/// different states, and without an event for the first one an outside reader
-/// could only tell them apart by asking the contract. The whole product is built
-/// so that reading the log is enough.
+//
+// Published even when the cut is zero, and that is the useful part. A community
+// event that pays nothing and an event whose fee has not been settled yet are
+// different states, and without an event for the first one an outside reader
+// could only tell them apart by asking the contract. The whole product is built
+// so that reading the log is enough.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeSettled {
@@ -321,9 +321,9 @@ pub struct PlatformFeeSettled {
 }
 
 /// Settlement was held, or released again.
-///
-/// The reason travels with the hold, because money stopping is the one thing a
-/// winner cannot investigate for themselves.
+//
+// The reason travels with the hold, because money stopping is the one thing a
+// winner cannot investigate for themselves.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettlementHeld {
@@ -332,10 +332,10 @@ pub struct SettlementHeld {
 }
 
 /// A track moved to award nothing, or that move was settled.
-///
-/// The reason travels with it and the signature count travels with it, because
-/// a prize that was announced and then not paid is the single thing a
-/// participant is most owed an explanation for.
+//
+// The reason travels with it and the signature count travels with it, because
+// a prize that was announced and then not paid is the single thing a
+// participant is most owed an explanation for.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NoAwardOpened {
@@ -404,10 +404,10 @@ pub struct CancellationApproved {
 }
 
 /// The hackathon stopped, and the pool went back along the declared route.
-///
-/// The returned amount travels with it because a cancellation is the one ending
-/// where nobody receives a prize, and the only question anybody has afterwards
-/// is where the money went.
+//
+// The returned amount travels with it because a cancellation is the one ending
+// where nobody receives a prize, and the only question anybody has afterwards
+// is where the money went.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HackathonCancelled {
@@ -443,11 +443,11 @@ pub fn hackathon_cancelled(env: &Env, reason: &BytesN<32>, approvals: u32, retur
 }
 
 /// A case was opened to remove an entry after screening had closed.
-///
-/// The reason travels with it from the first moment, before any judge has
-/// signed and before the team has answered, because the order matters: a
-/// removal that states its grounds only once it has already succeeded is not a
-/// process, it is an announcement.
+//
+// The reason travels with it from the first moment, before any judge has
+// signed and before the team has answered, because the order matters: a
+// removal that states its grounds only once it has already succeeded is not a
+// process, it is an announcement.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisqualificationOpened {
@@ -476,10 +476,10 @@ pub struct DisqualificationApproved {
 }
 
 /// The case was settled, whichever way it went.
-///
-/// A case that fell short of the threshold is published just as loudly as one
-/// that carried, so a team cleared by the process can point at the same record
-/// the accusation was made on.
+//
+// A case that fell short of the threshold is published just as loudly as one
+// that carried, so a team cleared by the process can point at the same record
+// the accusation was made on.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisqualificationResolved {
@@ -524,6 +524,68 @@ pub fn disqualification_resolved(env: &Env, team: u32, upheld: bool, approvals: 
     .publish(env);
 }
 
+/// Somebody outside the organizing team added to a prize.
+//
+// The sponsor is a topic because the wall of names is built by following one
+// address, and so is the track, because the page showing a position's worth
+// follows that. What a position is now worth travels in the payload as
+// `position_now`, so an indexer never has to add up the stream itself and can
+// never disagree with the contract about the total.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Sponsored {
+    #[topic]
+    pub sponsor: Address,
+    #[topic]
+    pub track: Symbol,
+    /// The position backed, or zero when the contribution was spread over
+    /// every position in the track. No real rank is zero, so the two cases
+    /// never collide.
+    pub rank: u32,
+    /// What was added to the prize.
+    pub amount: i128,
+    /// What the platform took on top, paid by the sponsor.
+    pub fee: i128,
+    /// The frozen tier plus every contribution to it so far, this one
+    /// included — or the whole track's, when `rank` is zero.
+    pub position_now: i128,
+    pub note: BytesN<32>,
+}
+
+/// A sponsor asked for a track of their own, and paid for it.
+//
+// Announced at the request rather than at the decision, so the organizer's
+// queue is something the indexer can build rather than something it has to
+// poll the contract for, and so a request that is never answered is still
+// visible as a request.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrackProposed {
+    #[topic]
+    pub sponsor: Address,
+    #[topic]
+    pub track: Symbol,
+    /// What the positions add up to.
+    pub total: i128,
+    pub fee: i128,
+    pub note: BytesN<32>,
+}
+
+/// The organizer answered.
+//
+// One event for both answers, with the answer in the payload, so a client
+// following a track sees its whole history under a single name. `returned` is
+// what went back to the sponsor, which is the whole of it on a refusal and
+// nothing at all on an acceptance.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrackDecided {
+    #[topic]
+    pub track: Symbol,
+    pub accepted: bool,
+    pub returned: i128,
+}
+
 /// A prize nobody claimed went back along the announced route.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -532,6 +594,56 @@ pub struct PrizeSwept {
     pub track: Symbol,
     pub rank: u32,
     pub amount: i128,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn sponsored(
+    env: &Env,
+    sponsor: &Address,
+    track: &Symbol,
+    rank: u32,
+    amount: i128,
+    fee: i128,
+    position_now: i128,
+    note: &BytesN<32>,
+) {
+    Sponsored {
+        sponsor: sponsor.clone(),
+        track: track.clone(),
+        rank,
+        amount,
+        fee,
+        position_now,
+        note: note.clone(),
+    }
+    .publish(env);
+}
+
+pub fn track_proposed(
+    env: &Env,
+    sponsor: &Address,
+    track: &Symbol,
+    total: i128,
+    fee: i128,
+    note: &BytesN<32>,
+) {
+    TrackProposed {
+        sponsor: sponsor.clone(),
+        track: track.clone(),
+        total,
+        fee,
+        note: note.clone(),
+    }
+    .publish(env);
+}
+
+pub fn track_decided(env: &Env, track: &Symbol, accepted: bool, returned: i128) {
+    TrackDecided {
+        track: track.clone(),
+        accepted,
+        returned,
+    }
+    .publish(env);
 }
 
 pub fn prize_swept(env: &Env, track: &Symbol, rank: u32, amount: i128) {
@@ -693,11 +805,11 @@ pub fn rules_locked(env: &Env, hash: &BytesN<32>) {
 }
 
 /// One member's share went back along the announced route.
-///
-/// Kept apart from `PrizeSwept`, which returns a position nobody won at all.
-/// The two look the same in the vault and mean very different things on the
-/// page: one says a prize found no winner, the other says a named winner never
-/// came for their part of it.
+//
+// Kept apart from `PrizeSwept`, which returns a position nobody won at all.
+// The two look the same in the vault and mean very different things on the
+// page: one says a prize found no winner, the other says a named winner never
+// came for their part of it.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShareSwept {

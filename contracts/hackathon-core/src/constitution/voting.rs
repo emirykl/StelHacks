@@ -7,22 +7,22 @@ use crate::errors::Error;
 pub const VOTE_SPLIT_TOTAL_BPS: u32 = 10_000;
 
 /// What one wallet gets to place when nobody said otherwise.
-///
-/// Ten points across at most three projects. Ten because it divides the way
-/// people already think about a shortlist — five and five, or six three one —
-/// without asking anybody to reason in percentages, and three because a voter
-/// who may back the whole field is not ranking it.
+//
+// Ten points across at most three projects. Ten because it divides the way
+// people already think about a shortlist — five and five, or six three one —
+// without asking anybody to reason in percentages, and three because a voter
+// who may back the whole field is not ranking it.
 pub const DEFAULT_VOTE_POWER: u32 = 10;
 
 /// How many projects one ballot may name when nobody said otherwise.
 pub const DEFAULT_MAX_CHOICES: u32 = 3;
 
 /// The most one wallet may be given to place.
-///
-/// Not a matter of taste. Every point placed is added into a per project
-/// running total and into the top total the community score divides by, and a
-/// ceiling here is what keeps those additions inside a `u32` no matter how many
-/// people vote.
+//
+// Not a matter of taste. Every point placed is added into a per project
+// running total and into the top total the community score divides by, and a
+// ceiling here is what keeps those additions inside a `u32` no matter how many
+// people vote.
 pub const MAX_VOTE_POWER: u32 = 1_000;
 
 /// How the final score is split between the judges and the crowd, and what one
@@ -35,17 +35,17 @@ pub struct VotePolicy {
     /// The community's share of the final score, in basis points.
     pub community_bps: u32,
     /// How many points one wallet has to place, all of which it must spend.
-    ///
-    /// Frozen with everything else that decides an outcome. An organizer who
-    /// could raise it mid week would be handing more influence to whoever had
-    /// not voted yet, and one who could lower it would be shrinking ballots
-    /// already cast.
+    //
+    // Frozen with everything else that decides an outcome. An organizer who
+    // could raise it mid week would be handing more influence to whoever had
+    // not voted yet, and one who could lower it would be shrinking ballots
+    // already cast.
     pub power: u32,
     /// The most projects one ballot may be spread across.
-    ///
-    /// A ceiling rather than a quota: a voter backing one project puts
-    /// everything on it, and this is what stops a ballot from being spread so
-    /// thin that it says nothing while still counting everywhere.
+    //
+    // A ceiling rather than a quota: a voter backing one project puts
+    // everything on it, and this is what stops a ballot from being spread so
+    // thin that it says nothing while still counting everywhere.
     pub max_choices: u32,
 }
 
@@ -78,21 +78,21 @@ impl VotePolicy {
     }
 
     /// Whether the judges' scorecards carry any weight in the final ranking.
-    ///
-    /// This is what releases the per project judge quorum. Requiring three
-    /// valid scorecards before a result can be finalized protects the ranking,
-    /// but when the scorecards contribute nothing to that ranking the same
-    /// requirement would only strand a hackathon that is otherwise complete.
+    //
+    // This is what releases the per project judge quorum. Requiring three
+    // valid scorecards before a result can be finalized protects the ranking,
+    // but when the scorecards contribute nothing to that ranking the same
+    // requirement would only strand a hackathon that is otherwise complete.
     pub fn judge_score_counts(&self) -> bool {
         self.judge_bps > 0
     }
 
     /// Rejects a split that does not add up.
-    ///
-    /// The share itself has no ceiling. A hackathon may be decided entirely by
-    /// its judges, entirely by its crowd, or anywhere in between, because every
-    /// hackathon admits its participants by application and the crowd casting
-    /// those ballots was let in one approval at a time.
+    //
+    // The share itself has no ceiling. A hackathon may be decided entirely by
+    // its judges, entirely by its crowd, or anywhere in between, because every
+    // hackathon admits its participants by application and the crowd casting
+    // those ballots was let in one approval at a time.
     pub fn validate(&self) -> Result<(), Error> {
         let total = self
             .judge_bps

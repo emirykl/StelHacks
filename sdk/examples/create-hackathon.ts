@@ -67,7 +67,7 @@ const judges = [Keypair.random(), Keypair.random(), Keypair.random()].map((judge
 }));
 
 const constitution: Constitution = {
-  version: 4,
+  version: 6,
   metadata_hash: Buffer.alloc(32, 7),
   // The native lumen wrapped as a contract token, so the vault holds something
   // real without an issuer to set up first.
@@ -108,6 +108,15 @@ const constitution: Constitution = {
   // should not have to check one field to know whether another one means
   // anything.
   platform_fee: { collector: organizer, bps: 0 },
+  // Open to top ups and to one sponsored track, so the example shows the
+  // door being opened rather than a field nobody varies. A hackathon that
+  // leaves this shut can never be sponsored, and there is no way back.
+  sponsorship: {
+    top_ups_allowed: true,
+    max_new_tracks: 1,
+    min_bounty: 10_000_000n,
+    borrows_from: "payments",
+  },
   tie_break: [
     { tag: "JudgeScore", values: undefined },
     { tag: "SubmissionOrder", values: undefined },

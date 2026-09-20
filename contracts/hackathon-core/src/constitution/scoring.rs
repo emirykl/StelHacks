@@ -38,9 +38,9 @@ pub struct Track {
 
 impl Track {
     /// Rejects a rubric that cannot produce a well defined score.
-    ///
-    /// A track needs at least one criterion, every criterion needs a non zero
-    /// weight, no identifier may repeat, and the weights must add up exactly.
+    //
+    // A track needs at least one criterion, every criterion needs a non zero
+    // weight, no identifier may repeat, and the weights must add up exactly.
     pub fn validate(&self) -> Result<(), Error> {
         if self.criteria.is_empty() {
             return Err(Error::ConstitutionInvalid);
@@ -92,9 +92,9 @@ pub struct PrizeTier {
 }
 
 /// Rejects a prize table that cannot be paid out unambiguously.
-///
-/// Every position needs a rank starting at one, a positive amount, and no
-/// repeated rank inside a track.
+//
+// Every position needs a rank starting at one, a positive amount, and no
+// repeated rank inside a track.
 pub fn validate_prize_tiers(tiers: &Vec<PrizeTier>) -> Result<(), Error> {
     if tiers.is_empty() {
         return Err(Error::ConstitutionInvalid);

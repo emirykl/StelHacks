@@ -11,14 +11,13 @@ use soroban_sdk::{symbol_short, vec, Address, BytesN, String, Symbol, Vec};
 use crate::constitution::JudgingMode;
 use crate::errors::Error;
 use crate::hashing::scorecard_leaf;
-use crate::merkle;
 use crate::phase::Phase;
 use crate::results::DecidedBy;
 use crate::scorecard::{CriterionScore, Scorecard};
-use crate::test::Fixture;
+use crate::test::{build_tree, Fixture};
 
 use prize_vault::PrizeVaultClient;
-use soroban_sdk::token::TokenClient;
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
 
 /// A hackathon carried all the way to a settled ranking.
 struct Settled {
@@ -134,6 +133,41 @@ impl Settled {
         Settled::open_with(1)
     }
 
+    /// The same hackathon with a sponsor standing behind first place in the
+    /// payments track, carried to an open settlement.
+    ///
+    /// The contribution lands during the reveal, which is the last moment the
+    /// window allows and the one worth testing: a sponsor who arrived while the
+    /// scorecards were already public still cannot have known who would win,
+    /// because the ranking is not computed until `finalize_results`.
+    fn open_sponsored(amount: i128) -> Settled {
+        let settled = Settled::through_reveal();
+        let env = settled.fixture.env.clone();
+
+        let bps = settled.fixture.client.constitution().platform_fee.bps as i128;
+        let fee = amount * bps / 10_000;
+
+        let sponsor = Address::generate(&env);
+        StellarAssetClient::new(&env, &settled.token.address).mint(&sponsor, &(amount + fee));
+
+        settled.fixture.client.sponsor_tier(
+            &sponsor,
+            &payments(),
+            &1,
+            &amount,
+            &BytesN::from_array(&env, &[5u8; 32]),
+        );
+
+        settled.fixture.client.finalize_results();
+
+        let hold = 24 * 60 * 60;
+        let now = settled.fixture.client.state().finalized_at + hold;
+        env.ledger().set_timestamp(now);
+        settled.fixture.client.open_settlement();
+
+        settled
+    }
+
     /// The same, with every team holding `size` people.
     fn open_with(size: u32) -> Settled {
         let settled = Settled::through_reveal_with(size);
@@ -242,70 +276,6 @@ impl Settled {
     }
 }
 
-/// A tree over any number of leaves, with a proof for each one.
-///
-/// A level with an odd count promotes its last node unchanged, which is what
-/// the real collection service will do too: three judges scoring two projects
-/// is six scorecards, and six is not a power of two.
-fn build_tree(
-    env: &soroban_sdk::Env,
-    leaves: &Vec<BytesN<32>>,
-) -> (BytesN<32>, Vec<Vec<BytesN<32>>>) {
-    let count = leaves.len();
-
-    let mut proofs = Vec::new(env);
-    let mut positions = Vec::new(env);
-    for index in 0..count {
-        proofs.push_back(Vec::new(env));
-        positions.push_back(index);
-    }
-
-    let mut level = leaves.clone();
-
-    while level.len() > 1 {
-        for leaf in 0..count {
-            let position = positions.get(leaf).unwrap();
-
-            let sibling = if position.is_multiple_of(2) {
-                if position + 1 < level.len() {
-                    Some(position + 1)
-                } else {
-                    None
-                }
-            } else {
-                Some(position - 1)
-            };
-
-            if let Some(sibling) = sibling {
-                let mut proof = proofs.get(leaf).unwrap();
-                proof.push_back(level.get(sibling).unwrap());
-                proofs.set(leaf, proof);
-            }
-
-            positions.set(leaf, position / 2);
-        }
-
-        let mut next = Vec::new(env);
-        let mut at = 0;
-        while at < level.len() {
-            if at + 1 < level.len() {
-                next.push_back(merkle::node(
-                    env,
-                    &level.get(at).unwrap(),
-                    &level.get(at + 1).unwrap(),
-                ));
-            } else {
-                next.push_back(level.get(at).unwrap());
-            }
-            at += 2;
-        }
-
-        level = next;
-    }
-
-    (level.get(0).unwrap(), proofs)
-}
-
 fn payments() -> Symbol {
     symbol_short!("payments")
 }
@@ -379,6 +349,48 @@ fn the_winner_is_paid_from_the_vault() {
     // out. The fee is still sitting there, because it leaves by its own call.
     assert_eq!(settled.vault.balance(), 5_500);
     assert!(settled.fixture.client.is_paid(&payments(), &1));
+}
+
+/// Where the sponsorship feature has to prove itself: the winner's balance.
+///
+/// Everything else about a contribution is bookkeeping. This is the assertion
+/// that says the money reached a person, and it is the one that would have
+/// failed for every version of this product before the payout stopped reading
+/// the frozen tier and started reading what the position is actually worth.
+#[test]
+fn a_sponsored_position_pays_the_winner_what_was_added_to_it() {
+    let settled = Settled::open_sponsored(1_000);
+    let captain = settled.captain(settled.teams.get(0).unwrap());
+
+    let paid =
+        settled
+            .fixture
+            .client
+            .settle_prize(&payments(), &1, &settled.winner(&payments(), 1));
+
+    assert_eq!(paid, 6_000, "five thousand frozen, one thousand added");
+    assert_eq!(settled.token.balance(&captain), 6_000);
+
+    // The runner up is untouched. A contribution aimed at one position that
+    // moved another would make the prize table a suggestion.
+    assert_eq!(settled.fixture.client.payable(&payments(), &2), 3_000);
+}
+
+/// The cut is taken on the sponsorship as well as on the frozen table, in one
+/// payment. A sponsorship that escaped the fee would be a route around it, and
+/// the first thing anybody would do with it is call a prize a sponsorship.
+#[test]
+fn the_platform_is_paid_its_cut_on_sponsorships_too() {
+    let settled = Settled::open_sponsored(1_000);
+    let collector = settled.fixture.client.constitution().platform_fee.collector;
+
+    assert_eq!(settled.fixture.client.sponsored_fee(), 50);
+    assert_eq!(
+        settled.fixture.client.settle_platform_fee(),
+        550,
+        "five hundred on the frozen table, fifty on the contribution"
+    );
+    assert_eq!(settled.token.balance(&collector), 550);
 }
 
 #[test]

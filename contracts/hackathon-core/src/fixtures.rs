@@ -12,8 +12,8 @@ use crate::ballot::VoteChoice;
 use crate::constitution::{
     Constitution, Criterion, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode,
     PlatformFee, PrizeTier, ProjectVisibility, RefundRoute, RegistrationPolicy, Schedule,
-    SettlementMode, TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION,
-    DEFAULT_MAX_CHOICES, DEFAULT_VOTE_POWER,
+    SettlementMode, SponsorshipPolicy, TeamPolicy, TieBreakRule, Track, VotePolicy,
+    CONSTITUTION_VERSION, DEFAULT_MAX_CHOICES, DEFAULT_VOTE_POWER,
 };
 use crate::scorecard::{CriterionScore, Scorecard};
 use crate::submission::{SubmissionMetadata, SubmissionRequirements};
@@ -139,6 +139,12 @@ pub fn sample_constitution_paying(env: &Env, prize_asset: Address) -> Constituti
             collector: Address::generate(env),
             bps: 500,
         },
+        sponsorship: SponsorshipPolicy {
+            top_ups_allowed: true,
+            max_new_tracks: 2,
+            min_bounty: 100,
+            borrows_from: symbol_short!("payments"),
+        },
         tie_break: vec![env, TieBreakRule::JudgeScore, TieBreakRule::SubmissionOrder],
         discretion: DiscretionPolicy {
             disqualification_threshold: 2,
@@ -229,6 +235,17 @@ pub fn canonical_constitution(env: &Env) -> Constitution {
         platform_fee: PlatformFee {
             collector: Address::from_str(env, CANONICAL_FEE_COLLECTOR),
             bps: 500,
+        },
+        /* Open, so the digest the two languages have to agree on actually
+        covers these fields. A canonical fixture that left sponsorship shut
+        would hash four values nobody had ever varied, and the first event to
+        use the feature would be the first to find out whether TypeScript
+        encodes it the same way. */
+        sponsorship: SponsorshipPolicy {
+            top_ups_allowed: true,
+            max_new_tracks: 2,
+            min_bounty: 100,
+            borrows_from: symbol_short!("payments"),
         },
         tie_break: vec![env, TieBreakRule::JudgeScore, TieBreakRule::SubmissionOrder],
         discretion: DiscretionPolicy {

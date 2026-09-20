@@ -14,11 +14,11 @@ pub enum ApplicationStatus {
 }
 
 /// One person's request to take part, and what came of it.
-///
-/// The rejection reason is kept here rather than only in an event, because a
-/// refusal that leaves no permanent record is the quiet back door the product
-/// exists to close. It is a hash: the written reason lives off chain, and this
-/// proves which text was given.
+//
+// The rejection reason is kept here rather than only in an event, because a
+// refusal that leaves no permanent record is the quiet back door the product
+// exists to close. It is a hash: the written reason lives off chain, and this
+// proves which text was given.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Registration {
@@ -71,12 +71,12 @@ impl Registration {
     }
 
     /// Whether this person may cast a community ballot.
-    ///
-    /// Approval alone is not enough. The registration deadline is the snapshot
-    /// that fixes the electorate, so an approval granted after it lets someone
-    /// take part in the event without ever gaining a vote. Without this, an
-    /// organizer could wave through a hundred friends on the morning of the
-    /// vote and decide the result.
+    //
+    // Approval alone is not enough. The registration deadline is the snapshot
+    // that fixes the electorate, so an approval granted after it lets someone
+    // take part in the event without ever gaining a vote. Without this, an
+    // organizer could wave through a hundred friends on the morning of the
+    // vote and decide the result.
     pub fn may_vote(&self, registration_closes_at: u64) -> bool {
         self.is_approved() && self.decided_at <= registration_closes_at
     }
@@ -90,16 +90,16 @@ impl Registration {
 }
 
 /// A team, as the contract sees it.
-///
-/// A prize is split equally between everybody on the team, and the contract
-/// pays each of them directly. There are no configurable shares: equal shares
-/// always add up, so the whole class of failure where a team reaches the
-/// deadline with a split that does not total a hundred percent cannot happen.
-/// What it costs is the case where a team genuinely wanted an uneven split,
-/// and that is a conversation they can have with their own money afterwards.
-///
-/// The captain is a member like any other and takes the same share. What being
-/// captain means is being able to admit people, and nothing about the money.
+//
+// A prize is split equally between everybody on the team, and the contract
+// pays each of them directly. There are no configurable shares: equal shares
+// always add up, so the whole class of failure where a team reaches the
+// deadline with a split that does not total a hundred percent cannot happen.
+// What it costs is the case where a team genuinely wanted an uneven split,
+// and that is a conversation they can have with their own money afterwards.
+//
+// The captain is a member like any other and takes the same share. What being
+// captain means is being able to admit people, and nothing about the money.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Team {
@@ -133,17 +133,17 @@ impl Team {
     }
 
     /// What one member takes from a prize of `total`.
-    ///
-    /// Everybody gets the same, and a prize that does not divide evenly leaves
-    /// a remainder smaller than the team. Those units go to the earliest
-    /// members one each, so the split is exact to the last unit rather than
-    /// leaving a residue in the vault, and no two members ever differ by more
-    /// than one. At Stellar's seven decimal places the difference is a
-    /// millionth of a cent; it is handled at all because money that adds up to
-    /// slightly less than it should is the kind of thing that turns into a
-    /// question nobody can answer three months later.
-    ///
-    /// Nothing for somebody who is not on the team.
+    //
+    // Everybody gets the same, and a prize that does not divide evenly leaves
+    // a remainder smaller than the team. Those units go to the earliest
+    // members one each, so the split is exact to the last unit rather than
+    // leaving a residue in the vault, and no two members ever differ by more
+    // than one. At Stellar's seven decimal places the difference is a
+    // millionth of a cent; it is handled at all because money that adds up to
+    // slightly less than it should is the kind of thing that turns into a
+    // question nobody can answer three months later.
+    //
+    // Nothing for somebody who is not on the team.
     pub fn share_of(&self, total: i128, member: &Address) -> Option<i128> {
         let size = self.size() as i128;
         let base = total / size;

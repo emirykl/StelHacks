@@ -3,17 +3,17 @@ use soroban_sdk::contracttype;
 use crate::errors::Error;
 
 /// The longest a settlement may be held back after the result is final.
-///
-/// The window exists so a contract bug found between the ranking and the payout
-/// can be caught before the money moves. It is capped because an open ended
-/// hold is indistinguishable from not paying, and the participant has no way to
-/// tell the two apart while they wait.
+//
+// The window exists so a contract bug found between the ranking and the payout
+// can be caught before the money moves. It is capped because an open ended
+// hold is indistinguishable from not paying, and the participant has no way to
+// tell the two apart while they wait.
 pub const MAX_SETTLEMENT_SAFETY_WINDOW: u64 = 48 * 60 * 60;
 
 /// Where money goes when it is not awarded to a winner.
-///
-/// Which routes are legal depends on why the money is unspent, so each use
-/// checks its own set rather than accepting the whole enum.
+//
+// Which routes are legal depends on why the money is unspent, so each use
+// checks its own set rather than accepting the whole enum.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -30,16 +30,16 @@ pub enum RefundRoute {
 
 impl RefundRoute {
     /// Whether this route can return money that never reached a winner.
-    ///
-    /// `RemainingTracks` is refused here. A cancelled hackathon has no
-    /// remaining tracks to pay, and an unclaimed prize belongs to a track that
-    /// ran perfectly well, so there is nothing to spread it across.
-    ///
-    /// `Depositors` is refused too, for now and for a different reason: paying
-    /// sponsors back in proportion needs the vault to remember who put in what,
-    /// and it does not yet. Allowing the setting before the machinery exists
-    /// would let an organizer promise a refund route the contract cannot walk,
-    /// which is worse than not offering it.
+    //
+    // `RemainingTracks` is refused here. A cancelled hackathon has no
+    // remaining tracks to pay, and an unclaimed prize belongs to a track that
+    // ran perfectly well, so there is nothing to spread it across.
+    //
+    // `Depositors` is refused too, for now and for a different reason: paying
+    // sponsors back in proportion needs the vault to remember who put in what,
+    // and it does not yet. Allowing the setting before the machinery exists
+    // would let an organizer promise a refund route the contract cannot walk,
+    // which is worse than not offering it.
     fn valid_for_return(self) -> bool {
         matches!(self, RefundRoute::Organizer)
     }
@@ -84,12 +84,12 @@ impl SettlementMode {
 }
 
 /// Every power the organizer holds after the rules are locked.
-///
-/// None of these are removed, because an organizer who cannot disqualify a
-/// plagiarised entry or extend a deadline after an outage will not run their
-/// event here. What the constitution does instead is publish each power before
-/// anyone writes a line of code, bound it, and make every use of it leave a
-/// record. Flexibility is kept; secrecy is not.
+//
+// None of these are removed, because an organizer who cannot disqualify a
+// plagiarised entry or extend a deadline after an outage will not run their
+// event here. What the constitution does instead is publish each power before
+// anyone writes a line of code, bound it, and make every use of it leave a
+// record. Flexibility is kept; secrecy is not.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DiscretionPolicy {
@@ -116,12 +116,12 @@ pub struct DiscretionPolicy {
 
 impl DiscretionPolicy {
     /// Rejects a policy that cannot be honoured.
-    ///
-    /// `judge_count` is an argument because a threshold above the number of
-    /// judges is not a strict rule, it is an unreachable one. A disqualification
-    /// requiring four signatures from three judges can never resolve, so the
-    /// power reads as available while being permanently dead, which is worse
-    /// than not having it.
+    //
+    // `judge_count` is an argument because a threshold above the number of
+    // judges is not a strict rule, it is an unreachable one. A disqualification
+    // requiring four signatures from three judges can never resolve, so the
+    // power reads as available while being permanently dead, which is worse
+    // than not having it.
     pub fn validate(&self, judge_count: u32) -> Result<(), Error> {
         if self.disqualification_threshold == 0 || self.disqualification_threshold > judge_count {
             return Err(Error::ConstitutionInvalid);

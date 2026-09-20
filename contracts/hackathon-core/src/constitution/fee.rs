@@ -7,32 +7,32 @@ use crate::errors::Error;
 pub const FEE_TOTAL_BPS: i128 = 10_000;
 
 /// The most a constitution may declare.
-///
-/// Not a protection against a greedy platform, which this cannot be: the fee is
-/// announced before the lock, anyone can read it, and it is paid on top of the
-/// prize table rather than out of it, so a high one only costs the organizer who
-/// agreed to it. It is a guard against the typo. Five percent written as `5_000`
-/// instead of `500` is a plausible mistake, it is a fifty percent fee, and there
-/// is no way to fix it after the lock. Twenty percent is well above anything
-/// this product intends to charge and well below what a slipped digit produces.
+//
+// Not a protection against a greedy platform, which this cannot be: the fee is
+// announced before the lock, anyone can read it, and it is paid on top of the
+// prize table rather than out of it, so a high one only costs the organizer who
+// agreed to it. It is a guard against the typo. Five percent written as `5_000`
+// instead of `500` is a plausible mistake, it is a fifty percent fee, and there
+// is no way to fix it after the lock. Twenty percent is well above anything
+// this product intends to charge and well below what a slipped digit produces.
 pub const MAX_PLATFORM_FEE_BPS: u32 = 2_000;
 
 /// What the platform takes for carrying the event, frozen with everything else.
-///
-/// This is in the constitution rather than in a table we keep, and that is the
-/// whole point of it. The landing page promises that the rules are hashed and
-/// frozen and that nobody can change them afterwards, us included. A cut applied
-/// from outside that document would be exactly the thing the promise is against,
-/// and it would be the platform breaking it rather than an organizer. So the fee
-/// is read before anybody registers, it is hashed into the same digest as the
-/// rubric and the prize table, and it cannot move afterwards either.
-///
-/// It is charged on top of the prize table, never out of it. A winner is paid
-/// the amount their position announced, and the organizer funds the pool with
-/// the prizes plus the fee. The alternative, taking a slice of each prize, would
-/// mean the number a builder read before giving up a weekend was not the number
-/// they were paid, which is a smaller lie than the ones this product exists to
-/// remove but is the same kind.
+//
+// This is in the constitution rather than in a table we keep, and that is the
+// whole point of it. The landing page promises that the rules are hashed and
+// frozen and that nobody can change them afterwards, us included. A cut applied
+// from outside that document would be exactly the thing the promise is against,
+// and it would be the platform breaking it rather than an organizer. So the fee
+// is read before anybody registers, it is hashed into the same digest as the
+// rubric and the prize table, and it cannot move afterwards either.
+//
+// It is charged on top of the prize table, never out of it. A winner is paid
+// the amount their position announced, and the organizer funds the pool with
+// the prizes plus the fee. The alternative, taking a slice of each prize, would
+// mean the number a builder read before giving up a weekend was not the number
+// they were paid, which is a smaller lie than the ones this product exists to
+// remove but is the same kind.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFee {
@@ -60,11 +60,11 @@ impl PlatformFee {
     }
 
     /// What this rate comes to against a prize table.
-    ///
-    /// Integer division, so the remainder is dropped and the fee lands a
-    /// fraction low rather than a fraction high. Rounding the other way would
-    /// take from a pool sized to the announced total and could, on a table small
-    /// enough, ask for a unit the organizer was never told to deposit.
+    //
+    // Integer division, so the remainder is dropped and the fee lands a
+    // fraction low rather than a fraction high. Rounding the other way would
+    // take from a pool sized to the announced total and could, on a table small
+    // enough, ask for a unit the organizer was never told to deposit.
     pub fn amount_on(&self, prize_total: i128) -> Result<i128, Error> {
         prize_total
             .checked_mul(self.bps as i128)

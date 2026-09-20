@@ -5,9 +5,10 @@
 //! each leaves a reason behind.
 
 use soroban_sdk::testutils::Ledger;
-use soroban_sdk::BytesN;
+use soroban_sdk::{vec, BytesN};
 
 use crate::constitution::Deadline;
+use crate::contract::DeadlineMove;
 use crate::errors::Error;
 use crate::fixtures::{DAY, HOUR};
 use crate::test::Fixture;
@@ -950,4 +951,218 @@ mod cancellation {
             Some(Ok(Error::WrongPhase))
         );
     }
+}
+
+/// What running late actually looks like: everything after the build window
+/// moves with it, under one signature.
+#[test]
+fn the_whole_schedule_can_be_pushed_back_in_one_call() {
+    let fixture = running();
+    let before = fixture.client.state().schedule;
+
+    fixture.client.extend_schedule(
+        &vec![
+            &fixture.env,
+            DeadlineMove {
+                deadline: Deadline::Submission,
+                moved_to: before.submission_closes_at + DAY,
+            },
+            DeadlineMove {
+                deadline: Deadline::Screening,
+                moved_to: before.screening_closes_at + DAY,
+            },
+            DeadlineMove {
+                deadline: Deadline::Judging,
+                moved_to: before.judging_closes_at + DAY,
+            },
+            /* The vote travels with the round it follows. Its opening is the one
+            opening a schedule may move, because the electorate was fixed when
+            registration closed and nothing here changes who is in it. */
+            DeadlineMove {
+                deadline: Deadline::CommunityVoteOpens,
+                moved_to: before.community_vote_opens_at + DAY,
+            },
+            DeadlineMove {
+                deadline: Deadline::CommunityVote,
+                moved_to: before.community_vote_closes_at + DAY,
+            },
+        ],
+        &reason(&fixture),
+    );
+
+    let after = fixture.client.state().schedule;
+
+    assert_eq!(
+        after.submission_closes_at,
+        before.submission_closes_at + DAY
+    );
+    assert_eq!(after.screening_closes_at, before.screening_closes_at + DAY);
+    assert_eq!(after.judging_closes_at, before.judging_closes_at + DAY);
+}
+
+/// The moves are a destination rather than a route, so the order they arrive in
+/// is nobody's business. Handed the schedule backwards — the last deadline
+/// first — the contract reaches the same place.
+#[test]
+fn the_order_the_moves_arrive_in_does_not_matter() {
+    let fixture = running();
+    let before = fixture.client.state().schedule;
+
+    fixture.client.extend_schedule(
+        &vec![
+            &fixture.env,
+            DeadlineMove {
+                deadline: Deadline::CommunityVote,
+                moved_to: before.community_vote_closes_at + HOUR,
+            },
+            DeadlineMove {
+                deadline: Deadline::CommunityVoteOpens,
+                moved_to: before.community_vote_opens_at + HOUR,
+            },
+            DeadlineMove {
+                deadline: Deadline::Judging,
+                moved_to: before.judging_closes_at + HOUR,
+            },
+            DeadlineMove {
+                deadline: Deadline::Screening,
+                moved_to: before.screening_closes_at + HOUR,
+            },
+            DeadlineMove {
+                deadline: Deadline::Submission,
+                moved_to: before.submission_closes_at + HOUR,
+            },
+        ],
+        &reason(&fixture),
+    );
+
+    let after = fixture.client.state().schedule;
+
+    assert_eq!(
+        after.submission_closes_at,
+        before.submission_closes_at + HOUR
+    );
+    assert_eq!(after.judging_closes_at, before.judging_closes_at + HOUR);
+    assert_eq!(
+        after.community_vote_opens_at,
+        before.community_vote_opens_at + HOUR
+    );
+}
+
+/// Where it ends up is what matters, and a schedule that ends up out of order
+/// is refused whole. Nothing is left half moved.
+#[test]
+fn a_run_that_ends_out_of_order_moves_nothing() {
+    let fixture = running();
+    let before = fixture.client.state().schedule;
+    let gap = before.screening_closes_at - before.submission_closes_at;
+
+    assert_eq!(
+        fixture
+            .client
+            .try_extend_schedule(
+                &vec![
+                    &fixture.env,
+                    /* Onto the screening round exactly, which the allowance can
+                    afford and the order forbids. */
+                    DeadlineMove {
+                        deadline: Deadline::Submission,
+                        moved_to: before.submission_closes_at + gap,
+                    },
+                ],
+                &reason(&fixture)
+            )
+            .err(),
+        Some(Ok(Error::ScheduleInvalid))
+    );
+
+    assert_eq!(
+        fixture.client.state().schedule.submission_closes_at,
+        before.submission_closes_at,
+        "the deadline it tried to move is where it was"
+    );
+}
+
+/// One deadline out of allowance takes the whole run down with it, which is
+/// the only honest answer: a schedule half pushed back is a schedule nobody
+/// announced.
+#[test]
+fn a_run_that_overspends_one_allowance_moves_nothing() {
+    let fixture = running();
+    let before = fixture.client.state().schedule;
+    let allowance = fixture.client.constitution().extensions;
+
+    assert_eq!(
+        fixture
+            .client
+            .try_extend_schedule(
+                &vec![
+                    &fixture.env,
+                    DeadlineMove {
+                        deadline: Deadline::Judging,
+                        moved_to: before.judging_closes_at + HOUR,
+                    },
+                    DeadlineMove {
+                        deadline: Deadline::Screening,
+                        moved_to: before.screening_closes_at
+                            + allowance.max_total_seconds_per_deadline
+                            + HOUR,
+                    },
+                ],
+                &reason(&fixture)
+            )
+            .err(),
+        Some(Ok(Error::ExtensionLimitReached))
+    );
+
+    assert_eq!(
+        fixture.client.state().schedule.judging_closes_at,
+        before.judging_closes_at,
+        "the move that would have fitted did not happen either"
+    );
+}
+
+/// A deadline already gone is closed for good, and being named beside others
+/// that are still open does not change that.
+#[test]
+fn a_run_naming_a_deadline_that_has_passed_is_refused() {
+    let fixture = running();
+    let before = fixture.client.state().schedule;
+    fixture
+        .env
+        .ledger()
+        .set_timestamp(before.registration_closes_at + 1);
+
+    assert_eq!(
+        fixture
+            .client
+            .try_extend_schedule(
+                &vec![
+                    &fixture.env,
+                    DeadlineMove {
+                        deadline: Deadline::Registration,
+                        moved_to: before.registration_closes_at + DAY,
+                    },
+                    DeadlineMove {
+                        deadline: Deadline::Submission,
+                        moved_to: before.submission_closes_at + DAY,
+                    },
+                ],
+                &reason(&fixture)
+            )
+            .err(),
+        Some(Ok(Error::DeadlinePassed))
+    );
+}
+
+#[test]
+fn a_run_that_moves_nothing_is_refused() {
+    let fixture = running();
+
+    assert_eq!(
+        fixture
+            .client
+            .try_extend_schedule(&vec![&fixture.env], &reason(&fixture))
+            .err(),
+        Some(Ok(Error::ScheduleInvalid))
+    );
 }

@@ -3,19 +3,19 @@ use soroban_sdk::contracttype;
 use crate::constitution::Deadline;
 
 /// The stages a hackathon walks through, in order.
-///
-/// A hackathon only ever moves forward and every stage has exactly one legal
-/// successor, so a caller can never skip a gate by picking a target state
-/// itself.
-///
-/// A stage is not the same thing as a window. Two stages carry two windows
-/// each, because the underlying activities genuinely overlap and pretending
-/// otherwise would force a schedule nobody runs. [`Phase::Open`] holds the
-/// registration window and the submission window, since people sign up and
-/// start building on the same evening. [`Phase::Judging`] holds the scoring
-/// window and the community vote window, both sealed, so the crowd never votes
-/// with the judge table already in front of it. Each window is gated by its own
-/// timestamps rather than by the stage alone.
+//
+// A hackathon only ever moves forward and every stage has exactly one legal
+// successor, so a caller can never skip a gate by picking a target state
+// itself.
+//
+// A stage is not the same thing as a window. Two stages carry two windows
+// each, because the underlying activities genuinely overlap and pretending
+// otherwise would force a schedule nobody runs. [`Phase::Open`] holds the
+// registration window and the submission window, since people sign up and
+// start building on the same evening. [`Phase::Judging`] holds the scoring
+// window and the community vote window, both sealed, so the crowd never votes
+// with the judge table already in front of it. Each window is gated by its own
+// timestamps rather than by the stage alone.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -78,12 +78,12 @@ impl Phase {
     }
 
     /// The deadline that has to pass before this phase can end.
-    ///
-    /// Only three stages end on the clock. The rest end when somebody does the
-    /// work that closes them: locking the rules, publishing a funded hackathon,
-    /// revealing the sealed input, computing the ranking, paying the winners.
-    /// Returning `None` therefore means the phase is waiting on an action, not
-    /// that it can be skipped.
+    //
+    // Only three stages end on the clock. The rest end when somebody does the
+    // work that closes them: locking the rules, publishing a funded hackathon,
+    // revealing the sealed input, computing the ranking, paying the winners.
+    // Returning `None` therefore means the phase is waiting on an action, not
+    // that it can be skipped.
     pub fn closing_deadline(self) -> Option<Deadline> {
         match self {
             Phase::Open => Some(Deadline::Submission),

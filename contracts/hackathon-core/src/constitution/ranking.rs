@@ -22,12 +22,12 @@ pub enum TieBreakRule {
 }
 
 /// Rejects a tie break chain that cannot always produce an order.
-///
-/// The chain has to end in [`TieBreakRule::SubmissionOrder`]. Every other rule
-/// can come out level a second time, and a ranking that can stop mid comparison
-/// has no defined winner, which is exactly the situation the product exists to
-/// remove. Ending on submission order means the chain always terminates, and
-/// the proof page can name the step that decided it.
+//
+// The chain has to end in [`TieBreakRule::SubmissionOrder`]. Every other rule
+// can come out level a second time, and a ranking that can stop mid comparison
+// has no defined winner, which is exactly the situation the product exists to
+// remove. Ending on submission order means the chain always terminates, and
+// the proof page can name the step that decided it.
 pub fn validate_tie_break(
     rules: &Vec<TieBreakRule>,
     tracks: &Vec<Track>,

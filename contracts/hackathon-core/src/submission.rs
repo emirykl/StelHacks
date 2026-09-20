@@ -3,12 +3,12 @@ use soroban_sdk::{contracttype, BytesN, Env, String, Symbol};
 use crate::errors::Error;
 
 /// What one field of a submission is worth to the organizer.
-///
-/// Three answers rather than two, because "not required" was covering two
-/// different intentions. An event that would like a deployed URL and an event
-/// that does not want to see one at all were both storing `false`, so the
-/// submission form had to show every field to everybody and a judge opening a
-/// design entry read an empty repository row as a team that never pushed code.
+//
+// Three answers rather than two, because "not required" was covering two
+// different intentions. An event that would like a deployed URL and an event
+// that does not want to see one at all were both storing `false`, so the
+// submission form had to show every field to everybody and a judge opening a
+// design entry read an empty repository row as a team that never pushed code.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -36,12 +36,12 @@ impl FieldRule {
 }
 
 /// What a team has to supply before their project counts as submitted.
-///
-/// The organizer chooses this before the lock, so nobody discovers on the last
-/// evening that a demo video was expected. A repository is required by default
-/// in practice, since a hackathon judging code without code to read is judging
-/// a pitch, but the choice stays with the organizer because internal and design
-/// focused events exist too.
+//
+// The organizer chooses this before the lock, so nobody discovers on the last
+// evening that a demo video was expected. A repository is required by default
+// in practice, since a hackathon judging code without code to read is judging
+// a pitch, but the choice stays with the organizer because internal and design
+// focused events exist too.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionRequirements {
@@ -54,10 +54,10 @@ pub struct SubmissionRequirements {
     /// A slide deck.
     pub pitch_deck: FieldRule,
     /// The contract the project deployed, as an id.
-    ///
-    /// Rarely worth demanding and here for the same reason as the rest: an
-    /// organizer running a contracts only track should be able to say so in the
-    /// frozen rules rather than in a paragraph on a page nobody can hash.
+    //
+    // Rarely worth demanding and here for the same reason as the rest: an
+    // organizer running a contracts only track should be able to say so in the
+    // frozen rules rather than in a paragraph on a page nobody can hash.
     pub deployed_contract: FieldRule,
 }
 
@@ -76,22 +76,22 @@ impl SubmissionRequirements {
 }
 
 /// Everything a team writes about their project.
-///
-/// None of this is stored on chain. It lives off chain and the contract keeps
-/// only a hash of it, which is what freezes the submission at the deadline
-/// without paying to store a description or a video link in ledger state.
-///
-/// The struct exists here anyway, and this is the important part: it fixes the
-/// exact field set and field order that the hash covers. A client that
-/// serializes these fields in this order arrives at the same digest the
-/// contract would, which is what lets anyone check that the project being
-/// judged is the project that was submitted.
-///
-/// Checking these fields against [`SubmissionRequirements`] is the SDK's job,
-/// not this contract's. The metadata never reaches the chain, only its digest
-/// does, so a contract side check would be validating something it cannot see.
-/// The SDK runs it before computing the hash, where it can also say which field
-/// is missing rather than only that one is.
+//
+// None of this is stored on chain. It lives off chain and the contract keeps
+// only a hash of it, which is what freezes the submission at the deadline
+// without paying to store a description or a video link in ledger state.
+//
+// The struct exists here anyway, and this is the important part: it fixes the
+// exact field set and field order that the hash covers. A client that
+// serializes these fields in this order arrives at the same digest the
+// contract would, which is what lets anyone check that the project being
+// judged is the project that was submitted.
+//
+// Checking these fields against [`SubmissionRequirements`] is the SDK's job,
+// not this contract's. The metadata never reaches the chain, only its digest
+// does, so a contract side check would be validating something it cannot see.
+// The SDK runs it before computing the hash, where it can also say which field
+// is missing rather than only that one is.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionMetadata {
@@ -128,25 +128,25 @@ pub enum SubmissionStatus {
     /// reason; it is never deleted.
     Invalidated = 1,
     /// Removed after the screening round, through the disqualification process.
-    ///
-    /// Kept apart from `Invalidated` rather than folded into it, because the two
-    /// carry very different weight. Screening is one organizer's call on an
-    /// entry nobody has scored yet; a disqualification takes a stated reason, a
-    /// window for the team to answer, and a bench of judges signing, and a page
-    /// that showed them as the same thing would flatter the first and slander
-    /// the second.
+    //
+    // Kept apart from `Invalidated` rather than folded into it, because the two
+    // carry very different weight. Screening is one organizer's call on an
+    // entry nobody has scored yet; a disqualification takes a stated reason, a
+    // window for the team to answer, and a bench of judges signing, and a page
+    // that showed them as the same thing would flatter the first and slander
+    // the second.
     Disqualified = 2,
 }
 
 /// A case for removing an entry after the screening round has closed.
-///
-/// This is the heaviest power in the product, so every condition the PRD
-/// attaches to it is a field here rather than a promise made elsewhere: the
-/// reason is recorded before anything happens, the team gets a window to answer
-/// on the record, judges other than the organizer have to sign, and only after
-/// the window closes does anyone find out whether it carried. A case that
-/// gathers no signatures ends with the project still in the running, because a
-/// team that entered is in unless somebody clears the bar to remove them.
+//
+// This is the heaviest power in the product, so every condition the PRD
+// attaches to it is a field here rather than a promise made elsewhere: the
+// reason is recorded before anything happens, the team gets a window to answer
+// on the record, judges other than the organizer have to sign, and only after
+// the window closes does anyone find out whether it carried. A case that
+// gathers no signatures ends with the project still in the running, because a
+// team that entered is in unless somebody clears the bar to remove them.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisqualificationCase {
@@ -187,12 +187,12 @@ impl DisqualificationCase {
 }
 
 /// A team's entry, as the contract records it.
-///
-/// The write up itself lives off chain under `uri`, and what sits here is its
-/// digest. That is the whole trick of the submission lock: at the deadline this
-/// digest stops being writable, so the project a judge scores is provably the
-/// project that was entered, without the chain ever paying to store a video
-/// link or a paragraph of prose.
+//
+// The write up itself lives off chain under `uri`, and what sits here is its
+// digest. That is the whole trick of the submission lock: at the deadline this
+// digest stops being writable, so the project a judge scores is provably the
+// project that was entered, without the chain ever paying to store a video
+// link or a paragraph of prose.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Submission {
@@ -206,10 +206,10 @@ pub struct Submission {
     /// Where that metadata can be fetched.
     pub uri: String,
     /// When the entry first arrived.
-    ///
-    /// Later edits do not move this. Submission order is the last step of the
-    /// tie break chain, so a team that edits a typo an hour before the deadline
-    /// would otherwise lose the place their early entry earned them.
+    //
+    // Later edits do not move this. Submission order is the last step of the
+    // tie break chain, so a team that edits a typo an hour before the deadline
+    // would otherwise lose the place their early entry earned them.
     pub submitted_at: u64,
     /// When it was last edited.
     pub updated_at: u64,
@@ -272,11 +272,11 @@ impl Submission {
     }
 
     /// Takes an entry out of the running, whichever route got it there.
-    ///
-    /// An entry already out cannot be taken out again, by either route. The two
-    /// processes can overlap in time, and a second ruling would overwrite the
-    /// first one's reason, leaving the page showing an explanation that belongs
-    /// to a decision nobody made.
+    //
+    // An entry already out cannot be taken out again, by either route. The two
+    // processes can overlap in time, and a second ruling would overwrite the
+    // first one's reason, leaving the page showing an explanation that belongs
+    // to a decision nobody made.
     fn rule_out(&self, status: SubmissionStatus, reason: BytesN<32>) -> Result<Submission, Error> {
         if !self.is_valid() {
             return Err(Error::SubmissionNotEligible);

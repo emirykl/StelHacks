@@ -31,7 +31,7 @@ const criteria = () => [
 
 export function canonicalConstitution(): Constitution {
   return {
-    version: 5,
+    version: 6,
     metadata_hash: Buffer.alloc(32, 7),
     prize_asset: PRIZE_ASSET,
     tracks: [
@@ -58,6 +58,12 @@ export function canonicalConstitution(): Constitution {
       { track: "defi", rank: 1, amount: 2_000n },
     ],
     platform_fee: { collector: FEE_COLLECTOR, bps: 500 },
+    sponsorship: {
+      top_ups_allowed: true,
+      max_new_tracks: 2,
+      min_bounty: 100n,
+      borrows_from: "payments",
+    },
     tie_break: [
       { tag: "JudgeScore", values: undefined },
       { tag: "SubmissionOrder", values: undefined },

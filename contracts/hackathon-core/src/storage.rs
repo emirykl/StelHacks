@@ -6,6 +6,7 @@ use crate::organizers::OrganizingTeam;
 use crate::results::{NoAwardCase, Placement};
 use crate::roster::{Registration, Team};
 use crate::scorecard::{CriterionTally, ScoreTally};
+use crate::sponsorship::{SponsorTrack, Sponsorship};
 use crate::state::{CancellationCase, ExtensionUsage, HackathonState};
 use crate::submission::{DisqualificationCase, Submission};
 
@@ -13,11 +14,11 @@ use crate::submission::{DisqualificationCase, Submission};
 const LEDGERS_PER_DAY: u32 = 17_280;
 
 /// How far ahead instance storage is pushed whenever it is written.
-///
-/// A hackathon runs for weeks and its proof page is supposed to outlive it, so
-/// the lifetime is generous. Every write extends it, which means an active
-/// hackathon can never expire underneath itself; only a finished one starts
-/// counting down, and by then the indexer has everything.
+//
+// A hackathon runs for weeks and its proof page is supposed to outlive it, so
+// the lifetime is generous. Every write extends it, which means an active
+// hackathon can never expire underneath itself; only a finished one starts
+// counting down, and by then the indexer has everything.
 pub const INSTANCE_LIFETIME_LEDGERS: u32 = 120 * LEDGERS_PER_DAY;
 
 /// The remaining lifetime below which a write pushes the entry back out.
@@ -31,11 +32,11 @@ const ENTRY_LIFETIME_LEDGERS: u32 = INSTANCE_LIFETIME_LEDGERS;
 const ENTRY_BUMP_THRESHOLD_LEDGERS: u32 = INSTANCE_BUMP_THRESHOLD_LEDGERS;
 
 /// Everything the core contract stores, one variant per family of entry.
-///
-/// Keys are an enum rather than loose symbols so that adding a new kind of
-/// entry is a change the compiler sees. A typo in a raw symbol key writes to a
-/// slot nobody reads, and that failure is silent, which is the worst shape a
-/// storage bug can take when prize money is involved.
+//
+// Keys are an enum rather than loose symbols so that adding a new kind of
+// entry is a change the compiler sees. A typo in a raw symbol key writes to a
+// slot nobody reads, and that failure is silent, which is the worst shape a
+// storage bug can take when prize money is involved.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -113,6 +114,24 @@ pub enum DataKey {
     NoAward(Symbol),
     /// One judge's signature on that move.
     NoAwardApproval(Symbol, Address),
+    /// What sponsors have added to one prize position since the lock. Kept per
+    /// position rather than per event, because that is the granularity the
+    /// money is aimed at and the granularity settlement pays from.
+    Bonus(Symbol, u32),
+    /// One contribution, in the order it arrived.
+    Sponsorship(u32),
+    /// How many there have been, which is also the next one's index.
+    SponsorshipCount,
+    /// What the platform is owed on those contributions, accumulated as they
+    /// arrive. Its own total rather than folded into the constitution's fee,
+    /// because that one is a function of a frozen table and this one is not.
+    SponsoredFee,
+    /// One track a sponsor asked for, keyed by its identifier.
+    SponsorTrack(Symbol),
+    /// Every such identifier, so the tracks can be walked without knowing their
+    /// names. Ranking, settlement and the refund all have to visit each one,
+    /// and none of them has a name to start from.
+    SponsorTrackIds,
 }
 
 /// Pushes the instance entry's lifetime out. Called on every write, so an
@@ -185,11 +204,11 @@ pub fn load_constitution(env: &Env) -> Result<Constitution, Error> {
 }
 
 /// Freezes the rules by recording their digest.
-///
-/// The phase remains the authority on whether a hackathon is locked, so that
-/// there is one answer to that question rather than two that could drift
-/// apart. This digest is the consequence of the lock and the value every later
-/// reader compares against.
+//
+// The phase remains the authority on whether a hackathon is locked, so that
+// there is one answer to that question rather than two that could drift
+// apart. This digest is the consequence of the lock and the value every later
+// reader compares against.
 pub fn lock_constitution(env: &Env, hash: &BytesN<32>) {
     env.storage()
         .instance()
@@ -514,11 +533,11 @@ pub fn has_ballot_counted(env: &Env, voter: &Address) -> bool {
 
 /// Counts one ballot, marking the voter so they cannot be counted again.
 /// Records that this wallet has spent its ballot, whatever it spent it on.
-///
-/// Separate from the points themselves because the two answer different
-/// questions. This one is what stops a second ballot from the same wallet, and
-/// it has to be written even when every project the ballot named turned out to
-/// be ruled out, or somebody whose choices all fell away could vote again.
+//
+// Separate from the points themselves because the two answer different
+// questions. This one is what stops a second ballot from the same wallet, and
+// it has to be written even when every project the ballot named turned out to
+// be ruled out, or somebody whose choices all fell away could vote again.
 pub fn mark_voted(env: &Env, voter: &Address) {
     let voted = DataKey::BallotCounted(voter.clone());
     env.storage().persistent().set(&voted, &true);
@@ -526,13 +545,13 @@ pub fn mark_voted(env: &Env, voter: &Address) {
 }
 
 /// Adds one ballot's points to a project, and moves the top total if it leads.
-///
-/// The top is held rather than searched for, because the community score
-/// divides by it and finding it would mean reading every project on every
-/// ranking. Saturating at the ceiling instead of overflowing: `MAX_VOTE_POWER`
-/// keeps this inside a `u32` for any electorate that could exist, and a total
-/// that somehow reached the top of the type should stop climbing rather than
-/// wrap around to nothing.
+//
+// The top is held rather than searched for, because the community score
+// divides by it and finding it would mean reading every project on every
+// ranking. Saturating at the ceiling instead of overflowing: `MAX_VOTE_POWER`
+// keeps this inside a `u32` for any electorate that could exist, and a total
+// that somehow reached the top of the type should stop climbing rather than
+// wrap around to nothing.
 pub fn add_vote_weight(env: &Env, team: u32, weight: u32) {
     let tally = vote_weight(env, team).saturating_add(weight);
     let counter = DataKey::VoteWeight(team);
@@ -610,10 +629,10 @@ pub fn is_share_settled(env: &Env, track: &Symbol, rank: u32, member: &Address) 
 
 /// Records one member's share as settled and reports how many of the position's
 /// shares that makes.
-///
-/// The count is kept rather than derived because closing a position otherwise
-/// means loading the team and checking every member on every single payment,
-/// and the answer is one number that only ever moves in one direction.
+//
+// The count is kept rather than derived because closing a position otherwise
+// means loading the team and checking every member on every single payment,
+// and the answer is one number that only ever moves in one direction.
 pub fn settle_share(env: &Env, track: &Symbol, rank: u32, member: &Address) -> u32 {
     let key = DataKey::Share(track.clone(), rank, member.clone());
     env.storage().persistent().set(&key, &true);
@@ -668,6 +687,128 @@ pub fn save_no_award_approval(env: &Env, track: &Symbol, judge: &Address) {
     let key = DataKey::NoAwardApproval(track.clone(), judge.clone());
     env.storage().persistent().set(&key, &true);
     touch_entry(env, &key);
+}
+
+/// What sponsors have added to one position. A position nobody sponsored has
+/// gained nothing, which is the same answer as no entry, so the caller never
+/// handles both.
+pub fn load_bonus(env: &Env, track: &Symbol, rank: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Bonus(track.clone(), rank))
+        .unwrap_or(0i128)
+}
+
+pub fn add_bonus(env: &Env, track: &Symbol, rank: u32, amount: i128) {
+    let key = DataKey::Bonus(track.clone(), rank);
+    let grown = load_bonus(env, track, rank) + amount;
+
+    env.storage().persistent().set(&key, &grown);
+    touch_entry(env, &key);
+}
+
+/// Files one contribution and reports how many that makes.
+//
+// The count is returned rather than looked up again by the caller, because the
+// cap is checked against it and a caller that had to re-read it could check
+// the wrong number.
+pub fn record_sponsorship(env: &Env, sponsorship: &Sponsorship) -> u32 {
+    let index = sponsorship_count(env);
+    let key = DataKey::Sponsorship(index);
+
+    env.storage().persistent().set(&key, sponsorship);
+    touch_entry(env, &key);
+
+    let count = index + 1;
+    env.storage()
+        .instance()
+        .set(&DataKey::SponsorshipCount, &count);
+    touch(env);
+
+    count
+}
+
+pub fn load_sponsorship(env: &Env, index: u32) -> Result<Sponsorship, Error> {
+    let key = DataKey::Sponsorship(index);
+    let sponsorship = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::NotFound)?;
+    touch_entry(env, &key);
+
+    Ok(sponsorship)
+}
+
+pub fn sponsorship_count(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::SponsorshipCount)
+        .unwrap_or(0u32)
+}
+
+/// What the platform is owed on sponsorships so far. Zero for an event nobody
+/// sponsored, which is also the answer for an event whose policy never opened.
+pub fn load_sponsored_fee(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::SponsoredFee)
+        .unwrap_or(0i128)
+}
+
+pub fn add_sponsored_fee(env: &Env, amount: i128) {
+    let owed = load_sponsored_fee(env) + amount;
+    env.storage().instance().set(&DataKey::SponsoredFee, &owed);
+    touch(env);
+}
+
+/// Files a sponsor's track and adds it to the list of names, if it is new.
+//
+// The same function writes a decision, because accepting and declining only
+// change the status on a record that already exists. A separate updater would
+// be a second place that has to remember to keep the name list right.
+pub fn save_sponsor_track(env: &Env, track: &SponsorTrack) {
+    let key = DataKey::SponsorTrack(track.id.clone());
+    let known = env.storage().persistent().has(&key);
+
+    env.storage().persistent().set(&key, track);
+    touch_entry(env, &key);
+
+    if !known {
+        let mut ids = sponsor_track_ids(env);
+        ids.push_back(track.id.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::SponsorTrackIds, &ids);
+        touch(env);
+    }
+}
+
+pub fn load_sponsor_track(env: &Env, id: &Symbol) -> Result<SponsorTrack, Error> {
+    let key = DataKey::SponsorTrack(id.clone());
+    let track = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::NotFound)?;
+    touch_entry(env, &key);
+
+    Ok(track)
+}
+
+pub fn has_sponsor_track(env: &Env, id: &Symbol) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::SponsorTrack(id.clone()))
+}
+
+/// Every sponsor track's name, proposed and decided alike. An event nobody
+/// sponsored has none, which is the same answer as no entry.
+pub fn sponsor_track_ids(env: &Env) -> Vec<Symbol> {
+    env.storage()
+        .instance()
+        .get(&DataKey::SponsorTrackIds)
+        .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn load_constitution_hash(env: &Env) -> Result<BytesN<32>, Error> {

@@ -1,17 +1,17 @@
 use soroban_sdk::contracttype;
 
 /// Who may read the submitted projects while the hackathon is running.
-///
-/// This governs the project metadata only, and it is enforced off chain, where
-/// that metadata lives. What sits on chain is a hash, a timestamp and a track,
-/// and those stay readable by anyone in every setting. A private hackathon
-/// therefore still produces a receipt a stranger can check: they can see that
-/// project seven scored 84.2 and what every judge gave it on every criterion,
-/// they simply cannot read what project seven was.
-///
-/// Calling this a privacy guarantee would be dishonest, so it is not. It is an
-/// access rule on the platform's own API, and the proof of the result never
-/// depends on it.
+//
+// This governs the project metadata only, and it is enforced off chain, where
+// that metadata lives. What sits on chain is a hash, a timestamp and a track,
+// and those stay readable by anyone in every setting. A private hackathon
+// therefore still produces a receipt a stranger can check: they can see that
+// project seven scored 84.2 and what every judge gave it on every criterion,
+// they simply cannot read what project seven was.
+//
+// Calling this a privacy guarantee would be dishonest, so it is not. It is an
+// access rule on the platform's own API, and the proof of the result never
+// depends on it.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -44,10 +44,10 @@ impl ProjectVisibility {
     }
 
     /// Whether a community vote can be run under this setting.
-    ///
-    /// Asking participants to vote on projects they are not allowed to read
-    /// would turn the ballot into a popularity contest over team names, so the
-    /// two settings are checked against each other when the rules are locked.
+    //
+    // Asking participants to vote on projects they are not allowed to read
+    // would turn the ballot into a popularity contest over team names, so the
+    // two settings are checked against each other when the rules are locked.
     pub fn supports_community_vote(self) -> bool {
         self.visible_to_participants()
     }

@@ -7,6 +7,7 @@ use crate::constitution::ranking::{validate_tie_break, TieBreakRule};
 use crate::constitution::registration::RegistrationPolicy;
 use crate::constitution::schedule::{ExtensionPolicy, Schedule};
 use crate::constitution::scoring::{total_prize_amount, validate_prize_tiers, PrizeTier, Track};
+use crate::constitution::sponsorship::SponsorshipPolicy;
 use crate::constitution::teams::TeamPolicy;
 use crate::constitution::visibility::ProjectVisibility;
 use crate::constitution::voting::VotePolicy;
@@ -15,13 +16,14 @@ use crate::submission::SubmissionRequirements;
 
 /// The format version of the constitution, so a reader can tell which shape it
 /// is looking at once this structure has changed a few times.
-///
-/// Five since a ballot became an amount rather than a mark. The bump is not
-/// decoration: every digest in `fixtures/` moved with it, and a client reading
-/// a version four document has one that could only ever say "this wallet chose
-/// this project". Counting a version five event with that assumption would
-/// undercount every voter who spread their points.
-pub const CONSTITUTION_VERSION: u32 = 5;
+//
+// Six since the prize table stopped being the whole of the prize. The bump is
+// not decoration: every digest in `fixtures/` moved with it, and a client
+// reading a version five document believes each position pays the amount
+// frozen beside it. That is still where a position starts, but a hackathon
+// that opened its [`Constitution::sponsorship`] door can pay more, and a
+// reader who assumed otherwise would under-report what a winner is owed.
+pub const CONSTITUTION_VERSION: u32 = 6;
 
 /// A judge and the tracks they are responsible for.
 #[contracttype]
@@ -34,16 +36,16 @@ pub struct JudgeAssignment {
 }
 
 /// Everything that decides the outcome of a hackathon.
-///
-/// This is signed and hashed before registration opens, and from that moment
-/// none of it can change. Anyone can rebuild the same structure from the public
-/// page, hash it themselves, and compare against the hash stored on chain; if
-/// the two differ, the competition is not the one that was announced.
-///
-/// Everything that does not decide an outcome, meaning the name, the logo, the
-/// long description and the judge biographies, is deliberately absent. Those
-/// live off chain under [`Constitution::metadata_hash`], so editing a typo in a
-/// description never has to look like tampering with the rules.
+//
+// This is signed and hashed before registration opens, and from that moment
+// none of it can change. Anyone can rebuild the same structure from the public
+// page, hash it themselves, and compare against the hash stored on chain; if
+// the two differ, the competition is not the one that was announced.
+//
+// Everything that does not decide an outcome, meaning the name, the logo, the
+// long description and the judge biographies, is deliberately absent. Those
+// live off chain under [`Constitution::metadata_hash`], so editing a typo in a
+// description never has to look like tampering with the rules.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Constitution {
@@ -75,6 +77,8 @@ pub struct Constitution {
     pub prize_tiers: Vec<PrizeTier>,
     /// What the platform takes, charged on top of the table above.
     pub platform_fee: PlatformFee,
+    /// Whether outside money may join the pool after the lock, and how far.
+    pub sponsorship: SponsorshipPolicy,
     /// The chain that separates two projects on the same score.
     pub tie_break: Vec<TieBreakRule>,
     /// Every power the organizer keeps after the lock.
@@ -97,11 +101,11 @@ impl Constitution {
     }
 
     /// What the prize table adds up to, which is what winners are owed.
-    ///
-    /// Kept apart from [`Self::required_funding`] now that the two differ. A
-    /// caller asking what the prizes come to and a caller asking what has to be
-    /// in the vault are asking different questions, and answering both from one
-    /// function is how a fee ends up quietly deducted from somebody's prize.
+    //
+    // Kept apart from [`Self::required_funding`] now that the two differ. A
+    // caller asking what the prizes come to and a caller asking what has to be
+    // in the vault are asking different questions, and answering both from one
+    // function is how a fee ends up quietly deducted from somebody's prize.
     pub fn prize_total(&self) -> Result<i128, Error> {
         total_prize_amount(&self.prize_tiers)
     }
@@ -112,12 +116,12 @@ impl Constitution {
     }
 
     /// The total the vault must hold before the hackathon can be published.
-    ///
-    /// Prizes plus the fee. The fee is funded before registration opens for the
-    /// same reason the prizes are: a pool that covers the prizes but not the fee
-    /// would reach settlement owing money it does not hold, and the only ways
-    /// out of that are taking it from a winner or never paying it. Both are
-    /// decided here instead, before anybody has signed up.
+    //
+    // Prizes plus the fee. The fee is funded before registration opens for the
+    // same reason the prizes are: a pool that covers the prizes but not the fee
+    // would reach settlement owing money it does not hold, and the only ways
+    // out of that are taking it from a winner or never paying it. Both are
+    // decided here instead, before anybody has signed up.
     pub fn required_funding(&self) -> Result<i128, Error> {
         self.prize_total()?
             .checked_add(self.platform_fee_amount()?)
@@ -156,11 +160,11 @@ impl Constitution {
     }
 
     /// Rejects a constitution that cannot run to a defined result.
-    ///
-    /// Each part validates itself first, then the checks that only make sense
-    /// across parts run. Those cross checks are the point of this function: a
-    /// setting is rarely wrong on its own, it is wrong next to another setting,
-    /// and the moment to catch that is before anybody writes code against it.
+    //
+    // Each part validates itself first, then the checks that only make sense
+    // across parts run. Those cross checks are the point of this function: a
+    // setting is rarely wrong on its own, it is wrong next to another setting,
+    // and the moment to catch that is before anybody writes code against it.
     pub fn validate(&self) -> Result<(), Error> {
         /*
           The shape this contract was compiled for, checked before anything in
@@ -189,6 +193,7 @@ impl Constitution {
 
         validate_prize_tiers(&self.prize_tiers)?;
         self.platform_fee.validate()?;
+        self.sponsorship.validate(&self.tracks)?;
         self.required_funding()?;
 
         for tier in self.prize_tiers.iter() {

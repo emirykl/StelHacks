@@ -12,6 +12,7 @@ mod ranking;
 mod registration;
 mod schedule;
 mod scoring;
+mod sponsorship;
 mod teams;
 mod visibility;
 mod voting;
@@ -27,6 +28,7 @@ pub use scoring::{
     total_prize_amount, validate_prize_tiers, Criterion, PrizeTier, Track, MAX_CRITERION_SCORE,
     WEIGHT_TOTAL_BPS,
 };
+pub use sponsorship::SponsorshipPolicy;
 pub use teams::{TeamPolicy, MAX_TEAM_SIZE, MIN_TEAM_SIZE};
 pub use visibility::ProjectVisibility;
 pub use voting::{

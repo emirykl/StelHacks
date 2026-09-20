@@ -3,16 +3,16 @@ use soroban_sdk::{contracttype, Address, Env, Vec};
 use crate::errors::Error;
 
 /// The people running a hackathon from the organizing side.
-///
-/// The organizer is fixed when the hackathon is created and is the only address
-/// that can fund the vault, lock the rules, screen submissions or open a
-/// disqualification. Collaborators are the organizer's helpers, and their reach
-/// stops at one job: deciding who gets into the event.
-///
-/// That split is deliberate. The collaborator list can grow in the middle of a
-/// running hackathon, when a hundred applications are waiting and one person
-/// cannot read them all. Anything touching the prize or the ranking would be
-/// unsafe to hang off a list that grows under time pressure, so it does not.
+//
+// The organizer is fixed when the hackathon is created and is the only address
+// that can fund the vault, lock the rules, screen submissions or open a
+// disqualification. Collaborators are the organizer's helpers, and their reach
+// stops at one job: deciding who gets into the event.
+//
+// That split is deliberate. The collaborator list can grow in the middle of a
+// running hackathon, when a hundred applications are waiting and one person
+// cannot read them all. Anything touching the prize or the ranking would be
+// unsafe to hang off a list that grows under time pressure, so it does not.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrganizingTeam {
@@ -38,18 +38,18 @@ impl OrganizingTeam {
     }
 
     /// Whether this address may approve or reject a registration application.
-    ///
-    /// The organizer is always included, so adding a collaborator widens the
-    /// door without ever narrowing it.
+    //
+    // The organizer is always included, so adding a collaborator widens the
+    // door without ever narrowing it.
     pub fn can_review_applications(&self, who: &Address) -> bool {
         self.is_organizer(who) || self.collaborators.contains(who)
     }
 
     /// Adds a helper who can work through the application queue.
-    ///
-    /// The organizer is refused rather than silently ignored, because a caller
-    /// asking for that has misunderstood who already holds the power and should
-    /// hear about it.
+    //
+    // The organizer is refused rather than silently ignored, because a caller
+    // asking for that has misunderstood who already holds the power and should
+    // hear about it.
     pub fn add_collaborator(&mut self, collaborator: Address) -> Result<(), Error> {
         if self.is_organizer(&collaborator) {
             return Err(Error::CollaboratorInvalid);

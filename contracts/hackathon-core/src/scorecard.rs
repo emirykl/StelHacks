@@ -4,20 +4,20 @@ use crate::constitution::{Track, MAX_CRITERION_SCORE, WEIGHT_TOTAL_BPS};
 use crate::errors::Error;
 
 /// The largest a weighted score can be: full marks on every criterion.
-///
-/// Scores are kept at this scale rather than divided down to a percentage. The
-/// division would happen twice, once here and once when averaging across
-/// judges, and each one would quietly drop a fraction of a point. On a close
-/// result that lost fraction is the difference between first and second, so the
-/// contract carries the full precision and only the interface rounds.
+//
+// Scores are kept at this scale rather than divided down to a percentage. The
+// division would happen twice, once here and once when averaging across
+// judges, and each one would quietly drop a fraction of a point. On a close
+// result that lost fraction is the difference between first and second, so the
+// contract carries the full precision and only the interface rounds.
 pub const MAX_WEIGHTED_SCORE: u32 = MAX_CRITERION_SCORE * WEIGHT_TOTAL_BPS;
 
 /// A project's revealed scorecards, kept as a running count and sum.
-///
-/// The average is the arithmetic mean of the valid scorecards, and holding the
-/// pair means computing it never requires loading every scorecard a project
-/// received. The sum is widened to sixty four bits so a project with hundreds
-/// of judges cannot overflow it.
+//
+// The average is the arithmetic mean of the valid scorecards, and holding the
+// pair means computing it never requires loading every scorecard a project
+// received. The sum is widened to sixty four bits so a project with hundreds
+// of judges cannot overflow it.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ScoreTally {
@@ -27,10 +27,10 @@ pub struct ScoreTally {
 
 impl ScoreTally {
     /// The mean weighted score, at [`MAX_WEIGHTED_SCORE`] scale.
-    ///
-    /// A project nobody scored has no average rather than an average of zero.
-    /// Treating it as zero would quietly rank an unjudged project below a badly
-    /// judged one, which is a different claim from the one the data supports.
+    //
+    // A project nobody scored has no average rather than an average of zero.
+    // Treating it as zero would quietly rank an unjudged project below a badly
+    // judged one, which is a different claim from the one the data supports.
     pub fn average(&self) -> Option<u32> {
         if self.count == 0 {
             return None;
@@ -41,10 +41,10 @@ impl ScoreTally {
 }
 
 /// One criterion's revealed scores for one project, as a count and a sum.
-///
-/// Kept alongside the weighted totals because the tie break chain can be asked
-/// to separate two projects on a single criterion, and the weighted total has
-/// already blended the criteria together by then.
+//
+// Kept alongside the weighted totals because the tie break chain can be asked
+// to separate two projects on a single criterion, and the weighted total has
+// already blended the criteria together by then.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct CriterionTally {
@@ -74,11 +74,11 @@ pub struct CriterionScore {
 }
 
 /// One judge's verdict on one project.
-///
-/// In the easy mode this is signed off chain and only its digest reaches the
-/// chain before the reveal. In the strict mode the judge commits to it
-/// themselves. Either way the shape is the same, so the scoring maths has one
-/// implementation rather than two that can disagree.
+//
+// In the easy mode this is signed off chain and only its digest reaches the
+// chain before the reveal. In the strict mode the judge commits to it
+// themselves. Either way the shape is the same, so the scoring maths has one
+// implementation rather than two that can disagree.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Scorecard {
@@ -91,11 +91,11 @@ pub struct Scorecard {
 
 impl Scorecard {
     /// The weighted total, at [`MAX_WEIGHTED_SCORE`] scale.
-    ///
-    /// The rubric drives the loop rather than the scorecard, which is what
-    /// makes a missing criterion an error instead of a silent zero. A judge who
-    /// skipped the criterion a project was strongest on would otherwise cost
-    /// that project the weight of it without anyone noticing.
+    //
+    // The rubric drives the loop rather than the scorecard, which is what
+    // makes a missing criterion an error instead of a silent zero. A judge who
+    // skipped the criterion a project was strongest on would otherwise cost
+    // that project the weight of it without anyone noticing.
     pub fn weighted_total(&self, track: &Track) -> Result<u32, Error> {
         self.validate(track)?;
 
@@ -122,11 +122,11 @@ impl Scorecard {
     }
 
     /// Rejects a scorecard the rubric cannot read.
-    ///
-    /// Every criterion has to appear exactly once and stay in range. An entry
-    /// naming a criterion the rubric does not have is refused rather than
-    /// ignored, because it means the judge scored against a different rubric
-    /// from the one that will be used to count them.
+    //
+    // Every criterion has to appear exactly once and stay in range. An entry
+    // naming a criterion the rubric does not have is refused rather than
+    // ignored, because it means the judge scored against a different rubric
+    // from the one that will be used to count them.
     pub fn validate(&self, track: &Track) -> Result<(), Error> {
         if self.scores.len() != track.criteria.len() {
             return Err(Error::ScorecardInvalid);

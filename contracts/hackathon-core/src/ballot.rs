@@ -4,12 +4,12 @@ use crate::constitution::VotePolicy;
 use crate::errors::Error;
 
 /// One project a voter backed, and how much of their ballot went to it.
-///
-/// A wallet used to have a vote and now has an amount to place, which is the
-/// difference between asking somebody which project is best and asking them
-/// what they thought of the field. Both are defensible; the second is the one
-/// the rules can express, and a hackathon that wants the first locks a power of
-/// one and a single choice.
+//
+// A wallet used to have a vote and now has an amount to place, which is the
+// difference between asking somebody which project is best and asking them
+// what they thought of the field. Both are defensible; the second is the one
+// the rules can express, and a hackathon that wants the first locks a power of
+// one and a single choice.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct VoteChoice {
@@ -20,13 +20,13 @@ pub struct VoteChoice {
 }
 
 /// Checks a ballot against the rules that were frozen before anybody voted.
-///
-/// Every condition here is one the voter's own wallet could have checked before
-/// sealing, and the page does check them. It is repeated because the page is
-/// not what decides: a ballot arrives at this contract as a digest under a root
-/// published by the collection service, and neither of those two can tell a
-/// well formed ballot from a malformed one. The only place that can is here,
-/// after the proof has shown what the voter actually sealed.
+//
+// Every condition here is one the voter's own wallet could have checked before
+// sealing, and the page does check them. It is repeated because the page is
+// not what decides: a ballot arrives at this contract as a digest under a root
+// published by the collection service, and neither of those two can tell a
+// well formed ballot from a malformed one. The only place that can is here,
+// after the proof has shown what the voter actually sealed.
 pub fn validate_ballot(choices: &Vec<VoteChoice>, policy: &VotePolicy) -> Result<(), Error> {
     if choices.is_empty() || choices.len() > policy.max_choices {
         return Err(Error::BallotMalformed);

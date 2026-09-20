@@ -1,20 +1,20 @@
 use soroban_sdk::{Bytes, BytesN, Env, Vec};
 
 /// Tags that keep a leaf and an inner node from ever hashing the same way.
-///
-/// Without them the tree has a known forgery: an attacker who can choose data
-/// shaped like a pair of digests can present an inner node as though it were a
-/// leaf, and prove membership of something that was never submitted. One byte
-/// in front of the payload closes it, and it is the reason these two constants
-/// exist rather than a plain concatenation.
+//
+// Without them the tree has a known forgery: an attacker who can choose data
+// shaped like a pair of digests can present an inner node as though it were a
+// leaf, and prove membership of something that was never submitted. One byte
+// in front of the payload closes it, and it is the reason these two constants
+// exist rather than a plain concatenation.
 const LEAF_TAG: u8 = 0x00;
 const NODE_TAG: u8 = 0x01;
 
 /// The digest of a leaf.
-///
-/// Callers pass the already serialized payload, so the tree stays indifferent
-/// to what it is carrying: a scorecard in one place, a ballot in another, each
-/// with its own domain tag applied before it gets here.
+//
+// Callers pass the already serialized payload, so the tree stays indifferent
+// to what it is carrying: a scorecard in one place, a ballot in another, each
+// with its own domain tag applied before it gets here.
 pub fn leaf(env: &Env, payload: &Bytes) -> BytesN<32> {
     let mut tagged = Bytes::from_array(env, &[LEAF_TAG]);
     tagged.append(payload);
@@ -23,11 +23,11 @@ pub fn leaf(env: &Env, payload: &Bytes) -> BytesN<32> {
 }
 
 /// The digest of two children.
-///
-/// The pair is sorted before hashing, which means a proof carries only the
-/// sibling digests and no direction bits. That keeps the proof half the size
-/// and, more usefully, removes a whole class of client bug where the two sides
-/// disagree about which way to walk the tree.
+//
+// The pair is sorted before hashing, which means a proof carries only the
+// sibling digests and no direction bits. That keeps the proof half the size
+// and, more usefully, removes a whole class of client bug where the two sides
+// disagree about which way to walk the tree.
 pub fn node(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
     let (first, second) = if a.to_array() <= b.to_array() {
         (a, b)
@@ -43,11 +43,11 @@ pub fn node(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
 }
 
 /// Whether `leaf` sits under `root`, given the sibling digests along the way.
-///
-/// This is what a judge uses to check their own scorecard was counted, and what
-/// a voter uses to check their ballot was. The collection service can hand over
-/// a root that leaves someone out, but it cannot hand over a proof for a leaf
-/// it excluded, so the omission is detectable by exactly the person it harmed.
+//
+// This is what a judge uses to check their own scorecard was counted, and what
+// a voter uses to check their ballot was. The collection service can hand over
+// a root that leaves someone out, but it cannot hand over a proof for a leaf
+// it excluded, so the omission is detectable by exactly the person it harmed.
 pub fn verify(env: &Env, root: &BytesN<32>, leaf: &BytesN<32>, proof: &Vec<BytesN<32>>) -> bool {
     let mut computed = leaf.clone();
 

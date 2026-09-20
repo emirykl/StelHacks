@@ -3,12 +3,12 @@ use soroban_sdk::contracttype;
 use crate::errors::Error;
 
 /// The deadlines of a hackathon, as UTC ledger timestamps in seconds.
-///
-/// The constitution locks the schedule that was announced. Deadlines can still
-/// move, but only forward, only before they pass, and only within the limits of
-/// the [`ExtensionPolicy`] that was declared alongside them, so the effective
-/// schedule is always the announced one plus a public list of recorded
-/// extensions.
+//
+// The constitution locks the schedule that was announced. Deadlines can still
+// move, but only forward, only before they pass, and only within the limits of
+// the [`ExtensionPolicy`] that was declared alongside them, so the effective
+// schedule is always the announced one plus a public list of recorded
+// extensions.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Schedule {
@@ -34,11 +34,11 @@ pub struct Schedule {
 
 impl Schedule {
     /// Rejects a schedule whose deadlines do not run in a workable order.
-    ///
-    /// `community_vote_enabled` comes from the locked vote split. When the
-    /// community has no share the two vote timestamps carry no meaning and are
-    /// not checked; otherwise the vote window has to sit inside the judging
-    /// window, which is what keeps the ballots sealed until the reveal.
+    //
+    // `community_vote_enabled` comes from the locked vote split. When the
+    // community has no share the two vote timestamps carry no meaning and are
+    // not checked; otherwise the vote window has to sit inside the judging
+    // window, which is what keeps the ballots sealed until the reveal.
     pub fn validate(&self, community_vote_enabled: bool) -> Result<(), Error> {
         let ordered = self.registration_opens_at < self.registration_closes_at
             && self.registration_opens_at <= self.submission_opens_at
@@ -72,13 +72,14 @@ impl Schedule {
             Deadline::Screening => self.screening_closes_at,
             Deadline::Judging => self.judging_closes_at,
             Deadline::CommunityVote => self.community_vote_closes_at,
+            Deadline::CommunityVoteOpens => self.community_vote_opens_at,
         }
     }
 
     /// Returns a copy of the schedule with one deadline moved back.
-    ///
-    /// The caller is expected to have checked [`Schedule::check_extension`]
-    /// first; this only rewrites the field.
+    //
+    // The caller is expected to have checked [`Schedule::check_extension`]
+    // first; this only rewrites the field.
     pub fn with_deadline(&self, deadline: Deadline, moved_to: u64) -> Schedule {
         let mut moved = self.clone();
         match deadline {
@@ -87,18 +88,19 @@ impl Schedule {
             Deadline::Screening => moved.screening_closes_at = moved_to,
             Deadline::Judging => moved.judging_closes_at = moved_to,
             Deadline::CommunityVote => moved.community_vote_closes_at = moved_to,
+            Deadline::CommunityVoteOpens => moved.community_vote_opens_at = moved_to,
         }
 
         moved
     }
 
     /// Whether a deadline may be moved to `moved_to` at time `now`.
-    ///
-    /// Two rules do the work here. A deadline only ever moves forward, so an
-    /// organizer can never cut a window short once people are working against
-    /// it. And a deadline that has already passed is closed for good, because
-    /// reopening it would let the organizer look at what came in and only then
-    /// decide whether to give more time.
+    //
+    // Two rules do the work here. A deadline only ever moves forward, so an
+    // organizer can never cut a window short once people are working against
+    // it. And a deadline that has already passed is closed for good, because
+    // reopening it would let the organizer look at what came in and only then
+    // decide whether to give more time.
     pub fn check_extension(
         &self,
         deadline: Deadline,
@@ -120,9 +122,20 @@ impl Schedule {
 }
 
 /// The deadlines an organizer is allowed to move.
-///
-/// The opening timestamps are deliberately absent. Moving an opening moment
-/// after the fact changes who could take part rather than how long they had.
+//
+// The opening timestamps are deliberately absent, with one exception. Moving
+// an opening moment after the fact changes who could take part rather than how
+// long they had: a registration window that opens later admits a different set
+// of people.
+//
+// The community vote's opening is the exception, and it is not an inconsistency
+// — it is the one opening that cannot change who takes part. The electorate was
+// fixed when registration closed, weeks earlier, and every voter in it was
+// approved by then. What moving it changes is only when a vote that is already
+// decided-who may be cast, and it has to be movable for the ordinary reason:
+// the vote opens when the entry check ends, so an entry check that slips leaves
+// a vote window starting before the round it follows, and the contract refuses
+// that schedule outright.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -132,13 +145,14 @@ pub enum Deadline {
     Screening = 2,
     Judging = 3,
     CommunityVote = 4,
+    CommunityVoteOpens = 5,
 }
 
 /// How much room the organizer announced for moving deadlines.
-///
-/// Declaring this before the lock is the whole point: participants know up
-/// front that submission can slip by at most so much, so an extension is a
-/// use of a published allowance rather than a surprise.
+//
+// Declaring this before the lock is the whole point: participants know up
+// front that submission can slip by at most so much, so an extension is a
+// use of a published allowance rather than a surprise.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ExtensionPolicy {

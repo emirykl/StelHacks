@@ -20,6 +20,7 @@ mod phase;
 mod results;
 mod roster;
 mod scorecard;
+mod sponsorship;
 mod state;
 mod storage;
 mod submission;
@@ -32,12 +33,12 @@ pub use constitution::{
     total_prize_amount, validate_prize_tiers, validate_tie_break, Constitution, Criterion,
     Deadline, DiscretionPolicy, ExtensionPolicy, JudgeAssignment, JudgingMode, PlatformFee,
     PrizeTier, ProjectVisibility, RefundRoute, RegistrationPolicy, Schedule, SettlementMode,
-    TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION, DEFAULT_MAX_CHOICES,
-    DEFAULT_VOTE_POWER, FEE_TOTAL_BPS, MAX_CRITERION_SCORE, MAX_PLATFORM_FEE_BPS,
-    MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE, MAX_VOTE_POWER, MIN_TEAM_SIZE,
-    VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
+    SponsorshipPolicy, TeamPolicy, TieBreakRule, Track, VotePolicy, CONSTITUTION_VERSION,
+    DEFAULT_MAX_CHOICES, DEFAULT_VOTE_POWER, FEE_TOTAL_BPS, MAX_CRITERION_SCORE,
+    MAX_PLATFORM_FEE_BPS, MAX_SETTLEMENT_SAFETY_WINDOW, MAX_TEAM_SIZE, MAX_VOTE_POWER,
+    MIN_TEAM_SIZE, VOTE_SPLIT_TOTAL_BPS, WEIGHT_TOTAL_BPS,
 };
-pub use contract::{HackathonCore, HackathonCoreClient};
+pub use contract::{DeadlineMove, HackathonCore, HackathonCoreClient};
 pub use errors::Error;
 pub use hashing::{ballot_leaf, hash_constitution, hash_submission_metadata, scorecard_leaf};
 pub use organizers::OrganizingTeam;
@@ -47,6 +48,7 @@ pub use results::{
 };
 pub use roster::{ApplicationStatus, Registration, Team};
 pub use scorecard::{CriterionScore, CriterionTally, ScoreTally, Scorecard, MAX_WEIGHTED_SCORE};
+pub use sponsorship::{Split, Sponsorship, MAX_SPONSORSHIPS};
 pub use state::{ExtensionUsage, HackathonState};
 pub use storage::DataKey;
 pub use submission::{

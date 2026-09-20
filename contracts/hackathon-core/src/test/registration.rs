@@ -201,6 +201,174 @@ fn a_decision_cannot_be_revisited() {
     );
 }
 
+/// Clearing a queue in one signature, which is the whole reason the batch
+/// exists: forty wallet prompts is not a slow afternoon, it is a queue nobody
+/// finishes.
+mod in_a_batch {
+    use super::*;
+
+    use soroban_sdk::{vec, Vec};
+
+    /// Three applicants, waiting.
+    fn queue(fixture: &Fixture) -> Vec<Address> {
+        vec![
+            &fixture.env,
+            applicant(fixture),
+            applicant(fixture),
+            applicant(fixture),
+        ]
+    }
+
+    /// Every one of them gets in, and each gets their own row rather than a
+    /// shared one. A batch is a signature over several decisions, not one
+    /// decision about several people.
+    #[test]
+    fn approving_a_queue_admits_every_name_in_it() {
+        let fixture = open();
+        let organizer = fixture.organizer.clone();
+        let waiting = queue(&fixture);
+
+        assert_eq!(fixture.client.approve_applications(&organizer, &waiting), 3);
+
+        for who in waiting.iter() {
+            let row = fixture.client.registration(&who);
+
+            assert!(row.status == ApplicationStatus::Approved);
+            assert_eq!(row.decided_at, fixture.env.ledger().timestamp());
+        }
+    }
+
+    /// One written reason for the batch, recorded against each of them. It is
+    /// what a reviewer turning thirty people away actually has: a rule they
+    /// all fell outside of.
+    #[test]
+    fn refusing_a_queue_records_the_one_reason_against_each_of_them() {
+        let fixture = open();
+        let organizer = fixture.organizer.clone();
+        let waiting = queue(&fixture);
+
+        assert_eq!(
+            fixture
+                .client
+                .reject_applications(&organizer, &waiting, &reason(&fixture)),
+            3
+        );
+
+        for who in waiting.iter() {
+            let row = fixture.client.registration(&who);
+
+            assert!(row.status == ApplicationStatus::Rejected);
+            assert_eq!(row.reason, reason(&fixture));
+        }
+    }
+
+    /// One applicant's situation is that applicant's. A queue read into a
+    /// browser a minute ago is a queue somebody may have been decided in
+    /// since, and that is not a fact about the other thirty nine: taking them
+    /// all down over it would mean the bigger the queue, the likelier that
+    /// clearing it does nothing at all.
+    #[test]
+    fn a_name_already_decided_is_passed_over_and_the_rest_go_through() {
+        let fixture = open();
+        let organizer = fixture.organizer.clone();
+        let waiting = queue(&fixture);
+
+        let first = waiting.get_unchecked(0);
+        fixture
+            .client
+            .reject_application(&organizer, &first, &reason(&fixture));
+
+        assert_eq!(
+            fixture.client.approve_applications(&organizer, &waiting),
+            2,
+            "the two that were still there to decide"
+        );
+
+        // The refusal already on the record stands. A batch approval is not a
+        // way to overturn a decision somebody has already taken.
+        assert!(fixture.client.registration(&first).status == ApplicationStatus::Rejected);
+
+        for who in waiting.iter().skip(1) {
+            assert!(fixture.client.registration(&who).status == ApplicationStatus::Approved);
+        }
+    }
+
+    /// A name nobody has an application for is a name there was no decision to
+    /// make about, and it costs the rest of the list nothing.
+    #[test]
+    fn a_name_that_never_applied_is_passed_over_too() {
+        let fixture = open();
+        let organizer = fixture.organizer.clone();
+        let who = applicant(&fixture);
+        let stranger = Address::generate(&fixture.env);
+
+        assert_eq!(
+            fixture
+                .client
+                .approve_applications(&organizer, &vec![&fixture.env, stranger, who.clone()]),
+            1
+        );
+
+        assert!(fixture.client.registration(&who).status == ApplicationStatus::Approved);
+    }
+
+    /// The same name twice is one decision, not one decision and one failure.
+    /// Nobody assembling a selection in a browser should have to guarantee it
+    /// holds no duplicates.
+    #[test]
+    fn the_same_name_twice_is_decided_once() {
+        let fixture = open();
+        let organizer = fixture.organizer.clone();
+        let who = applicant(&fixture);
+
+        assert_eq!(
+            fixture
+                .client
+                .approve_applications(&organizer, &vec![&fixture.env, who.clone(), who.clone()]),
+            1
+        );
+
+        assert!(fixture.client.registration(&who).status == ApplicationStatus::Approved);
+    }
+
+    /// The batch is not a way around who may decide. Passing over a name the
+    /// reviewer cannot decide is one thing; passing over the reviewer is
+    /// another, and this gate is the same function the singular calls use.
+    #[test]
+    fn a_stranger_cannot_clear_somebody_elses_queue() {
+        let fixture = open();
+        let stranger = Address::generate(&fixture.env);
+        let waiting = queue(&fixture);
+
+        assert_eq!(
+            fixture
+                .client
+                .try_approve_applications(&stranger, &waiting)
+                .err(),
+            Some(Ok(Error::NotAuthorized))
+        );
+    }
+
+    /// Asking for no decisions decides nothing, and says so. A reviewer who
+    /// pressed the button with an empty selection has wasted a fee, not
+    /// corrupted a roster.
+    #[test]
+    fn an_empty_batch_changes_nothing() {
+        let fixture = open();
+        let organizer = fixture.organizer.clone();
+        let who = applicant(&fixture);
+
+        assert_eq!(
+            fixture
+                .client
+                .approve_applications(&organizer, &Vec::new(&fixture.env)),
+            0
+        );
+
+        assert!(fixture.client.registration(&who).status == ApplicationStatus::Pending);
+    }
+}
+
 /// The queue is exactly the work one person cannot clear alone, so a
 /// collaborator can decide as well as the organizer.
 #[test]

@@ -39,12 +39,12 @@ impl ExtensionUsage {
 }
 
 /// A move to end the hackathon early, and how far along it is.
-///
-/// Cancellation is the only power that reaches everybody at once, so it carries
-/// the same shape as the others rather than a shortcut: it is opened with a
-/// reason, it is signed by judges against a threshold announced before the lock,
-/// and only then does it take effect and send the pool back along the route the
-/// rules named.
+//
+// Cancellation is the only power that reaches everybody at once, so it carries
+// the same shape as the others rather than a shortcut: it is opened with a
+// reason, it is signed by judges against a threshold announced before the lock,
+// and only then does it take effect and send the pool back along the route the
+// rules named.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CancellationCase {
@@ -57,14 +57,14 @@ pub struct CancellationCase {
 }
 
 /// Everything about a hackathon that changes while it runs.
-///
-/// This sits beside the constitution rather than inside it. The constitution is
-/// hashed and frozen; if the schedule in force lived there, moving a deadline
-/// by an hour after an outage would break the digest and make a legitimate,
-/// announced, judge approved extension look identical to tampering. So the
-/// announced schedule stays locked in the constitution, the schedule actually
-/// in force lives here, and the difference between them is a public list of
-/// recorded extensions.
+//
+// This sits beside the constitution rather than inside it. The constitution is
+// hashed and frozen; if the schedule in force lived there, moving a deadline
+// by an hour after an outage would break the digest and make a legitimate,
+// announced, judge approved extension look identical to tampering. So the
+// announced schedule stays locked in the constitution, the schedule actually
+// in force lives here, and the difference between them is a public list of
+// recorded extensions.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HackathonState {
@@ -99,11 +99,11 @@ impl HackathonState {
     }
 
     /// Moves to the next phase, refusing to move early.
-    ///
-    /// A phase that ends on the clock cannot end before that moment, so nobody
-    /// can cut a window short by advancing the state machine. A phase that ends
-    /// on an action is advanced by whichever entry point performs that action,
-    /// and reaches here having already checked its own conditions.
+    //
+    // A phase that ends on the clock cannot end before that moment, so nobody
+    // can cut a window short by advancing the state machine. A phase that ends
+    // on an action is advanced by whichever entry point performs that action,
+    // and reaches here having already checked its own conditions.
     pub fn advance(&self, now: u64) -> Result<HackathonState, Error> {
         let next = self.phase.next().ok_or(Error::WrongPhase)?;
 
@@ -123,12 +123,12 @@ impl HackathonState {
     }
 
     /// Ends the hackathon early, under the policy declared before the lock.
-    ///
-    /// This is the one transition that does not follow the phase order, because
-    /// cancellation is not a stage the event reaches but a stop it comes to. A
-    /// hackathon that already finished cannot be stopped: its winners are paid
-    /// and its proof page is permanent, and reopening either would be worse than
-    /// whatever the cancellation was meant to fix.
+    //
+    // This is the one transition that does not follow the phase order, because
+    // cancellation is not a stage the event reaches but a stop it comes to. A
+    // hackathon that already finished cannot be stopped: its winners are paid
+    // and its proof page is permanent, and reopening either would be worse than
+    // whatever the cancellation was meant to fix.
     pub fn cancel(&self) -> Result<HackathonState, Error> {
         if self.phase.is_terminal() {
             return Err(Error::WrongPhase);
@@ -144,12 +144,12 @@ impl HackathonState {
     }
 
     /// Moves one deadline back, within the allowance the organizer announced.
-    ///
-    /// Returns the new state alongside the updated usage, so the caller writes
-    /// both or neither. The schedule is revalidated afterwards because moving
-    /// one deadline past another would leave a schedule that no longer runs in
-    /// order, and a submission deadline pushed beyond the judging deadline is
-    /// exactly the kind of well meant extension that strands an event.
+    //
+    // Returns the new state alongside the updated usage, so the caller writes
+    // both or neither. The schedule is revalidated afterwards because moving
+    // one deadline past another would leave a schedule that no longer runs in
+    // order, and a submission deadline pushed beyond the judging deadline is
+    // exactly the kind of well meant extension that strands an event.
     pub fn extend(
         &self,
         deadline: Deadline,

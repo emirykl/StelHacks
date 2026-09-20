@@ -8,46 +8,46 @@ use crate::scorecard::Scorecard;
 use crate::submission::SubmissionMetadata;
 
 /// Domain separators.
-///
-/// Every digest in this system is taken over a tagged payload, so a value that
-/// happens to serialize identically in two different roles can never produce
-/// the same digest. Without this, a carefully shaped submission could in
-/// principle carry the digest of a constitution, and a client comparing hashes
-/// would have no way to tell which one it was looking at.
+//
+// Every digest in this system is taken over a tagged payload, so a value that
+// happens to serialize identically in two different roles can never produce
+// the same digest. Without this, a carefully shaped submission could in
+// principle carry the digest of a constitution, and a client comparing hashes
+// would have no way to tell which one it was looking at.
 const CONSTITUTION_DOMAIN: &[u8] = b"stelhacks.v1.constitution";
 const SUBMISSION_DOMAIN: &[u8] = b"stelhacks.v1.submission";
 const SCORECARD_DOMAIN: &[u8] = b"stelhacks.v1.scorecard";
 const BALLOT_DOMAIN: &[u8] = b"stelhacks.v1.ballot";
 
 /// The digest that locks the rules of a hackathon.
-///
-/// The payload is the domain tag followed by the XDR encoding of the
-/// constitution. XDR is used rather than a hand rolled byte layout because it
-/// is canonical, it already covers every nested type, and both the contract and
-/// a JavaScript client reach it through the same specification rather than
-/// through two hand written serializers that will eventually disagree.
-///
-/// A participant can rebuild the constitution from the public page, encode it,
-/// hash it, and compare against the value stored on chain. If the two differ,
-/// the competition being run is not the one that was announced.
+//
+// The payload is the domain tag followed by the XDR encoding of the
+// constitution. XDR is used rather than a hand rolled byte layout because it
+// is canonical, it already covers every nested type, and both the contract and
+// a JavaScript client reach it through the same specification rather than
+// through two hand written serializers that will eventually disagree.
+//
+// A participant can rebuild the constitution from the public page, encode it,
+// hash it, and compare against the value stored on chain. If the two differ,
+// the competition being run is not the one that was announced.
 pub fn hash_constitution(env: &Env, constitution: &Constitution) -> BytesN<32> {
     digest(env, CONSTITUTION_DOMAIN, constitution.clone().to_xdr(env))
 }
 
 /// The digest that pins a project at the submission deadline.
-///
-/// Only this value goes on chain. The description, the links and the logo stay
-/// off chain, and anyone can fetch them later, hash them the same way, and see
-/// that the project a judge scored is the project that was submitted.
+//
+// Only this value goes on chain. The description, the links and the logo stay
+// off chain, and anyone can fetch them later, hash them the same way, and see
+// that the project a judge scored is the project that was submitted.
 pub fn hash_submission_metadata(env: &Env, metadata: &SubmissionMetadata) -> BytesN<32> {
     digest(env, SUBMISSION_DOMAIN, metadata.clone().to_xdr(env))
 }
 
 /// The leaf a scorecard occupies in the sealed tree.
-///
-/// The judge's address is part of the payload, so one judge cannot have their
-/// scorecard counted as another's, and the team is part of it so a scorecard
-/// cannot be moved between projects after the fact.
+//
+// The judge's address is part of the payload, so one judge cannot have their
+// scorecard counted as another's, and the team is part of it so a scorecard
+// cannot be moved between projects after the fact.
 pub fn scorecard_leaf(env: &Env, scorecard: &Scorecard) -> BytesN<32> {
     merkle::leaf(
         env,
@@ -56,15 +56,15 @@ pub fn scorecard_leaf(env: &Env, scorecard: &Scorecard) -> BytesN<32> {
 }
 
 /// The leaf a community ballot occupies.
-///
-/// The whole ballot, not one choice of it. A voter places points across up to
-/// three projects and all of it is sealed under a single digest, because the
-/// rules count a ballot rather than a choice: one wallet spends its power once,
-/// and splitting the seal per project would let somebody reveal the half that
-/// suits them and abandon the rest.
-///
-/// Nothing about the voter's identity is hidden here. The tally is sealed until
-/// the reveal, and after it every ballot is open for anyone to recount.
+//
+// The whole ballot, not one choice of it. A voter places points across up to
+// three projects and all of it is sealed under a single digest, because the
+// rules count a ballot rather than a choice: one wallet spends its power once,
+// and splitting the seal per project would let somebody reveal the half that
+// suits them and abandon the rest.
+//
+// Nothing about the voter's identity is hidden here. The tally is sealed until
+// the reveal, and after it every ballot is open for anyone to recount.
 pub fn ballot_leaf(env: &Env, voter: &Address, choices: &Vec<VoteChoice>) -> BytesN<32> {
     let mut payload = Bytes::from_slice(env, BALLOT_DOMAIN);
     payload.append(&voter.clone().to_xdr(env));

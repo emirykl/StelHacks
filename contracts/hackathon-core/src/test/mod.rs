@@ -17,14 +17,16 @@ mod lifecycle;
 mod registration;
 mod settlement;
 mod setup;
+mod sponsorship;
 mod submission;
 
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, BytesN, Env, Vec};
 
-use crate::constitution::RegistrationPolicy;
+use crate::constitution::{Constitution, RegistrationPolicy};
 use crate::contract::{HackathonCore, HackathonCoreClient};
 use crate::fixtures::{sample_constitution, sample_constitution_paying};
+use crate::merkle;
 
 /// A registered contract with an organizer holding it, and authorization
 /// mocked so a test can say what it is about rather than restating signatures.
@@ -83,10 +85,20 @@ impl Fixture {
     }
 
     fn funded_and_open_under(registration: RegistrationPolicy) -> Fixture {
+        Fixture::funded_and_open_with(|constitution| constitution.registration = registration)
+    }
+
+    /// The same, with one edit made to the rules before they were locked.
+    ///
+    /// Taking a closure rather than growing an argument list per field. A test
+    /// about sponsorship and a test about registration each need exactly one
+    /// thing changed and everything else standing a hackathon up is the part
+    /// neither of them is about.
+    pub fn funded_and_open_with(edit: impl FnOnce(&mut Constitution)) -> Fixture {
         use prize_vault::{PrizeVault, PrizeVaultClient};
         use soroban_sdk::token::StellarAssetClient;
 
-        let fixture = Fixture::locked_with_asset_under(registration);
+        let fixture = Fixture::locked_with_asset_with(edit);
         let asset = fixture.client.constitution().prize_asset;
 
         let vault_id = fixture.env.register(PrizeVault, ());
@@ -112,10 +124,10 @@ impl Fixture {
     /// A locked hackathon whose prize asset is a token contract that exists, so
     /// a vault can be bound to it and money can actually move.
     pub fn locked_with_asset() -> Fixture {
-        Fixture::locked_with_asset_under(RegistrationPolicy::Reviewed)
+        Fixture::locked_with_asset_with(|_| {})
     }
 
-    fn locked_with_asset_under(registration: RegistrationPolicy) -> Fixture {
+    fn locked_with_asset_with(edit: impl FnOnce(&mut Constitution)) -> Fixture {
         let fixture = Fixture::empty();
 
         let issuer = Address::generate(&fixture.env);
@@ -125,11 +137,74 @@ impl Fixture {
             .address();
 
         let mut constitution = sample_constitution_paying(&fixture.env, asset);
-        constitution.registration = registration;
+        edit(&mut constitution);
 
         fixture.client.create(&fixture.organizer, &constitution);
         fixture.client.lock_rules();
 
         fixture
     }
+}
+/// A tree over any number of leaves, with a proof for each one.
+///
+/// A level with an odd count promotes its last node unchanged, which is what
+/// the real collection service will do too: three judges scoring two projects
+/// is six scorecards, and six is not a power of two.
+pub fn build_tree(
+    env: &soroban_sdk::Env,
+    leaves: &Vec<BytesN<32>>,
+) -> (BytesN<32>, Vec<Vec<BytesN<32>>>) {
+    let count = leaves.len();
+
+    let mut proofs = Vec::new(env);
+    let mut positions = Vec::new(env);
+    for index in 0..count {
+        proofs.push_back(Vec::new(env));
+        positions.push_back(index);
+    }
+
+    let mut level = leaves.clone();
+
+    while level.len() > 1 {
+        for leaf in 0..count {
+            let position = positions.get(leaf).unwrap();
+
+            let sibling = if position.is_multiple_of(2) {
+                if position + 1 < level.len() {
+                    Some(position + 1)
+                } else {
+                    None
+                }
+            } else {
+                Some(position - 1)
+            };
+
+            if let Some(sibling) = sibling {
+                let mut proof = proofs.get(leaf).unwrap();
+                proof.push_back(level.get(sibling).unwrap());
+                proofs.set(leaf, proof);
+            }
+
+            positions.set(leaf, position / 2);
+        }
+
+        let mut next = Vec::new(env);
+        let mut at = 0;
+        while at < level.len() {
+            if at + 1 < level.len() {
+                next.push_back(merkle::node(
+                    env,
+                    &level.get(at).unwrap(),
+                    &level.get(at + 1).unwrap(),
+                ));
+            } else {
+                next.push_back(level.get(at).unwrap());
+            }
+            at += 2;
+        }
+
+        level = next;
+    }
+
+    (level.get(0).unwrap(), proofs)
 }

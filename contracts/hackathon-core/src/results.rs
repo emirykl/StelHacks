@@ -6,15 +6,15 @@ use crate::constitution::{TieBreakRule, VotePolicy, VOTE_SPLIT_TOTAL_BPS};
 use crate::scorecard::{CriterionScore, MAX_WEIGHTED_SCORE};
 
 /// The community's share of a project, at [`MAX_WEIGHTED_SCORE`] scale.
-///
-/// The project the crowd liked most scores full marks and the rest are placed
-/// relative to it, which is what the PRD's formula says: a hundred times this
-/// project's votes over the highest count anyone reached.
-///
-/// A hackathon where nobody voted has no top count, and every project scores
-/// zero on the community component rather than the contract dividing by zero
-/// and taking the whole result down with it. The transparency page marks that
-/// case rather than hiding it.
+//
+// The project the crowd liked most scores full marks and the rest are placed
+// relative to it, which is what the PRD's formula says: a hundred times this
+// project's votes over the highest count anyone reached.
+//
+// A hackathon where nobody voted has no top count, and every project scores
+// zero on the community component rather than the contract dividing by zero
+// and taking the whole result down with it. The transparency page marks that
+// case rather than hiding it.
 pub fn community_score(votes: u32, top_votes: u32) -> u32 {
     if top_votes == 0 {
         return 0;
@@ -24,11 +24,11 @@ pub fn community_score(votes: u32, top_votes: u32) -> u32 {
 }
 
 /// A project's final score, at [`MAX_WEIGHTED_SCORE`] scale.
-///
-/// Both components arrive on the same scale, so the split is a plain weighted
-/// average. A project with no valid scorecards contributes nothing from the
-/// judge side rather than a zero, because those are different claims: one says
-/// the judges thought little of it, the other says the judges never saw it.
+//
+// Both components arrive on the same scale, so the split is a plain weighted
+// average. A project with no valid scorecards contributes nothing from the
+// judge side rather than a zero, because those are different claims: one says
+// the judges thought little of it, the other says the judges never saw it.
 pub fn final_score(vote: &VotePolicy, judge_average: Option<u32>, community: u32) -> u32 {
     let judge = judge_average.unwrap_or(0) as u64;
 
@@ -38,13 +38,13 @@ pub fn final_score(vote: &VotePolicy, judge_average: Option<u32>, community: u32
 }
 
 /// A track's move to award nothing, and how far along it is.
-///
-/// The five conditions the product attaches to this power are all here rather
-/// than in a policy document: the track was marked before the rules locked, the
-/// reason is recorded, the judges have to sign, the appeal window has to run
-/// out, and only then does the money move. Every one of them is a line in
-/// `resolve_no_award`, which is what makes this discretion rather than a
-/// loophole.
+//
+// The five conditions the product attaches to this power are all here rather
+// than in a policy document: the track was marked before the rules locked, the
+// reason is recorded, the judges have to sign, the appeal window has to run
+// out, and only then does the money move. Every one of them is a line in
+// `resolve_no_award`, which is what makes this discretion rather than a
+// loophole.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NoAwardCase {
@@ -75,10 +75,10 @@ pub struct Placement {
 }
 
 /// Which step of the tie break chain decided a placing.
-///
-/// Recorded alongside the ranking so the proof page can name it. A participant
-/// asking why they came fourth deserves to read the actual reason rather than
-/// be told the contract worked it out.
+//
+// Recorded alongside the ranking so the proof page can name it. A participant
+// asking why they came fourth deserves to read the actual reason rather than
+// be told the contract worked it out.
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -96,11 +96,11 @@ pub enum DecidedBy {
 }
 
 /// One project as the ranking sees it.
-///
-/// Everything the tie break chain can ask about is gathered here first, so the
-/// comparison is a pure function of its inputs. That matters more than it
-/// sounds: a ranking that reaches into storage while it sorts is a ranking
-/// nobody can reproduce off chain, and reproducing it is the entire promise.
+//
+// Everything the tie break chain can ask about is gathered here first, so the
+// comparison is a pure function of its inputs. That matters more than it
+// sounds: a ranking that reaches into storage while it sorts is a ranking
+// nobody can reproduce off chain, and reproducing it is the entire promise.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Candidate {
@@ -126,10 +126,10 @@ impl Candidate {
 }
 
 /// Orders two projects, and names the step that separated them.
-///
-/// [`Ordering::Greater`] means `a` places above `b`. The chain is walked in the
-/// order the constitution locked, and because that chain always ends in
-/// submission order, this never returns `Equal` for two different projects.
+//
+// [`Ordering::Greater`] means `a` places above `b`. The chain is walked in the
+// order the constitution locked, and because that chain always ends in
+// submission order, this never returns `Equal` for two different projects.
 pub fn compare(a: &Candidate, b: &Candidate, chain: &Vec<TieBreakRule>) -> (Ordering, DecidedBy) {
     if a.final_score != b.final_score {
         return (a.final_score.cmp(&b.final_score), DecidedBy::Score);

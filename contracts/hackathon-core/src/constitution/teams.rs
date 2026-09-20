@@ -6,10 +6,10 @@ use crate::errors::Error;
 pub const MIN_TEAM_SIZE: u32 = 1;
 
 /// The ceiling on what an organizer may allow.
-///
-/// Past ten, a hackathon team stops being a team and starts being a company
-/// with an unfair head start, and the cap is here so that judgement does not
-/// have to be made again for every event.
+//
+// Past ten, a hackathon team stops being a team and starts being a company
+// with an unfair head start, and the cap is here so that judgement does not
+// have to be made again for every event.
 pub const MAX_TEAM_SIZE: u32 = 10;
 
 /// How teams may be formed.
@@ -19,12 +19,12 @@ pub struct TeamPolicy {
     /// The most people one team may hold, counting the captain.
     pub max_size: u32,
     /// Whether one person may belong to more than one team.
-    ///
-    /// Off in most events, because a builder splitting themselves across four
-    /// entries is competing against their own teammates. An organizer running a
-    /// small event where the same handful of people carry several ideas can
-    /// turn it on, and the self vote check accounts for every team a voter
-    /// belongs to either way.
+    //
+    // Off in most events, because a builder splitting themselves across four
+    // entries is competing against their own teammates. An organizer running a
+    // small event where the same handful of people carry several ideas can
+    // turn it on, and the self vote check accounts for every team a voter
+    // belongs to either way.
     pub multi_team_allowed: bool,
 }
 
