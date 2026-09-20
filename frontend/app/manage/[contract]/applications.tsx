@@ -1,10 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../../components/spec";
 import { arg, send, type Sent } from "../../../lib/send";
-import { applicantsOf, reasonHash, type Applicant } from "../../../lib/applications";
+import { reasonHash, type Applicant } from "../../../lib/applications";
+import type { Person } from "../../../lib/hackers";
+import { shorten } from "../../components/wallet-context";
+
+/**
+ * A face, or the initial of one, or the shape where one would be.
+ *
+ * Held at one size whichever it is, so a queue does not reflow as the avatars
+ * arrive and an organizer's press does not land on the row that moved.
+ */
+function Face({ person, address }: { person: Person | undefined; address: string }) {
+  if (person?.avatarUrl != null) {
+    return (
+      <img
+        src={person.avatarUrl}
+        alt=""
+        className="size-11 shrink-0 rounded-full object-cover ring-1 ring-rule"
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden
+      className="grid size-11 shrink-0 place-items-center rounded-full bg-paper-sunk text-[1rem] text-ink-faint"
+    >
+      {(person?.displayName ?? person?.username ?? address).trim().slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
 
 /**
  * The queue, and the two things that can be done with each row.
@@ -19,23 +47,59 @@ import { applicantsOf, reasonHash, type Applicant } from "../../../lib/applicati
 export function Applications({
   contractId,
   reviewer,
+  applicants,
+  reread,
+  reviewed,
 }: {
   contractId: string;
   reviewer: string | null;
+  /**
+   * The queue, read by the panel and handed down.
+   *
+   * Read here as well it would be read twice on every visit, and this is the
+   * expensive one: it walks the contract's event log in passes of ten thousand
+   * ledgers. Null means the panel has not finished the walk yet.
+   */
+  applicants: Applicant[] | null;
+  /** Re-reads the queue after a decision, so the panel's count follows it. */
+  reread: () => Promise<void>;
+  /**
+   * Whether the frozen rules put anybody in front of a decision at all.
+   *
+   * An open hackathon has applicants and no queue: they were admitted as they
+   * arrived, and the buttons would offer a decision the contract has already
+   * made and would refuse. The list stays, because who turned up is the
+   * question this tab answers either way.
+   */
+  reviewed: boolean;
 }) {
-  const [applicants, setApplicants] = useState<Applicant[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [refusing, setRefusing] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<Sent | null>(null);
 
-  const reread = useCallback(async () => {
-    setApplicants(await applicantsOf(contractId));
-  }, [contractId]);
+  /* Who these addresses belong to, when they belong to anybody. An applicant
+     with no account here still applies and is still decided on; what they lack
+     is a face, not a right. */
+  const [people, setPeople] = useState<Record<string, Person>>({});
 
   useEffect(() => {
-    void reread();
-  }, [reread]);
+    if (applicants === null || applicants.length === 0) {
+      return;
+    }
+
+    let alive = true;
+    const addresses = applicants.map((applicant) => applicant.address).join(",");
+
+    void fetch(`/api/people?addresses=${addresses}`)
+      .then((answer) => answer.json() as Promise<{ people: Record<string, Person> }>)
+      .then((said) => alive && setPeople(said.people))
+      .catch(() => null);
+
+    return () => {
+      alive = false;
+    };
+  }, [applicants]);
 
   async function decide(address: string, work: () => Promise<Sent>) {
     setBusy(address);
@@ -56,8 +120,7 @@ export function Applications({
   if (applicants === null) {
     return (
       <section>
-        <SpecLabel index="3">Applications</SpecLabel>
-        <p className="mt-6 label text-ink-faint">Reading the log</p>
+        <p className="label text-ink-faint">Reading the log</p>
       </section>
     );
   }
@@ -66,27 +129,53 @@ export function Applications({
 
   return (
     <section>
-      <SpecLabel index="3">Applications</SpecLabel>
+      {!reviewed && (
+        <p className="mb-6 max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
+          Your rules let anybody in, so everybody here was admitted as they
+          applied. There is nothing to approve.
+        </p>
+      )}
 
       {applicants.length === 0 ? (
-        <p className="mt-6 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
           Nobody has applied yet.
         </p>
       ) : (
-        <div className="mt-8">
-          <SpecRows>
-            {applicants.map((applicant, index) => (
-              <SpecRow
-                key={applicant.address}
-                index={String(index + 1)}
-                label={applicant.status}
-                mark={applicant.status === "pending"}
-              >
-                <div className="space-y-3">
-                  <SpecValue>{applicant.address}</SpecValue>
+        <>
+          {/* Three across where there is room. One applicant is a name, an
+              address and two decisions, which is a card rather than a row: laid
+              out full width, a queue of ten was ten strips of mostly empty paper
+              with the buttons a screen away from the name they belong to. */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {applicants.map((applicant) => {
+              const person = people[applicant.address];
+              const pending = applicant.status === "pending";
 
-                  {applicant.status === "pending" && reviewer !== null && (
-                    <div className="flex flex-wrap items-center gap-2">
+              return (
+                <div
+                  key={applicant.address}
+                  className="flex flex-col rounded-[1rem] bg-paper p-4 ring-1 ring-rule"
+                >
+                  <div className="flex items-center gap-3">
+                    <Face person={person} address={applicant.address} />
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[1rem] font-semibold text-ink">
+                        {person?.displayName ?? person?.username ?? "Unnamed builder"}
+                      </p>
+
+                      {/* The address under the name rather than instead of it,
+                          and shortened. Whoever the contract approves is a key,
+                          so an organizer should see both the person and the key;
+                          what they never need is all fifty six characters. */}
+                      <p className="tabular truncate text-[0.8125rem] text-ink-faint">
+                        {shorten(applicant.address)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {pending && reviewed && reviewer !== null ? (
+                    <div className="mt-4 flex gap-2">
                       <button
                         type="button"
                         disabled={busy !== null}
@@ -100,7 +189,7 @@ export function Applications({
                             ),
                           )
                         }
-                        className="label h-8 bg-ink px-3 text-paper transition-colors duration-150 ease-settle hover:bg-ink/85 disabled:opacity-40"
+                        className="h-9 flex-1 rounded-full bg-verified/12 text-[0.9375rem] font-semibold text-verified transition-colors duration-150 ease-settle hover:bg-verified hover:text-paper disabled:opacity-40 disabled:hover:bg-verified/12 disabled:hover:text-verified"
                       >
                         {busy === applicant.address ? "Signing" : "Approve"}
                       </button>
@@ -111,74 +200,78 @@ export function Applications({
                         onClick={() =>
                           setRefusing(refusing === applicant.address ? null : applicant.address)
                         }
-                        className="label h-8 px-3 text-ink-soft transition-colors duration-150 ease-settle hover:text-broken disabled:opacity-40"
+                        className="h-9 flex-1 rounded-full bg-broken/10 text-[0.9375rem] font-semibold text-broken transition-colors duration-150 ease-settle hover:bg-broken hover:text-paper disabled:opacity-40 disabled:hover:bg-broken/10 disabled:hover:text-broken"
                       >
-                        Refuse
+                        {refusing === applicant.address ? "Cancel" : "Refuse"}
                       </button>
                     </div>
+                  ) : (
+                    <p
+                      className={`label mt-4 ${
+                        applicant.status === "approved" ? "text-verified" : "text-ink-faint"
+                      }`}
+                    >
+                      {applicant.status}
+                    </p>
                   )}
 
                   {refusing === applicant.address && reviewer !== null && (
-                    <div className="max-w-[34rem] space-y-2">
+                    <div className="mt-3 grid gap-3 rounded-[0.75rem] bg-paper-sunk p-3">
                       <input
                         value={reason}
                         onChange={(event) => setReason(event.target.value)}
                         placeholder="Why, in writing"
-                        className="h-10 w-full bg-paper px-3 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+                        className="h-10 w-full rounded-[0.5rem] bg-paper px-3 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
                       />
 
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          disabled={busy !== null || reason.trim().length === 0}
-                          onClick={() =>
-                            void decide(applicant.address, async () =>
-                              send(
-                                contractId,
-                                "reject_application",
-                                [
-                                  await arg.address(reviewer),
-                                  await arg.address(applicant.address),
-                                  await arg.bytes32(await reasonHash(reason.trim())),
-                                ],
-                                reviewer,
-                              ),
-                            )
-                          }
-                          className="label h-8 bg-broken px-3 text-paper transition-colors duration-150 ease-settle hover:bg-broken/85 disabled:opacity-40"
-                        >
-                          Refuse
-                        </button>
+                      <button
+                        type="button"
+                        disabled={busy !== null || reason.trim().length === 0}
+                        onClick={() =>
+                          void decide(applicant.address, async () =>
+                            send(
+                              contractId,
+                              "reject_application",
+                              [
+                                await arg.address(reviewer),
+                                await arg.address(applicant.address),
+                                await arg.bytes32(await reasonHash(reason.trim())),
+                              ],
+                              reviewer,
+                            ),
+                          )
+                        }
+                        className="h-9 rounded-full bg-broken text-[0.9375rem] font-semibold text-paper transition-opacity duration-150 ease-settle hover:opacity-90 disabled:opacity-40"
+                      >
+                        {busy === applicant.address ? "Signing" : "Refuse them"}
+                      </button>
 
-                        {/* Said plainly, because it is the part somebody would
-                            otherwise learn afterwards: the words are hashed and
-                            the hash is permanent. */}
-                        <p className="text-[0.75rem] leading-relaxed text-ink-faint">
-                          A hash of this goes on chain and stays there.
-                        </p>
-                      </div>
+                      {/* Said plainly, because it is the part somebody would
+                          otherwise learn afterwards: the words are hashed and
+                          the hash is permanent. */}
+                      <p className="text-[0.75rem] leading-relaxed text-ink-faint">
+                        A hash of this goes on chain and stays there.
+                      </p>
                     </div>
                   )}
                 </div>
-              </SpecRow>
-            ))}
-          </SpecRows>
+              );
+            })}
+          </div>
 
           {waiting.length > 0 && (
-            <p className="mt-6 label text-ink-faint">
-              {waiting.length} waiting
-            </p>
+            <p className="label mt-5 text-ink-faint">{waiting.length} waiting</p>
           )}
-        </div>
+        </>
       )}
 
       {result !== null && (
         <p
-          className={`mt-6 max-w-[46rem] text-[0.875rem] leading-relaxed ${
+          className={`mt-6 max-w-[46rem] text-[0.9375rem] leading-relaxed ${
             result.ok ? "text-verified" : "text-broken"
           }`}
         >
-          {result.ok ? `Recorded. ${result.hash}` : result.why}
+          {result.ok ? "Recorded." : result.why}
         </p>
       )}
     </section>

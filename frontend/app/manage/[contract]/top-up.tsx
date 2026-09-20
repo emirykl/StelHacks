@@ -175,9 +175,9 @@ export function TopUp({ assetContract, needed }: { assetContract: string; needed
 
   return (
     <section className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule">
-      <h3 className="text-[1.25rem] text-ink">Buy the prize with lira</h3>
+      <h3 className="text-[1.3125rem] text-ink">Buy the prize with lira</h3>
 
-      <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="mt-3 text-[1rem] leading-relaxed text-ink-soft">
         The vault needs <span className="tabular">{needed}</span> {asset.code} and this
         wallet holds <span className="tabular">{held ?? "0"}</span>. {anchor.domain}{" "}
         issues it against a bank transfer, and it is the same {asset.code} a winner
@@ -237,7 +237,7 @@ function Body({
   if (stage.at === "failed") {
     return (
       <div className="grid gap-4">
-        <p className="text-[0.8125rem] leading-relaxed text-broken">{stage.why}</p>
+        <p className="text-[0.875rem] leading-relaxed text-broken">{stage.why}</p>
 
         <div>
           <Button intent="quiet" onClick={onRetry}>
@@ -250,7 +250,7 @@ function Body({
 
   if (settled(stage.transfer.status)) {
     return (
-      <p className="flex items-center gap-2 text-[0.9375rem] text-verified">
+      <p className="flex items-center gap-2 text-[1rem] text-verified">
         <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-verified" />
         {stage.transfer.status === "completed"
           ? `${code} is in the wallet. Fund the vault below.`
@@ -264,12 +264,12 @@ function Body({
       {/* Their words. A reference this page reworded is a transfer the anchor
           cannot match to anybody. */}
       {stage.transfer.how !== undefined && (
-        <p className="rounded-[0.75rem] bg-paper-sunk p-4 text-[0.875rem] leading-relaxed text-ink">
+        <p className="rounded-[0.75rem] bg-paper-sunk p-4 text-[0.9375rem] leading-relaxed text-ink">
           {stage.transfer.how}
         </p>
       )}
 
-      <p className="flex items-center gap-2 text-[0.875rem] text-signal-deep dark:text-signal">
+      <p className="flex items-center gap-2 text-[0.9375rem] text-signal-deep dark:text-signal">
         <span
           aria-hidden
           className="size-1.5 shrink-0 rounded-full bg-signal-deep dark:bg-signal"

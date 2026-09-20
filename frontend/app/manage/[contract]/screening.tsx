@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../../components/spec";
 import { arg, send, type Sent } from "../../../lib/send";
 import { reasonHash } from "../../../lib/applications";
-import { entriesOf, type Entry } from "../../../lib/submissions";
+import type { Entry } from "../../../lib/submissions";
+import type { Card } from "../../../lib/project";
 
 /**
  * Striking out the entries nobody would argue about.
@@ -24,29 +24,43 @@ import { entriesOf, type Entry } from "../../../lib/submissions";
 export function Screening({
   contractId,
   organizer,
+  entries,
+  reread,
 }: {
   contractId: string;
   organizer: string | null;
+  /** The entries, read by the panel and handed down rather than read twice. */
+  entries: Entry[] | null;
+  /** Re-reads them after a strike, so the panel's count follows it. */
+  reread: () => Promise<void>;
 }) {
-  const [entries, setEntries] = useState<Entry[] | null>(null);
   const [striking, setStriking] = useState<number | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Sent | null>(null);
 
-  const reread = useCallback(async () => {
-    setEntries(await entriesOf(contractId));
-  }, [contractId]);
+  /* How each project presents itself. The contract pins a digest and a link;
+     the banner, the mark and the words beside them are written on our side, and
+     without them this tab is a list of team numbers. */
+  const [cards, setCards] = useState<Record<number, Card>>({});
 
   useEffect(() => {
-    void reread();
-  }, [reread]);
+    let alive = true;
+
+    void fetch(`/api/cards?contract=${contractId}`)
+      .then((answer) => answer.json() as Promise<{ cards: Record<number, Card> }>)
+      .then((said) => alive && setCards(said.cards))
+      .catch(() => null);
+
+    return () => {
+      alive = false;
+    };
+  }, [contractId]);
 
   if (entries === null) {
     return (
       <section>
-        <SpecLabel index="4">Screening</SpecLabel>
-        <p className="mt-6 label text-ink-faint">Reading the entries</p>
+        <p className="label text-ink-faint">Reading the entries</p>
       </section>
     );
   }
@@ -78,82 +92,126 @@ export function Screening({
 
   return (
     <section>
-      <SpecLabel index="4">Screening</SpecLabel>
-
       {entries.length === 0 ? (
-        <p className="mt-6 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
           Nothing has been submitted yet.
         </p>
       ) : (
-        <div className="mt-8">
-          <SpecRows>
-            {entries.map((entry) => (
-              <SpecRow
-                key={entry.team}
-                index={String(entry.team)}
-                label={entry.track}
-                mark={!entry.invalid}
-              >
-                <div className="space-y-3">
-                  <div className={entry.invalid ? "opacity-50" : ""}>
-                    <SpecValue>{entry.uri}</SpecValue>
+        <>
+          {/* The same card the public gallery draws, because it is the same
+              project. An organizer deciding whether an entry belongs in the
+              event should be looking at what the judges and everybody else will
+              look at, not at a row of hex with a strike button beside it. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {entries.map((entry) => {
+              const card = cards[entry.team];
+
+              return (
+                <div
+                  key={entry.team}
+                  className={`flex flex-col overflow-hidden rounded-[1rem] bg-paper ring-1 ring-rule ${
+                    entry.invalid ? "opacity-60" : ""
+                  }`}
+                >
+                  <div className="relative aspect-[16/7] bg-paper-sunk">
+                    {card?.bannerUrl == null ? (
+                      <div className="hatch size-full" aria-hidden />
+                    ) : (
+                      <img src={card.bannerUrl} alt="" className="size-full object-cover" />
+                    )}
+
+                    {/* Where the gallery puts the track, and struck out replaces
+                        it rather than joining it: a removed entry's category is
+                        no longer the thing to say about it. */}
+                    <span
+                      className={`label absolute left-3 top-3 px-2.5 py-1.5 ${
+                        entry.invalid
+                          ? "bg-broken text-paper"
+                          : "bg-paper text-ink ring-1 ring-inset ring-rule"
+                      }`}
+                    >
+                      {entry.invalid ? "Struck out" : entry.track}
+                    </span>
                   </div>
 
-                  {entry.invalid ? (
-                    <p className="label text-broken">struck out</p>
-                  ) : (
-                    organizer !== null && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setStriking(striking === entry.team ? null : entry.team)}
-                        className="label h-8 px-3 text-ink-soft ring-1 ring-inset ring-rule transition-colors duration-150 ease-settle hover:text-broken disabled:opacity-40"
-                      >
-                        Strike out
-                      </button>
-                    )
-                  )}
+                  <div className="flex flex-1 flex-col px-4 pb-4">
+                    <div className="relative z-10 -mt-7 mb-3 size-12 overflow-hidden rounded-full border border-rule bg-paper">
+                      {card?.logoUrl == null ? (
+                        <div className="hatch size-full" aria-hidden />
+                      ) : (
+                        <img src={card.logoUrl} alt="" className="size-full object-cover" />
+                      )}
+                    </div>
 
-                  {striking === entry.team && organizer !== null && (
-                    <div className="max-w-[34rem] space-y-2">
-                      <input
-                        value={reason}
-                        onChange={(event) => setReason(event.target.value)}
-                        placeholder="Why, in writing"
-                        className="h-10 w-full bg-paper px-3 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
-                      />
+                    <p className="text-[1.0625rem] font-semibold leading-tight text-ink">
+                      {card?.title ?? `Team ${entry.team}`}
+                    </p>
 
-                      <div className="flex items-center gap-3">
+                    {card?.summary != null && (
+                      <p className="mt-1.5 line-clamp-2 text-[0.9375rem] leading-relaxed text-ink-soft">
+                        {card.summary}
+                      </p>
+                    )}
+
+                    <p className="mt-2 text-[0.8125rem] text-ink-faint">
+                      {card?.teamName ?? `Team ${entry.team}`} ·{" "}
+                      {entry.members.length === 1
+                        ? "one member"
+                        : `${entry.members.length} members`}
+                    </p>
+
+                    {!entry.invalid && organizer !== null && (
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setStriking(striking === entry.team ? null : entry.team)}
+                          className="h-9 w-full rounded-full bg-broken/10 text-[0.9375rem] font-semibold text-broken transition-colors duration-150 ease-settle hover:bg-broken hover:text-paper disabled:opacity-40"
+                        >
+                          {striking === entry.team ? "Cancel" : "Strike out"}
+                        </button>
+                      </div>
+                    )}
+
+                    {striking === entry.team && organizer !== null && (
+                      <div className="mt-3 grid gap-3 rounded-[0.75rem] bg-paper-sunk p-3">
+                        <input
+                          value={reason}
+                          onChange={(event) => setReason(event.target.value)}
+                          placeholder="Why, in writing"
+                          className="h-10 w-full rounded-[0.5rem] bg-paper px-3 text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-2 focus:ring-ink"
+                        />
+
                         <button
                           type="button"
                           disabled={busy || reason.trim().length === 0}
                           onClick={() => void strike(entry.team)}
-                          className="label h-8 bg-broken px-3 text-paper transition-colors duration-150 ease-settle hover:bg-broken/85 disabled:opacity-40"
+                          className="h-9 rounded-full bg-broken text-[0.9375rem] font-semibold text-paper transition-opacity duration-150 ease-settle hover:opacity-90 disabled:opacity-40"
                         >
-                          {busy ? "Signing" : "Strike out"}
+                          {busy ? "Signing" : "Strike it out"}
                         </button>
 
                         <p className="text-[0.75rem] leading-relaxed text-ink-faint">
-                          A hash of this goes on chain and stays there. Use the
-                          appeal route for anything a team would contest.
+                          A hash of this goes on chain and stays there. Use the appeal route
+                          for anything a team would contest.
                         </p>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </SpecRow>
-            ))}
-          </SpecRows>
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {result !== null && (
         <p
-          className={`mt-6 max-w-[46rem] text-[0.875rem] leading-relaxed ${
+          className={`mt-6 max-w-[46rem] text-[0.9375rem] leading-relaxed ${
             result.ok ? "text-verified" : "text-broken"
           }`}
         >
-          {result.ok ? `Recorded. ${result.hash}` : result.why}
+          {result.ok ? "Recorded." : result.why}
         </p>
       )}
     </section>

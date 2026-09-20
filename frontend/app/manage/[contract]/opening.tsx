@@ -3,9 +3,9 @@
 import { useState } from "react";
 
 import { CommitButton } from "../../components/commit-button";
-import { arg, deploy, send, type Sent } from "../../../lib/send";
+import { arg, send } from "../../../lib/send";
 import { TopUp } from "./top-up";
-import { prizeAssetOf, type Running } from "../../../lib/running";
+import type { Running } from "../../../lib/running";
 import { units } from "../../../lib/money";
 import type { Rules } from "../../../lib/rules";
 
@@ -23,10 +23,11 @@ import type { Rules } from "../../../lib/rules";
  * that actually deserved a screen: a plain reading of what is about to be
  * frozen, while it can still be changed.
  *
- * The wallet still asks six times, because six transactions really are signed
- * and pretending otherwise would be lying about what is happening to somebody's
- * key. What changes is that they are six signatures inside one flow rather than
- * six presses spread over four pages.
+ * The wallet asks once. It used to ask six times, because six contract calls
+ * really were signed and Soroban allows one call per transaction; the contract
+ * now has a `set_up` entry point that runs all six inside a single invocation,
+ * so the same work is authorized once. Nothing was loosened to do it: every
+ * check those calls made is still made, by the same code, in the same order.
  */
 
 /** The vault wasm already uploaded to the network, from `docs/deployments.md`. */
@@ -45,26 +46,31 @@ const STEPS: { id: StepId; title: string; blurb: string }[] = [
   {
     id: "freeze",
     title: "Freeze the rules",
-    blurb: "Your rules are hashed and written to the chain. Nobody can change them after this.",
+    blurb: "Hashed and written to the chain.",
   },
   {
     id: "pot",
     title: "Create the prize pot",
-    blurb: "A separate contract that holds the money. It has no owner and no way to withdraw.",
+    blurb: "A separate contract, with no owner and no way to withdraw.",
   },
   {
     id: "money",
     title: "Move the prize money in",
-    blurb: "Straight from your wallet into the pot, where it waits for the winners.",
+    blurb: "From your wallet into the pot.",
   },
   {
     id: "open",
     title: "Open for sign-ups",
-    blurb: "The hackathon goes live and people can join.",
+    blurb: "It goes live and people can join.",
   },
 ];
 
 type Standing = "done" | "doing" | "waiting" | "failed";
+
+/** A hex digest as the bytes the contract wants, without reaching for Buffer. */
+function bytesOf(hex: string): Uint8Array {
+  return Uint8Array.from(hex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? []);
+}
 
 export function Opening({
   contractId,
@@ -106,6 +112,10 @@ export function Opening({
       return "doing";
     }
 
+    /* Still read from the chain rather than remembered, because a press that
+       failed leaves real work done: the rules may be frozen and the pot may
+       exist. The four are one signature now, but the contract skips whatever is
+       already behind it, so this is what a second press would actually do. */
     const behind =
       step === "freeze"
         ? running.phase > 0
@@ -121,97 +131,35 @@ export function Opening({
   async function open(): Promise<void> {
     setFailed(null);
     setWhy(null);
+    setAt("freeze");
 
-    /* Carried locally because the read behind `running` is not refreshed
-       between moves, and the pot's address is needed by the two moves after the
-       one that creates it. */
-    let vault = running.vault;
+    /*
+      A fresh salt on every press.
 
-    function stop(step: StepId, outcome: Sent): boolean {
-      if (outcome.ok) {
-        return false;
-      }
+      The vault's address is derived from this contract and this salt, so one
+      used before names a contract that already exists and the deploy inside
+      `set_up` would fail on it. A run that got as far as standing the pot up
+      never reaches the deploy again, because the contract skips it once a vault
+      is bound; a run that failed before the binding does, and it needs
+      somewhere new to put it.
+    */
+    const salt = crypto.getRandomValues(new Uint8Array(32));
 
-      setFailed(step);
+    const outcome = await send(
+      contractId,
+      "set_up",
+      [
+        await arg.bytes32(bytesOf(VAULT_WASM)),
+        await arg.bytes32(salt),
+      ],
+      address,
+    );
+
+    if (!outcome.ok) {
+      setFailed("freeze");
       setWhy(outcome.why ?? "the wallet refused it");
       setAt(null);
 
-      return true;
-    }
-
-    if (running.phase === 0) {
-      setAt("freeze");
-
-      if (stop("freeze", await send(contractId, "lock_rules", [], address))) {
-        return;
-      }
-    }
-
-    if (vault === null) {
-      setAt("pot");
-
-      const asset = await prizeAssetOf(contractId);
-
-      if (asset === null) {
-        setFailed("pot");
-        setWhy("the rules do not name a prize asset");
-        setAt(null);
-
-        return;
-      }
-
-      /*
-        Three signatures, in this order, because each needs the one before.
-
-        The pot is deployed empty: its `create` is an ordinary entry point
-        rather than a constructor, so handing the arguments to the deployment
-        fails inside the wasm. Then it is told which hackathon and which token
-        it serves. Only then can the hackathon be pointed at it, and it checks
-        the binding from both sides, so a pot built for a different event is
-        refused here rather than discovered when it is time to pay.
-      */
-      const built = await deploy(VAULT_WASM, [], address);
-
-      if (stop("pot", built) || built.contractId === undefined) {
-        return;
-      }
-
-      vault = built.contractId;
-
-      const started = await send(
-        vault,
-        "create",
-        [await arg.address(contractId), await arg.address(asset)],
-        address,
-      );
-
-      if (stop("pot", started)) {
-        return;
-      }
-
-      if (stop("pot", await send(contractId, "bind_vault", [await arg.address(vault)], address))) {
-        return;
-      }
-    }
-
-    if (short > BigInt(0) && vault !== null) {
-      setAt("money");
-
-      const paid = await send(
-        vault,
-        "deposit",
-        [await arg.address(address), await arg.i128(short)],
-        address,
-      );
-
-      if (stop("money", paid)) {
-        return;
-      }
-    }
-
-    setAt("open");
-
-    if (stop("open", await send(contractId, "publish", [], address))) {
       return;
     }
 
@@ -223,10 +171,24 @@ export function Opening({
     <div className="grid gap-8">
       {rules !== null && <Reading rules={rules} running={running} code={code} />}
 
-      <div className="grid gap-5">
-        {STEPS.map((step) => (
-          <Move key={step.id} step={step} standing={standingOf(step.id)} />
-        ))}
+      {/* Titled, because four greyed lines with circles beside them read as a
+          list of things to go and do rather than as what one button is about to
+          do. Numbered for the same reason. */}
+      <div>
+        <h3 className="text-[1.25rem] font-semibold text-ink">
+          What happens when you press it
+        </h3>
+
+        <div className="mt-5 grid gap-4">
+          {STEPS.map((step, at) => (
+            <Move
+              key={step.id}
+              number={at + 1}
+              step={step}
+              standing={standingOf(step.id)}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-5">
@@ -234,14 +196,13 @@ export function Opening({
           {busy ? "Signing" : failed !== null ? "Try again" : "Open the hackathon"}
         </CommitButton>
 
-        <p className="max-w-[32rem] text-[0.875rem] leading-relaxed text-ink-soft">
-          Your wallet will ask you to sign a few times, once for each move above.
-          Nothing is public until the last one.
+        <p className="max-w-[32rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+          One signature. Nothing is public until it lands.
         </p>
       </div>
 
       {why !== null && (
-        <p className="text-[0.875rem] leading-relaxed text-broken">
+        <p className="text-[0.9375rem] leading-relaxed text-broken">
           Stopped at this step: {why}. Whatever was already done is done, so
           pressing again carries on from there.
         </p>
@@ -250,43 +211,46 @@ export function Opening({
   );
 }
 
-/** One move, and where it has got to. */
+/** One move, numbered, and where it has got to. */
 function Move({
+  number,
   step,
   standing,
 }: {
+  number: number;
   step: { id: StepId; title: string; blurb: string };
   standing: Standing;
 }) {
   return (
     <div className="flex items-start gap-4">
+      {/* The number is the marker until the move is done, and the tick replaces
+          it afterwards. Two separate things, a number and a state, would take
+          two columns to say what one shape says here. */}
       <span
         aria-hidden
-        className={
+        className={`tabular mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.75rem] ${
           standing === "done"
-            ? "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink text-[0.625rem] text-paper"
+            ? "bg-verified text-paper"
             : standing === "doing"
-              ? "mt-1 h-5 w-5 shrink-0 animate-pulse rounded-full bg-ink"
+              ? "animate-pulse bg-ink text-paper"
               : standing === "failed"
-                ? "mt-1 h-5 w-5 shrink-0 rounded-full bg-broken"
-                : "mt-1 h-5 w-5 shrink-0 rounded-full ring-1 ring-inset ring-rule"
-        }
+                ? "bg-broken text-paper"
+                : "text-ink-faint ring-1 ring-inset ring-rule"
+        }`}
       >
-        {standing === "done" ? "✓" : ""}
+        {standing === "done" ? "✓" : number}
       </span>
 
       <div className="min-w-0">
         <p
-          className={
-            standing === "waiting"
-              ? "text-[0.9375rem] text-ink-faint"
-              : "text-[0.9375rem] text-ink"
-          }
+          className={`text-[1rem] font-semibold ${
+            standing === "waiting" ? "text-ink-soft" : "text-ink"
+          }`}
         >
           {step.title}
         </p>
 
-        <p className="mt-1 max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-soft">
+        <p className="mt-0.5 max-w-[34rem] text-[0.9375rem] leading-relaxed text-ink-faint">
           {step.blurb}
         </p>
       </div>
@@ -327,12 +291,13 @@ function Reading({
       )}
 
     <section className="rounded-[1.25rem] bg-paper p-7 ring-1 ring-rule sm:p-9">
-      <p className="label text-ink-soft">Before you do</p>
+      {/* One sentence where there were three. What an organizer needs at this
+          moment is the fact that it is permanent, not a paragraph explaining
+          permanence to them. */}
+      <h3 className="text-[1.25rem] font-semibold text-ink">Check this, then freeze it</h3>
 
-      <p className="mt-3 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink">
-        Everything below is about to be written to the chain and frozen. After
-        that you cannot change a prize, a deadline, a judge or a scoring rule.
-        The only thing left is cancelling the whole event.
+      <p className="mt-2 max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+        None of it can change afterwards. Cancelling is the only way out.
       </p>
 
       <dl className="mt-7 grid gap-x-10 gap-y-4 border-t border-rule pt-6 sm:grid-cols-2">
@@ -388,8 +353,8 @@ function Reading({
 function Line({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-1">
-      <dt className="label text-[0.75rem] text-ink-faint">{name}</dt>
-      <dd className="text-[0.9375rem] text-ink">{children}</dd>
+      <dt className="label text-[0.8125rem] text-ink-faint">{name}</dt>
+      <dd className="text-[1rem] text-ink">{children}</dd>
     </div>
   );
 }

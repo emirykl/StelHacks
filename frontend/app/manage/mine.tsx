@@ -98,11 +98,11 @@ export function Mine() {
                 exactly the row somebody has just created and not yet described,
                 and it is the row they came here to find. */}
             {entry.name === null ? (
-              <span className="min-w-0 flex-1 truncate tabular text-[0.875rem] text-ink-soft">
+              <span className="min-w-0 flex-1 truncate tabular text-[0.9375rem] text-ink-soft">
                 {entry.contractId}
               </span>
             ) : (
-              <span className="min-w-0 flex-1 truncate text-[0.9375rem] text-ink">
+              <span className="min-w-0 flex-1 truncate text-[1rem] text-ink">
                 {entry.name}
               </span>
             )}
@@ -117,7 +117,7 @@ export function Mine() {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="border-t border-rule pt-5 text-[0.875rem] leading-relaxed text-ink-soft">
+    <p className="border-t border-rule pt-5 text-[0.9375rem] leading-relaxed text-ink-soft">
       {children}
     </p>
   );

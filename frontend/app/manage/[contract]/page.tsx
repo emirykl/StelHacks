@@ -1,5 +1,7 @@
 import { Console } from "./console";
-import { nameOf } from "../../../lib/chain";
+import { Measure } from "../../components/primitives";
+import { currentUser } from "../../../lib/supabase/server";
+import { presentationOf } from "../../../lib/chain";
 
 /**
  * Running a hackathon, keyed on the contract rather than on a name.
@@ -23,23 +25,24 @@ export const dynamic = "force-dynamic";
 
 export default async function Manage({ params }: PageProps<"/manage/[contract]">) {
   const { contract } = await params;
-  const written = await nameOf(contract);
+
+  /* Both together: one dresses the panel, the other is whose folder the artwork
+     in the details tab lands in. */
+  const [written, user] = await Promise.all([presentationOf(contract), currentUser()]);
 
   return (
     <main className="flex-1">
-      <section>
-        <div className="mx-auto w-full max-w-[60rem] px-6 py-16 text-center sm:py-20">
-          <p className="label text-[0.875rem] tracking-[0.16em] text-ink-soft">Organizer</p>
-
-          <h1 className="mt-4 text-[clamp(2.5rem,6vw,4rem)]">
-            {written?.name ?? "Your hackathon"}
-          </h1>
-        </div>
-      </section>
-
-      <div className="mx-auto w-full max-w-[60rem] px-6 pb-24">
-        <Console contractId={contract} slug={written?.slug ?? null} />
-      </div>
+      {/* The measure the public hackathon page uses, not the narrower column
+          the create form is set in. This is a workspace with a rail beside a
+          banner, and holding it to a reading width left the whole thing in the
+          middle of the screen with paper down both sides. */}
+      <Measure wide className="py-10 pb-24 sm:py-12">
+        <Console
+          contractId={contract}
+          written={written}
+          userId={user?.id ?? null}
+        />
+      </Measure>
     </main>
   );
 }
