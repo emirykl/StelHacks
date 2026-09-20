@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "../../components/primitives";
-import { SpecHeading, SpecLabel, SpecRow, SpecRows, SpecValue } from "../../components/spec";
+import { SpecRow, SpecRows, SpecValue } from "../../components/spec";
 import { useWallet } from "../../components/wallet-context";
 import { arg, send, type Sent } from "../../../lib/send";
 import { decisions, resultsOf, tracksOf, type Results } from "../../../lib/results";
@@ -178,11 +178,14 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
   }
 
   return (
-    <section className="hatch border-t border-rule">
+    <section className="border-t border-rule">
       <div className="mx-auto w-full max-w-[96rem] px-6 py-16">
-        <SpecLabel index="4">Results</SpecLabel>
-
-        <SpecHeading className="mt-3">Computed by the contract</SpecHeading>
+        {/* A heading the size of every other page's, and no diagonal hatch
+            behind it. This was a specification sheet: an eyebrow numbering the
+            section, a title in tracked capitals, and a texture saying "look,
+            machinery". It is a results table, and the thing worth emphasising
+            is who won rather than that a contract worked it out. */}
+        <h2 className="text-[2rem] leading-tight">Results</h2>
 
         {/*
           Only when it is this wallet's problem, and only when it is a problem.
@@ -225,12 +228,15 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
           <CashOut asset={asset} token={prizeAsset} />
         )}
 
-        <div className="mt-10 space-y-12">
+        <div className="mt-10 grid gap-6">
           {results.map((result) => (
-            <div key={result.track}>
-              <p className="label text-ink-faint">{result.track}</p>
+            <section
+              key={result.track}
+              className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10"
+            >
+              <h3 className="text-[1.25rem] text-ink">{result.track}</h3>
 
-              <div className="mt-4">
+              <div className="mt-6">
                 <SpecRows>
                   {result.places.map((place) => (
                     <SpecRow
@@ -277,7 +283,7 @@ export function ResultsBoard({ contractId }: { contractId: string }) {
                   ))}
                 </SpecRows>
               </div>
-            </div>
+            </section>
           ))}
         </div>
 

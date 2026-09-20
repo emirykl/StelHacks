@@ -21,18 +21,20 @@ import type { Card } from "../../../lib/project";
  * A struck out entry keeps its card. Removing it would leave a reader unable to
  * tell a hackathon where nothing was disqualified from one where the record was
  * tidied afterwards, which is the distinction the whole product exists to make.
+ *
+ * The reading rules used to be printed above the grid — who may see these
+ * projects, and that the organizer fixed it before the lock. True, and a
+ * paragraph nobody asked for on the way to the thing they came to look at. It
+ * belongs with the rest of the frozen rules on the details tab.
  */
 
 export function Entries({
   contractId,
   slug,
-  visibility,
   cards,
 }: {
   contractId: string;
   slug: string;
-  /** An index into `VISIBILITY`, or nothing when the contract was unreachable. */
-  visibility: number | null;
   /** What the teams wrote about themselves, by team id, read on the server. */
   cards: Record<number, Card>;
 }) {
@@ -82,12 +84,6 @@ export function Entries({
         <h2 className="text-[2rem] leading-tight">
           {entries.length} {entries.length === 1 ? "project" : "projects"}
         </h2>
-
-        {visibility !== null && (
-          <p className="mt-4 max-w-[46rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-            {explained[visibility] ?? explained[2]}
-          </p>
-        )}
 
         <ul className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {entries.map((entry) => (
@@ -292,10 +288,3 @@ function Play() {
   );
 }
 
-/* The three levels the contract holds, said the way somebody entering would ask
-   the question. Their order is the contract's, so the index is the answer. */
-const explained = [
-  "Anybody can read every project in this event, signed in or not. The organizer chose that before the rules were locked and cannot narrow it now.",
-  "Only people the organizer approved into this event can read the projects. If you are not on that list you will see nothing here, which is the rule working rather than an empty hackathon.",
-  "Nobody but the organizer reads a project before the result is published. What is below is what the chain records about a submission, which is a digest and a link rather than the work itself.",
-];

@@ -60,6 +60,12 @@ export default async function Hackathon({
 
       {at === "projects" && <Projects hackathon={hackathon} />}
 
+      {/* Its own tab rather than the foot of the projects one. A result is what
+          somebody comes back for after the event and it was reached by
+          scrolling past every entry, which is the wrong order for a reader who
+          already knows what was entered. */}
+      {at === "results" && <ResultsBoard contractId={hackathon.contract_id} />}
+
       {at === "hackers" && <Hackers contractId={hackathon.contract_id} />}
 
       {/* Its own tab rather than a band under the three steps. Looking for a
@@ -91,11 +97,8 @@ async function Projects({ hackathon }: { hackathon: HackathonDetail }) {
       <Entries
         contractId={hackathon.contract_id}
         slug={hackathon.slug}
-        visibility={hackathon.rules?.visibility ?? null}
         cards={cards}
       />
-
-      <ResultsBoard contractId={hackathon.contract_id} />
     </>
   );
 }
