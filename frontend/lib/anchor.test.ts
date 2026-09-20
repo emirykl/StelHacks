@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { awaitingTransfer, completeWithdraw, discover, settled } from "./anchor";
+import { awaitingTransfer, completeWithdraw, discover, readTransfer, settled } from "./anchor";
 
 /**
  * The guards around the one irreversible step.
@@ -157,5 +157,78 @@ describe("knowing when to stop asking", () => {
   it("knows the one status that is our turn", () => {
     expect(awaitingTransfer("pending_user_transfer_start")).toBe(true);
     expect(awaitingTransfer("pending_anchor")).toBe(false);
+  });
+});
+
+describe("reading a transfer back", () => {
+  const anchor = {
+    domain: "anchor.example.com",
+    auth: "https://anchor.example.com/auth",
+    direct: "https://anchor.example.com/sep6",
+    signingKey: ANCHOR_ACCOUNT,
+    currencies: [{ code: "USDC", issuer: null }],
+  };
+
+  /*
+    The mapping from the anchor's JSON to what this product reads.
+
+    Worth a test of its own because nothing else touches it: every other case
+    here stops at a guard, and the two scripts that walk a real anchor read the
+    JSON themselves rather than through this. It went out as a function whose
+    whole body was a call to itself, and the page died with a stack overflow
+    naming a line number and nothing else.
+  */
+  it("carries the account, the memo and the amounts across", async () => {
+    const raw = {
+      id: "sep_abc",
+      status: "pending_user_transfer_start",
+      withdraw_anchor_account: ANCHOR_ACCOUNT,
+      withdraw_memo: "240382583284",
+      withdraw_memo_type: "id",
+      amount_in: "10.0000000",
+      amount_out: "481.89",
+      message: "waiting",
+    };
+
+    const asked: string[] = [];
+
+    vi.stubGlobal("fetch", async (url: string) => {
+      asked.push(url);
+
+      return { ok: true, json: async () => ({ transaction: raw }) } as Response;
+    });
+
+    const transfer = await readTransfer(anchor, "token", "sep_abc");
+
+    expect(asked[0]).toContain("/transaction?id=sep_abc");
+    expect(transfer).toEqual({
+      id: "sep_abc",
+      status: "pending_user_transfer_start",
+      withdrawAnchorAccount: ANCHOR_ACCOUNT,
+      withdrawMemo: "240382583284",
+      withdrawMemoType: "id",
+      amountIn: "10.0000000",
+      amountOut: "481.89",
+      message: "waiting",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  /* An anchor that omits a field means it, and an empty string is the same as
+     omitting it. Both have to come back absent rather than as "". */
+  it("leaves out what the anchor left out", async () => {
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      json: async () => ({ transaction: { id: "one", status: "incomplete", amount_out: "" } }),
+    }) as unknown as Response);
+
+    const transfer = await readTransfer(anchor, "token", "one");
+
+    expect(transfer.withdrawAnchorAccount).toBeUndefined();
+    expect(transfer.withdrawMemo).toBeUndefined();
+    expect(transfer.amountOut).toBeUndefined();
+
+    vi.unstubAllGlobals();
   });
 });

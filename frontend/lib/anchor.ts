@@ -738,8 +738,24 @@ function hexFromBase64(value: string): string {
   return hex;
 }
 
+/**
+ * One transfer as this product reads it, out of the anchor's own JSON.
+ *
+ * Both standards answer `/transaction` and `/transactions` in the same shape,
+ * so reading one is the same work whichever opened it, and it is done here once
+ * rather than at each caller.
+ */
 function shape(transaction: Record<string, unknown>): Transfer {
-  return shape(transaction);
+  return {
+    id: String(transaction["id"]),
+    status: String(transaction["status"]),
+    withdrawAnchorAccount: text(transaction["withdraw_anchor_account"]),
+    withdrawMemo: text(transaction["withdraw_memo"]),
+    withdrawMemoType: text(transaction["withdraw_memo_type"]),
+    amountIn: text(transaction["amount_in"]),
+    amountOut: text(transaction["amount_out"]),
+    message: text(transaction["message"]),
+  };
 }
 
 function text(value: unknown): string | undefined {
