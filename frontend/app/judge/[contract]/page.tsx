@@ -1,5 +1,5 @@
-import { Eyebrow, Measure } from "../../components/primitives";
 import { JudgeConsole } from "./console";
+import { nameOf } from "../../../lib/chain";
 
 /**
  * The judge's one visit.
@@ -8,34 +8,39 @@ import { JudgeConsole } from "./console";
  * organizer's console is: a judge is given an address by the organizer, and
  * making them wait for our indexer to have caught up before they can score is
  * the wrong thing to make anybody wait for.
+ *
+ * Laid out as the organizer's panel is, because it is the same kind of room: a
+ * desk somebody was sent to with a job on it. It used to open with a display
+ * heading that said "Score" and a hatched band under it, which is the language
+ * the marketing pages use to introduce the product to somebody who has not
+ * decided yet. A judge has decided.
  */
 
 export const dynamic = "force-dynamic";
 
 export default async function Judge({ params }: PageProps<"/judge/[contract]">) {
   const { contract } = await params;
+  const written = await nameOf(contract);
 
   return (
     <main className="flex-1">
-      <section className="border-b border-rule">
-        <Measure wide className="py-16 sm:py-20">
-          <Eyebrow>Judge</Eyebrow>
+      <div className="mx-auto w-full max-w-[60rem] px-6 py-10 sm:py-12">
+        <p className="label text-[0.8125rem] tracking-[0.16em] text-ink-faint">Judge</p>
 
-          <h1 className="mt-4 text-[clamp(2rem,4.5vw,3rem)]">Score</h1>
+        <h1 className="mt-2 text-[clamp(1.75rem,3.5vw,2.5rem)]">
+          {written?.name ?? "Scoring"}
+        </h1>
 
-          <p className="mt-5 max-w-[40rem] text-[1.0625rem] leading-relaxed text-ink-soft">
-            One card per project, signed once. Nothing goes on chain and nothing
-            costs you a fee; the cards stay sealed until the reveal opens them
-            all at once.
-          </p>
-        </Measure>
-      </section>
+        <p className="mt-4 max-w-[40rem] text-[1rem] leading-relaxed text-ink-soft">
+          One card per project, signed once. Nothing goes on chain and nothing
+          costs you a fee; the cards stay sealed until the reveal opens them all
+          at once.
+        </p>
+      </div>
 
-      <section className="hatch">
-        <Measure wide className="py-16">
-          <JudgeConsole contractId={contract} />
-        </Measure>
-      </section>
+      <div className="mx-auto w-full max-w-[60rem] px-6 pb-24">
+        <JudgeConsole contractId={contract} />
+      </div>
     </main>
   );
 }

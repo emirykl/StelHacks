@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../../components/primitives";
-import { SpecHeading, SpecLabel, SpecRow, SpecRows, SpecValue } from "../../components/spec";
+import { SpecLabel, SpecRow, SpecRows, SpecValue } from "../../components/spec";
 import { useWallet } from "../../components/wallet-context";
 import { entriesOf, type Entry } from "../../../lib/submissions";
 import { phaseOf } from "../../../lib/running";
+import { phaseName } from "../../../lib/phase";
+import { rulesFor, type Rules } from "../../../lib/rules";
 import { rubricOf, type Rubric } from "../../../lib/rubric";
 import {
   inclusionOf,
@@ -44,20 +46,26 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [rubric, setRubric] = useState<Rubric[] | null>(null);
   const [phase, setPhase] = useState<number | null>(null);
+  const [rules, setRules] = useState<Rules | null>(null);
   const [held, setHeld] = useState<Record<number, Held>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [found, tracks, at] = await Promise.all([
+    const [found, tracks, at, frozen] = await Promise.all([
       entriesOf(contractId, false),
       rubricOf(contractId),
       phaseOf(contractId),
+      /* For the window this page lives inside. A judge arriving early or late
+         should be told when their turn is, not that the hackathon "is not
+         there". */
+      rulesFor(contractId).catch(() => null),
     ]);
 
     setEntries(found);
     setRubric(tracks);
     setPhase(at);
+    setRules(frozen);
   }, [contractId]);
 
   useEffect(() => {
@@ -78,30 +86,70 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
 
   if (!sealingConfigured()) {
     return (
-      <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <Standing phase={phase}>
         No collection service is configured for this deployment, so there is
         nowhere to hand a scorecard.
-      </p>
+      </Standing>
     );
   }
 
   /* Cards are only collected while the judging window is open. Outside it the
-     service refuses them, so the page says so rather than offering a form that
-     cannot be handed in. */
+     service refuses them, so the page says when the window is rather than
+     offering a form that cannot be handed in. */
   if (phase !== 4) {
     return (
-      <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
-        Scorecards are collected during judging. This hackathon is not there.
-      </p>
+      <Standing phase={phase}>
+        {phase !== null && phase < 4 ? (
+          <>
+            Scoring has not opened yet. It starts when the entry check ends
+            {rules !== null && rules.schedule.screeningCloses > 0 && (
+              <>
+                , <Moment at={rules.schedule.screeningCloses} />
+              </>
+            )}
+            , and closes
+            {rules !== null && rules.schedule.judgingCloses > 0 ? (
+              <>
+                {" "}
+                <Moment at={rules.schedule.judgingCloses} />.
+              </>
+            ) : (
+              " at the deadline the rules named."
+            )}
+          </>
+        ) : (
+          "Scoring is over for this hackathon. The cards have been handed in and the reveal opens them all at once."
+        )}
+      </Standing>
     );
   }
 
   const scoreable = entries.filter((entry) => !entry.invalid);
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-8">
+      {/* The deadline, at the top and not in an email. A judge who does not
+          know when their window shuts is a judge who finds out by being
+          refused. */}
+      <div className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule sm:p-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <p className="text-[1.25rem] font-semibold text-ink">
+            {scoreable.length === 1 ? "One project to score" : `${scoreable.length} projects to score`}
+          </p>
+
+          <p className="label text-ink-faint">{phaseName(phase)}</p>
+        </div>
+
+        {rules !== null && rules.schedule.judgingCloses > 0 && (
+          <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
+            Cards are collected until <Moment at={rules.schedule.judgingCloses} />.
+            After that the service refuses them.
+          </p>
+        )}
+      </div>
+
       {scoreable.length === 0 ? (
-        <p className="max-w-[38rem] text-[0.9375rem] leading-relaxed text-ink-soft">
+        <p className="max-w-[38rem] text-[1rem] leading-relaxed text-ink-soft">
           Nothing to score. Either no project was entered or every one was struck
           out in screening.
         </p>
@@ -124,9 +172,44 @@ export function JudgeConsole({ contractId }: { contractId: string }) {
       )}
 
       {refused !== null && (
-        <p className="max-w-[46rem] text-[0.875rem] leading-relaxed text-broken">{refused}</p>
+        <p className="max-w-[46rem] text-[0.9375rem] leading-relaxed text-broken">{refused}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * Why there is nothing to do, in the same card the work would have been in.
+ *
+ * A bare sentence on an empty page reads as a surface that failed to load. The
+ * phase is named beside it for the same reason the organizer's panel names it:
+ * it is the one fact that explains every other thing on the screen.
+ */
+function Standing({ phase, children }: { phase: number | null; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[1.25rem] bg-paper p-8 ring-1 ring-rule sm:p-10">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+        <p className="text-[1.25rem] font-semibold text-ink">Nothing to score yet</p>
+
+        <p className="label text-ink-faint">{phaseName(phase)}</p>
+      </div>
+
+      <p className="mt-3 max-w-[40rem] text-[1rem] leading-relaxed text-ink-soft">{children}</p>
+    </div>
+  );
+}
+
+/** A moment in the reader's own clock, which is the one a deadline is read in. */
+function Moment({ at }: { at: number }) {
+  return (
+    <span suppressHydrationWarning className="text-ink">
+      {new Date(at * 1000).toLocaleString(undefined, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}
+    </span>
   );
 }
 
@@ -211,11 +294,15 @@ function Card({
     setChecking(false);
   }
 
+  /* The same card the create form and the organizer's panel are built from.
+     This was a hairline down the left with a spec label at the top, which is
+     the language the chain's own readouts use; what a judge is doing here is
+     filling something in. */
   return (
-    <section className="border-l-2 border-rule pl-6">
+    <section className="rounded-[1.25rem] bg-paper p-6 ring-1 ring-rule sm:p-8">
       <SpecLabel index={String(entry.team)}>{entry.track}</SpecLabel>
 
-      <p className="mt-2 tabular text-[0.875rem] break-all text-ink-soft">{entry.uri}</p>
+      <p className="mt-2 tabular text-[0.9375rem] break-all text-ink-soft">{entry.uri}</p>
 
       {held === undefined ? (
         <>
@@ -236,7 +323,7 @@ function Card({
                   }
                   inputMode="numeric"
                   placeholder="0"
-                  className="tabular h-10 w-20 bg-paper px-3 text-center text-[0.9375rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
+                  className="tabular h-10 w-20 bg-paper px-3 text-center text-[1rem] text-ink ring-1 ring-inset ring-rule outline-none transition-shadow duration-150 ease-settle focus:ring-ink"
                 />
 
                 <span className="label text-ink-faint">of 100</span>
@@ -255,7 +342,7 @@ function Card({
             {/* Only the button waits on the wallet, and it says why rather
                 than sitting there greyed out for a reason nobody can see. */}
             {judge === null && (
-              <p className="text-[0.875rem] leading-relaxed text-ink-soft">
+              <p className="text-[0.9375rem] leading-relaxed text-ink-soft">
                 {ready
                   ? "Connect the wallet the rules name as a judge. A card signed by any other key is refused."
                   : "Checking your wallet"}
@@ -296,14 +383,14 @@ function Card({
                 </div>
 
                 {included?.at === "disagrees" && (
-                  <p className="max-w-[34rem] text-[0.8125rem] leading-relaxed text-broken">
+                  <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
                     The service proved your card against a tree whose root is not
                     the one on chain. Keep this receipt.
                   </p>
                 )}
 
                 {included?.at === "omitted" && (
-                  <p className="max-w-[34rem] text-[0.8125rem] leading-relaxed text-broken">
+                  <p className="max-w-[34rem] text-[0.875rem] leading-relaxed text-broken">
                     Cards are held for this hackathon and yours is not among
                     them. This is what the receipt is for.
                   </p>
@@ -315,7 +402,7 @@ function Card({
           {/* Said plainly because it is the judge's only recourse. The proof
               shows the card was included; the receipt is what they hold if it
               turns out not to have been. */}
-          <p className="mt-4 max-w-[34rem] text-[0.8125rem] leading-relaxed text-ink-faint">
+          <p className="mt-4 max-w-[34rem] text-[0.875rem] leading-relaxed text-ink-faint">
             Keep this receipt. Once the root is published you can prove your card
             was in the tree, and if it was not, this is what says it should have
             been.
