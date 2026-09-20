@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AvatarPicker } from "./avatar-picker";
+import { Prizes } from "./prizes";
 import { WalletLink } from "./wallet-link";
 import { Measure } from "../components/primitives";
 import { countriesByName } from "../../lib/countries";
@@ -96,6 +97,13 @@ export default async function Account() {
               rather than the last thing they do. */}
           <Block title="Wallet">
             <WalletLink />
+          </Block>
+
+          {/* Under the wallet, because it is the wallet's contents. A person
+              with no prizes sees one sentence saying so rather than nothing,
+              which would read as a section that failed to load. */}
+          <Block title="Prizes">
+            <Prizes />
           </Block>
 
           <Block title="Session">

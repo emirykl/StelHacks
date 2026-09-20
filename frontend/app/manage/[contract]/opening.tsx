@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { CommitButton } from "../../components/commit-button";
 import { arg, deploy, send, type Sent } from "../../../lib/send";
+import { TopUp } from "./top-up";
 import { prizeAssetOf, type Running } from "../../../lib/running";
 import { units } from "../../../lib/money";
 import type { Rules } from "../../../lib/rules";
@@ -311,7 +312,20 @@ function Reading({
 }) {
   const fee = running.required - rules.total;
 
+  /* What is still missing from the organizer's wallet, which is what the ramp
+     above is asked to fetch. The step below deposits the whole requirement; the
+     shortfall is what has to be bought first. */
+  const short = running.required - running.held;
+
   return (
+    <div className="grid gap-6">
+      {/* Above the summary, because it is the step before it. An organizer who
+          cannot fund the vault cannot do anything below, and finding that out
+          at the deposit is finding it out too late to be useful. */}
+      {running.prizeAsset !== null && short > BigInt(0) && (
+        <TopUp assetContract={running.prizeAsset} needed={units(short)} />
+      )}
+
     <section className="rounded-[1.25rem] bg-paper p-7 ring-1 ring-rule sm:p-9">
       <p className="label text-ink-soft">Before you do</p>
 
@@ -367,6 +381,7 @@ function Reading({
         </Line>
       </dl>
     </section>
+    </div>
   );
 }
 

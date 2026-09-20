@@ -276,8 +276,10 @@ function signatureBytes(entry: unknown): Uint8Array {
   return encoded.subarray(4, 4 + length);
 }
 
-/** Where a withdrawal has got to, in the anchor's own words. */
+/** Where a transfer has got to, in the anchor's own words. */
 export interface Transfer {
+  /** How to pay the anchor, for a deposit. Their sentence, not ours. */
+  how?: string;
   id: string;
   status: string;
   /** The page the person completes the transfer in. Opened, never scraped. */
@@ -677,6 +679,53 @@ export async function startDirectWithdraw(
     withdrawMemo: text(opened["memo"]),
     withdrawMemoType: text(opened["memo_type"]),
     amountIn: amount,
+  };
+}
+
+/**
+ * Open a deposit: local money in, the asset out.
+ *
+ * The other end of the same ramp. An organizer funding a prize pool holds lira
+ * and the vault holds a token, and without this the product simply assumed the
+ * token had appeared from somewhere — which is true of nobody funding their
+ * first hackathon.
+ *
+ * What comes back is the anchor's own instructions for paying them, printed
+ * rather than parsed. A bank reference is theirs to word and getting it wrong
+ * is a payment they cannot match to anybody.
+ */
+export async function startDeposit(
+  anchor: Anchor,
+  token: string,
+  assetCode: string,
+  address: string,
+  amount: string,
+): Promise<Transfer> {
+  if (anchor.direct === undefined) {
+    throw new Error(`${anchor.domain} does not offer direct deposits`);
+  }
+
+  const asked = await fetch(
+    `${anchor.direct}/deposit?asset_code=${encodeURIComponent(assetCode)}` +
+      `&account=${encodeURIComponent(address)}&amount=${encodeURIComponent(amount)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  if (!asked.ok) {
+    throw new Error(`${anchor.domain} refused the deposit: ${(await asked.text()).slice(0, 200)}`);
+  }
+
+  const opened = (await asked.json()) as Record<string, unknown>;
+  const id = text(opened["id"]);
+
+  if (id === undefined) {
+    throw new Error(`${anchor.domain} started nothing`);
+  }
+
+  return {
+    id,
+    status: "pending_user_transfer_start",
+    ...(text(opened["how"]) === undefined ? {} : { how: text(opened["how"])! }),
   };
 }
 
