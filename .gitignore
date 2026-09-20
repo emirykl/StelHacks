@@ -29,6 +29,7 @@ yarn-error.log*
 # Local working notes
 docs/roadmap.md
 docs/pitch-assets/
+project-summary.txt
 
 # Editors and OS
 .DS_Store
