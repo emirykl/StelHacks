@@ -64,7 +64,7 @@ import {
   is the failure worth having: it names the missing step instead of appearing
   three calls later as a rejected document.
 */
-const CORE_WASM = "4bf32e95b0758cc6af291bf4e91f86dba1bad8c7e81926479f6404af73c7ec1c";
+const CORE_WASM = "6e1de3c87ecb8e2896eaecc6337397d44bfd352f99211611b4ed3e3a372e68c6";
 
 export function Wizard({
   feeBps: grantedFeeBps,

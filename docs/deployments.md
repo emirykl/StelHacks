@@ -32,7 +32,7 @@ friendbot. Test network, test lumens, no real money.
 
 | Contract | Wasm hash | Upload transaction |
 |---|---|---|
-| `hackathon-core` | `4bf32e95b0758cc6af291bf4e91f86dba1bad8c7e81926479f6404af73c7ec1c` | [`46ede969…`](https://stellar.expert/explorer/testnet/tx/46ede9696f7c5f137685e7e82b5cd1ae8fce5508a83c170710e7551a02a037be) |
+| `hackathon-core` | `6e1de3c87ecb8e2896eaecc6337397d44bfd352f99211611b4ed3e3a372e68c6` | [`e5ee46db…`](https://stellar.expert/explorer/testnet/tx/e5ee46dbee35ebb2e3e37973eb32c94a64c223e154d1167f4ae615920b623207) |
 | `prize-vault` | `afc98888d9321be76160951ce072b52f08c7f3a6a0e29ee1ac9e3c0aa4783ffb` | [`c5d45d80…`](https://stellar.expert/explorer/testnet/tx/c5d45d80f312c0879190f8b13031f763254321043507adfd5b2cf318ae68f252) |
 
 The core moved when sponsorship arrived: the constitution gained a policy
@@ -49,6 +49,15 @@ The core moved again for the batch application calls and sponsor placement:
 is additive — nothing was removed or renamed, and the error enum is unchanged at
 forty nine cases, which is what lets the clock keep reading refusals off a live
 contract it was not built against.
+
+The core moved a third time for settlement: `settle_position` pays a whole
+winning team in one call and skips only a member whose account cannot receive
+the asset, a paused settlement now holds the sweeps as well as the payments, and
+a track declared no award returns what sponsors added to it. Additive again,
+with the error enum still at forty nine. The hackathons deployed from
+`4bf32e95…` and `90d71d2d…` keep their code; the clock pays them member by
+member, since `settle_position` is not there for it to call, and leaves them
+alone while they are paused, since their own sweeps would not.
 
 Uploading is not upgrading. Neither contract has an `upgrade` entry point, on
 purpose: a hackathon's rules are frozen at the lock and a contract somebody
