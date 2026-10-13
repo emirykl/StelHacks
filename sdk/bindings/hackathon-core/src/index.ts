@@ -1510,6 +1510,12 @@ export interface Client {
   open_settlement: (options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
   /**
+   * Construct and simulate a settle_position transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Pays every member of one prize position who can be paid right now.
+   */
+  settle_position: ({track, rank}: {track: string, rank: u32}, options?: MethodOptions) => Promise<AssembledTransaction<Result<u32>>>
+
+  /**
    * Construct and simulate a sweep_unclaimed transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Returns a position that never had a winner.
    */
@@ -1853,6 +1859,7 @@ export class Client extends ContractClient {
         "AAAAAAAAADdXaGF0IG9uZSBkZWFkbGluZSBoYXMgc3BlbnQgb2YgaXRzIGFubm91bmNlZCBhbGxvd2FuY2UuAAAAAA9leHRlbnNpb25fdXNhZ2UAAAAAAQAAAAAAAAAIZGVhZGxpbmUAAAfQAAAACERlYWRsaW5lAAAAAQAAB9AAAAAORXh0ZW5zaW9uVXNhZ2UAAA==",
         "AAAAAAAAACVXaGV0aGVyIHRoZSBwcml6ZSBpcyBjb3ZlcmVkIGluIGZ1bGwuAAAAAAAAD2lzX2Z1bGx5X2Z1bmRlZAAAAAAAAAAAAQAAA+kAAAABAAAAAw==",
         "AAAAAAAAADRPcGVucyBzZXR0bGVtZW50IG9uY2UgdGhlIHNhZmV0eSB3aW5kb3cgaGFzIHJ1biBvdXQuAAAAD29wZW5fc2V0dGxlbWVudAAAAAAAAAAAAQAAA+kAAAACAAAAAw==",
+        "AAAAAAAAAEJQYXlzIGV2ZXJ5IG1lbWJlciBvZiBvbmUgcHJpemUgcG9zaXRpb24gd2hvIGNhbiBiZSBwYWlkIHJpZ2h0IG5vdy4AAAAAAA9zZXR0bGVfcG9zaXRpb24AAAAAAgAAAAAAAAAFdHJhY2sAAAAAAAARAAAAAAAAAARyYW5rAAAABAAAAAEAAAPpAAAABAAAAAM=",
         "AAAAAAAAACtSZXR1cm5zIGEgcG9zaXRpb24gdGhhdCBuZXZlciBoYWQgYSB3aW5uZXIuAAAAAA9zd2VlcF91bmNsYWltZWQAAAAAAgAAAAAAAAAFdHJhY2sAAAAAAAARAAAAAAAAAARyYW5rAAAABAAAAAEAAAPpAAAACwAAAAM=",
         "AAAAAAAAACRUaGUgbGFyZ2VzdCB0b3RhbCBhbnkgcHJvamVjdCBob2xkcy4AAAAPdG9wX3ZvdGVfd2VpZ2h0AAAAAAAAAAABAAAABA==",
         "AAAAAAAAADlBZGRzIGEgaGVscGVyIHdobyBjYW4gd29yayB0aHJvdWdoIHRoZSBhcHBsaWNhdGlvbiBxdWV1ZS4AAAAAAAAQYWRkX2NvbGxhYm9yYXRvcgAAAAEAAAAAAAAADGNvbGxhYm9yYXRvcgAAABMAAAABAAAD6QAAAAIAAAAD",
@@ -1952,6 +1959,7 @@ export class Client extends ContractClient {
         extension_usage: this.txFromJSON<ExtensionUsage>,
         is_fully_funded: this.txFromJSON<Result<boolean>>,
         open_settlement: this.txFromJSON<Result<void>>,
+        settle_position: this.txFromJSON<Result<u32>>,
         sweep_unclaimed: this.txFromJSON<Result<i128>>,
         top_vote_weight: this.txFromJSON<u32>,
         add_collaborator: this.txFromJSON<Result<void>>,

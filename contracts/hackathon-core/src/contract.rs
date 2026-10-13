@@ -2049,6 +2049,69 @@ impl HackathonCore {
         Ok(share)
     }
 
+    /// Pays every member of one prize position who can be paid right now.
+    //
+    // The same payment as `settle_prize`, made for the whole team in one
+    // call, so that settling a hackathon is one call per position rather than
+    // one per person and nobody has to chase the money member by member.
+    //
+    // Each transfer is attempted on its own. A member whose account cannot
+    // receive the asset, most often one with no trustline for it, is skipped
+    // and stays owed, and the teammates beside them are paid anyway. That is
+    // the reason `settle_prize` exists one member at a time, and the reason
+    // this does not simply call it in a loop: inside one invocation a failed
+    // transfer would take every payment before it down too. A skipped member
+    // can still be paid by a later call, or swept once the claim period runs
+    // out, exactly as if this call had never been made.
+    //
+    // One position rather than the whole table, because a call has to fit in
+    // one transaction. A position is at most `MAX_TEAM_SIZE` transfers; the
+    // whole table has no such bound.
+    pub fn settle_position(env: Env, track: Symbol, rank: u32) -> Result<u32, Error> {
+        let state = storage::load_state(&env)?;
+        if state.phase != Phase::Settlement {
+            return Err(Error::WrongPhase);
+        }
+        if state.settlement_paused {
+            return Err(Error::SettlementPaused);
+        }
+        if storage::is_paid(&env, &track, rank) {
+            return Err(Error::PrizeAlreadyPaid);
+        }
+
+        let worth = Self::worth_of(&env, &track, rank)?;
+        let placement = storage::load_ranking(&env, &track)?
+            .iter()
+            .find(|placement| placement.rank == rank)
+            .ok_or(Error::ResultsNotFinalized)?;
+        let team = storage::load_team(&env, placement.team)?;
+        let vault = VaultClient::new(&env, &storage::load_vault(&env)?);
+
+        let mut paid = 0u32;
+
+        for member in team.members.iter() {
+            if storage::is_share_settled(&env, &track, rank, &member) {
+                continue;
+            }
+
+            let share = team.share_of(worth, &member).ok_or(Error::NotTeamMember)?;
+
+            /* Transfer first and record after, the reverse of `hand_over`. A
+            failed transfer rolls back only its own invocation, so a share
+            recorded before it would stay recorded with the money still in
+            the vault. */
+            if share > 0 && !matches!(vault.try_pay(&member, &share), Ok(Ok(()))) {
+                continue;
+            }
+
+            Self::record_share(&env, &track, rank, &member, team.size());
+            events::prize_paid(&env, &member, &track, rank, team.id, share);
+            paid += 1;
+        }
+
+        Ok(paid)
+    }
+
     /// Sends the platform its cut, once.
     //
     // A call of its own rather than a slice taken off each prize, because the
@@ -2159,9 +2222,7 @@ impl HackathonCore {
         share: i128,
         size: u32,
     ) -> Result<(), Error> {
-        if storage::settle_share(env, track, rank, member) == size {
-            storage::mark_paid(env, track, rank);
-        }
+        Self::record_share(env, track, rank, member, size);
 
         if share > 0 {
             let vault = storage::load_vault(env)?;
@@ -2169,6 +2230,13 @@ impl HackathonCore {
         }
 
         Ok(())
+    }
+
+    /// Marks one share settled, and the position with it once it was the last.
+    fn record_share(env: &Env, track: &Symbol, rank: u32, member: &Address, size: u32) {
+        if storage::settle_share(env, track, rank, member) == size {
+            storage::mark_paid(env, track, rank);
+        }
     }
 
     /// Opens settlement once the safety window has run out.

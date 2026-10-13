@@ -20,7 +20,7 @@ mod setup;
 mod sponsorship;
 mod submission;
 
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, IssuerFlags};
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 use crate::constitution::{Constitution, RegistrationPolicy};
@@ -131,10 +131,12 @@ impl Fixture {
         let fixture = Fixture::empty();
 
         let issuer = Address::generate(&fixture.env);
-        let asset = fixture
-            .env
-            .register_stellar_asset_contract_v2(issuer)
-            .address();
+        let registered = fixture.env.register_stellar_asset_contract_v2(issuer);
+
+        /* Revocable, as USDC is, so a test can stand in for a winner whose
+        account refuses the asset by revoking it. */
+        registered.issuer().set_flag(IssuerFlags::RevocableFlag);
+        let asset = registered.address();
 
         let mut constitution = sample_constitution_paying(&fixture.env, asset);
         edit(&mut constitution);

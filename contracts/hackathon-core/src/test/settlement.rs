@@ -1584,6 +1584,97 @@ mod shared_prizes {
         );
         assert!(settled.fixture.client.is_paid(&payments(), &1));
     }
+
+    #[test]
+    fn one_call_pays_the_whole_team() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+
+        assert_eq!(settled.fixture.client.settle_position(&payments(), &1), 3);
+
+        let mut paid = 0i128;
+        for member in members.iter() {
+            paid += settled.token.balance(&member);
+        }
+
+        assert_eq!(paid, FIRST_PRIZE);
+        assert!(settled.fixture.client.is_paid(&payments(), &1));
+    }
+
+    /// The reason the team call cannot be a loop over `settle_prize`: one
+    /// member whose account refuses the asset would undo every payment made
+    /// before them in the same invocation.
+    #[test]
+    fn a_member_who_cannot_receive_does_not_hold_back_their_teammates() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+        let unprepared = members.get(1).unwrap();
+
+        StellarAssetClient::new(&settled.fixture.env, &settled.token.address)
+            .set_authorized(&unprepared, &false);
+
+        assert_eq!(settled.fixture.client.settle_position(&payments(), &1), 2);
+        assert_eq!(settled.token.balance(&unprepared), 0);
+        assert!(settled.token.balance(&members.get(0).unwrap()) > 0);
+        assert!(settled.token.balance(&members.get(2).unwrap()) > 0);
+        assert!(
+            !settled.fixture.client.is_paid(&payments(), &1),
+            "the skipped share is still owed, so the position stays open"
+        );
+    }
+
+    /// Skipped is not forfeited. A member who fixes their account inside the
+    /// claim period is paid by the next call as if nothing had happened.
+    #[test]
+    fn a_skipped_member_is_paid_once_their_account_can_receive() {
+        let settled = Settled::open_with(3);
+        let members = winners(&settled);
+        let unprepared = members.get(1).unwrap();
+        let asset = StellarAssetClient::new(&settled.fixture.env, &settled.token.address);
+
+        asset.set_authorized(&unprepared, &false);
+        settled.fixture.client.settle_position(&payments(), &1);
+
+        asset.set_authorized(&unprepared, &true);
+        assert_eq!(settled.fixture.client.settle_position(&payments(), &1), 1);
+
+        assert!(settled.token.balance(&unprepared) > 0);
+        assert!(settled.fixture.client.is_paid(&payments(), &1));
+    }
+
+    /// Nothing about the team call loosens the hold. It is a payment like any
+    /// other and stops with the rest.
+    #[test]
+    fn a_hold_stops_the_team_call_too() {
+        let settled = Settled::open_with(3);
+        let reason = BytesN::from_array(&settled.fixture.env, &[4u8; 32]);
+
+        settled.fixture.client.pause_settlement(&reason);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_settle_position(&payments(), &1)
+                .err(),
+            Some(Ok(Error::SettlementPaused))
+        );
+    }
+
+    #[test]
+    fn a_position_already_closed_cannot_be_settled_again() {
+        let settled = Settled::open_with(3);
+        settled.fixture.client.settle_position(&payments(), &1);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_settle_position(&payments(), &1)
+                .err(),
+            Some(Ok(Error::PrizeAlreadyPaid))
+        );
+    }
 }
 
 /// The platform's cut, which is the one payment in this system that goes to us.
