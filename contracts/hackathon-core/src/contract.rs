@@ -2297,6 +2297,13 @@ impl HackathonCore {
         if state.phase != Phase::Settlement {
             return Err(Error::WrongPhase);
         }
+        /* A hold stops the money, not only the payments to winners. A sweep
+        is money leaving the vault too, and one allowed through a hold would
+        hand an unpaid winner's share back to its funder at the very moment
+        somebody stopped settlement to look for a bug. */
+        if state.settlement_paused {
+            return Err(Error::SettlementPaused);
+        }
         if storage::is_paid(env, track, rank) {
             return Err(Error::PrizeAlreadyPaid);
         }

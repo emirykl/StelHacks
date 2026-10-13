@@ -985,6 +985,43 @@ mod closing {
         assert_eq!(settled.fixture.client.phase(), Phase::Completed);
     }
 
+    /// A hold is somebody stopping the money to look for a bug. A sweep let
+    /// through it would hand an unpaid winner's share back to its funder at
+    /// exactly that moment.
+    #[test]
+    fn a_hold_stops_the_sweeps_too() {
+        let settled = Settled::open();
+        let reason = BytesN::from_array(&settled.fixture.env, &[4u8; 32]);
+
+        let claim = settled
+            .fixture
+            .client
+            .constitution()
+            .discretion
+            .prize_claim_period;
+        let opened = settled.fixture.client.state().settlement_opened_at;
+        settled.fixture.env.ledger().set_timestamp(opened + claim);
+
+        settled.fixture.client.pause_settlement(&reason);
+
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_sweep_unclaimed(&defi(), &1)
+                .err(),
+            Some(Ok(Error::SettlementPaused))
+        );
+        assert_eq!(
+            settled
+                .fixture
+                .client
+                .try_sweep_share(&payments(), &1, &settled.winner(&payments(), 1))
+                .err(),
+            Some(Ok(Error::SettlementPaused))
+        );
+    }
+
     /// The winner keeps the full window the rules promised them.
     #[test]
     fn nothing_is_swept_while_the_claim_period_is_open() {
