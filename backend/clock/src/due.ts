@@ -52,8 +52,8 @@ export function stillMoving({ contracts, phases }: Known): string[] {
  * caption was "yes, the clock is right".
  *
  * Paying the winners is not in this list because it is not one call per
- * hackathon but one per member of every winning team. It lives in `payout.ts`
- * and runs before `complete`, which is what lets the close go through.
+ * hackathon but one per prize position. It lives in `payout.ts` and runs
+ * before `complete`, which is what lets the close go through.
  */
 export const CALLS = ["advance_phase", "open_settlement", "complete"] as const;
 

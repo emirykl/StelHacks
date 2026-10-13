@@ -13,14 +13,15 @@ import { named, refusal } from "./due.js";
  *
  * What a lap tries, per position the rules pay:
  *
- *   won       pay each member their share, straight to their own wallet
+ *   won       pay the whole team in one call, each member straight to their
+ *             own wallet
  *   not won   return the whole position to the organizer, or its sponsor
  *
- * and for a member who cannot be paid, most often a wallet with no trustline
- * for the prize asset, their share goes back the same way. The contract holds
- * both returns until the claim period announced at the lock has run out, so a
- * winner who fixes their wallet in the meantime is still paid; this simply asks
- * again every lap and the refusal is the answer until then.
+ * A member who cannot be paid, most often a wallet with no trustline for the
+ * prize asset, is skipped by the contract while their teammates are paid, and
+ * their share goes back the same way as an unwon position once the claim
+ * period announced at the lock has run out. A winner who fixes their wallet in
+ * the meantime is still paid; this simply asks again every lap.
  */
 
 /** Settlement, the only phase any of this can happen in. */
@@ -30,14 +31,22 @@ const SETTLEMENT = 7;
 const reported = new Set<string>();
 
 export interface Paid {
-  call: "settle_platform_fee" | "settle_prize" | "sweep_unclaimed" | "sweep_share";
+  call: "settle_platform_fee" | "settle_position" | "settle_prize" | "sweep_unclaimed" | "sweep_share";
   what: string;
 }
 
 export async function payOut(core: HackathonCore, contract: string): Promise<Paid[]> {
-  const phase = (await core.phase()).result;
+  const state = (await core.state()).result;
 
-  if (!phase.isOk() || Number(phase.unwrap()) !== SETTLEMENT) {
+  if (!state.isOk() || Number(state.unwrap().phase) !== SETTLEMENT) {
+    return [];
+  }
+
+  /* A hold is the organizer stopping the money to look for a bug, and nothing
+     moves until it lifts. Contracts deployed before the sweeps learned to
+     respect it would still let a sweep through, and this service is the one
+     caller that would otherwise make it every lap. */
+  if (state.unwrap().settlement_paused) {
     return [];
   }
 
@@ -73,33 +82,75 @@ export async function payOut(core: HackathonCore, contract: string): Promise<Pai
       continue;
     }
 
-    for (const member of team.unwrap().members) {
-      const prize = await core.settle_prize({ track, rank, member });
+    const members = team.unwrap().members;
 
-      if (await sent(prize)) {
-        paid.push({ call: "settle_prize", what: `${track} #${rank} to ${member}` });
-        continue;
-      }
+    paid.push(...(await payTeam(core, track, rank, members)));
 
-      const why = failure(prize);
+    for (const member of members) {
+      const sweep = await core.sweep_share({ track, rank, member });
 
-      /* Already paid is the one refusal that is not about this member's
-         wallet: a teammate's payment in an earlier lap closed the share. */
-      if (why?.startsWith("refused: PrizeAlreadyPaid")) {
-        continue;
-      }
-
-      if (await sent(await core.sweep_share({ track, rank, member }))) {
+      if (await sent(sweep)) {
         paid.push({ call: "sweep_share", what: `${track} #${rank} share of ${member} back to its funder` });
         continue;
       }
 
+      /* Already paid is the ordinary answer for every member who was. The
+         claim period still running is the one that means somebody is owed and
+         could not be paid this lap. */
+      const why = failure(sweep);
       const key = `${contract}:${track}:${rank}:${member}`;
 
-      if (!reported.has(key)) {
+      if (why?.startsWith("refused: ClaimPeriodOpen") && !reported.has(key)) {
         reported.add(key);
-        console.error(`${contract}: cannot pay ${member} for ${track} #${rank} yet, ${why}`);
+        console.error(`${contract}: cannot pay ${member} for ${track} #${rank} yet`);
       }
+    }
+  }
+
+  return paid;
+}
+
+/**
+ * Pays every member of one position who can be paid, in one call where the
+ * contract has it.
+ *
+ * Hackathons deployed before `settle_position` existed keep their code for
+ * good, so for those this falls back to one `settle_prize` per member. Their
+ * simulation fails without a contract error, because the function is not
+ * there to refuse anything, and that is the signal.
+ */
+async function payTeam(
+  core: HackathonCore,
+  track: string,
+  rank: number,
+  members: string[],
+): Promise<Paid[]> {
+  const whole = await core.settle_position({ track, rank });
+  const why = failure(whole);
+
+  if (why === null) {
+    const count = whole.result.isOk() ? whole.result.unwrap() : 0;
+
+    /* A simulation that would pay nobody is everyone already paid or nobody
+       yet able to receive. Sending it would buy a ledger entry saying so. */
+    if (count === 0) {
+      return [];
+    }
+
+    await whole.signAndSend();
+
+    return [{ call: "settle_position", what: `${track} #${rank} to ${count} of ${members.length} members` }];
+  }
+
+  if (refusal(simulationError(whole) ?? "") !== null) {
+    return [];
+  }
+
+  const paid: Paid[] = [];
+
+  for (const member of members) {
+    if (await sent(await core.settle_prize({ track, rank, member }))) {
+      paid.push({ call: "settle_prize", what: `${track} #${rank} to ${member}` });
     }
   }
 
@@ -133,7 +184,7 @@ async function positions(core: HackathonCore): Promise<{ track: string; rank: nu
   return all;
 }
 
-type Built = Awaited<ReturnType<HackathonCore["settle_prize"]>>;
+type Built = { simulation?: unknown; signAndSend: () => Promise<unknown> };
 
 /** Sends the call when the simulation went through, and says whether it did. */
 async function sent(built: Built): Promise<boolean> {
@@ -146,18 +197,28 @@ async function sent(built: Built): Promise<boolean> {
   return true;
 }
 
-function failure(built: Built): string | null {
-  const simulation = built.simulation;
+function simulationError(built: Built): string | null {
+  const simulation = built.simulation as rpc.Api.SimulateTransactionResponse | undefined;
 
   if (simulation === undefined || !rpc.Api.isSimulationError(simulation)) {
+    return null;
+  }
+
+  return simulation.error;
+}
+
+function failure(built: Built): string | null {
+  const error = simulationError(built);
+
+  if (error === null) {
     return null;
   }
 
   /* Named only when the code is ours. A token that refuses the transfer, the
      usual one being a wallet with no trustline, raises its own contract error
      whose number means something else entirely in this contract's table. */
-  const code = refusal(simulation.error);
-  const ours = code !== null && !simulation.error.includes("token");
+  const code = refusal(error);
+  const ours = code !== null && !error.includes("token");
 
-  return ours ? `refused: ${named(code)}` : simulation.error.slice(0, 200);
+  return ours ? `refused: ${named(code)}` : error.slice(0, 200);
 }
