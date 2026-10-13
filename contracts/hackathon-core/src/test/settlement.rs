@@ -807,6 +807,50 @@ mod no_award {
         );
     }
 
+    /// Returning only the table amounts used to close every position with
+    /// the sponsors' additions still inside, where nothing could reach them
+    /// again and the hackathon still completed as if the vault were settled.
+    #[test]
+    fn a_withheld_track_returns_what_sponsors_added_to_them() {
+        let settled = Settled::through_reveal();
+        let env = settled.fixture.env.clone();
+        let organizer = settled.fixture.organizer.clone();
+
+        let added = 1_000i128;
+        let bps = settled.fixture.client.constitution().platform_fee.bps as i128;
+        let sponsor = Address::generate(&env);
+        StellarAssetClient::new(&env, &settled.token.address)
+            .mint(&sponsor, &(added + added * bps / 10_000));
+        settled.fixture.client.sponsor_tier(
+            &sponsor,
+            &defi(),
+            &1,
+            &added,
+            &BytesN::from_array(&env, &[5u8; 32]),
+        );
+
+        settled.fixture.client.finalize_results();
+        settled
+            .fixture
+            .client
+            .open_no_award(&defi(), &reason(&settled));
+        settled
+            .fixture
+            .client
+            .approve_no_award(&judge(&settled, 0), &defi());
+        settled
+            .fixture
+            .client
+            .approve_no_award(&judge(&settled, 1), &defi());
+        past_the_window(&settled);
+
+        let before = settled.token.balance(&organizer);
+        assert!(settled.fixture.client.resolve_no_award(&defi()));
+
+        assert_eq!(settled.token.balance(&sponsor), added);
+        assert_eq!(settled.token.balance(&organizer), before + 2_000);
+    }
+
     #[test]
     fn a_judge_cannot_sign_the_same_move_twice() {
         let settled = Settled::through_finalization();

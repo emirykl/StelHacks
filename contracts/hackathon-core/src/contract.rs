@@ -2457,17 +2457,37 @@ impl HackathonCore {
         if declared {
             // Every position in the track is marked paid so settlement cannot
             // reach them, and the money goes back along the announced route.
-            let organizer = storage::load_organizing_team(&env)?.organizer;
+            let back_to = Self::refund_target(&env, &track)?;
             let vault = VaultClient::new(&env, &storage::load_vault(&env)?);
 
-            for tier in constitution.prize_tiers.iter() {
-                if tier.track != track || storage::is_paid(&env, &track, tier.rank) {
+            for tier in Self::tiers_of(&env, &track)?.iter() {
+                if storage::is_paid(&env, &track, tier.rank) {
                     continue;
                 }
 
                 storage::mark_paid(&env, &track, tier.rank);
-                vault.pay(&organizer, &tier.amount);
+                vault.pay(&back_to, &tier.amount);
                 returned += tier.amount;
+            }
+
+            /* What sponsors added goes back to them, each the amount they put
+            in. Returning only the table amounts closed every position with
+            the additions still inside, and a closed position is one nothing
+            can pay out of again.
+
+            The whole of every contribution aimed at this track, including one
+            spread over its places, because the move withholds every place at
+            once. Nothing in the track can have been paid yet: this runs in
+            Finalization and payments start in Settlement. The fee stays owed
+            to the platform, since the track ran and was judged. Bounded by
+            `MAX_SPONSORSHIPS`, as the cancellation refund is. */
+            for index in 0..storage::sponsorship_count(&env) {
+                let sponsorship = storage::load_sponsorship(&env, index)?;
+
+                if sponsorship.track == track {
+                    vault.pay(&sponsorship.sponsor, &sponsorship.amount);
+                    returned += sponsorship.amount;
+                }
             }
         }
 
