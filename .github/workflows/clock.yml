@@ -1,0 +1,67 @@
+name: Clock
+
+# The clock, without a laptop that has to stay awake for it.
+#
+# Every call it makes is one anybody may make and the contract refuses until it
+# is due, so running it from here hands this runner no authority: the key below
+# pays fees and nothing else. One lap per run, because a runner is not a place
+# to sleep in, and the schedule is the wait between laps.
+#
+# Five minutes is the shortest schedule GitHub offers and it is often late by a
+# few more under load. That bounds how long a phase that is due, or a prize that
+# is owed, waits for its call. The contract enforces every deadline by itself
+# whatever this does, and the site still offers each call to anybody who would
+# rather not wait.
+#
+# Each lap reads two small rows sets from Postgres, which keeps a month of
+# laps to a few megabytes of the free tier's egress.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# A lap that runs long must not overlap the next one, or both would send the
+# same call from the same account and one would fail on its sequence number.
+concurrency:
+  group: clock
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  lap:
+    name: One lap
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sdk/package-lock.json
+            backend/clock/package-lock.json
+
+      # The clock imports the SDK from its built output, and the bindings it
+      # calls are the committed ones, so no Rust toolchain is needed here.
+      - name: Build the SDK
+        run: npm ci && npm run build
+        working-directory: sdk
+
+      - name: Install
+        run: npm ci
+        working-directory: backend/clock
+
+      - name: Lap
+        run: npx tsx src/index.ts --once
+        working-directory: backend/clock
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STELLAR_RPC_URL: ${{ secrets.STELLAR_RPC_URL }}
+          STELLAR_NETWORK_PASSPHRASE: ${{ secrets.STELLAR_NETWORK_PASSPHRASE }}
+          CLOCK_SECRET_KEY: ${{ secrets.CLOCK_SECRET_KEY }}
